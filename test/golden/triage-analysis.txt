@@ -1,0 +1,10 @@
+GrantTrace
+
+Scenario: triage-integration
+Observed: 4 GitHub REST operations
+
+Selected permission contract
+  issues: write
+
+Coverage
+  This contract describes only GitHub REST operations observed in the selected scenarios.

@@ -1,0 +1,15 @@
+GrantTrace check failed
+
+New permission
+  issues: write
+
+Observed in
+  Route     POST /repos/{owner}/{repo}/issues/{issue_number}/comments
+  Evidence  runtime_header, pinned_catalog
+
+Next
+  Review the evidence, then run:
+  granttrace check --accept
+
+Coverage
+  This contract describes only GitHub REST operations observed in the selected scenarios.
