@@ -1,0 +1,59 @@
+import { createServer } from "node:http";
+
+import { Octokit } from "@octokit/core";
+
+import { grantTrace } from "../../../src/octokit/plugin.js";
+
+const server = createServer((request, response) => {
+  request.resume();
+  request.once("end", () => {
+    response.writeHead(201, {
+      "content-type": "application/json",
+      "x-accepted-github-permissions":
+        "pull_requests=write; issues=write",
+    });
+    response.end('{"ok":true}');
+  });
+});
+
+await new Promise<void>((resolve, reject) => {
+  server.once("error", reject);
+  server.listen(0, "127.0.0.1", resolve);
+});
+
+try {
+  const address = server.address();
+  if (address === null || typeof address === "string") {
+    throw new Error("Stub server did not bind to a TCP port.");
+  }
+
+  const TracedOctokit = Octokit.plugin(grantTrace);
+  const octokit = new TracedOctokit({
+    auth: "ghs_CHILD_PROCESS_CANARY",
+    baseUrl: `http://127.0.0.1:${address.port}`,
+  });
+
+  await Promise.all(
+    [401_001, 401_002, 401_003, 401_004].map((issueNumber) =>
+      octokit.request(
+        "POST /repos/{owner}/{repo}/issues/{issue_number}/comments",
+        {
+          owner: "child-owner-canary",
+          repo: "child-repo-canary",
+          issue_number: issueNumber,
+          body: "child-body-canary",
+        },
+      ),
+    ),
+  );
+} finally {
+  await new Promise<void>((resolve, reject) => {
+    server.close((error) => {
+      if (error === undefined) {
+        resolve();
+      } else {
+        reject(error);
+      }
+    });
+  });
+}

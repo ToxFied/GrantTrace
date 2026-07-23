@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.granttrace/
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p8
+coverage/
+*.log
+.DS_Store
