@@ -109,7 +109,8 @@ describe("prove CLI workflow", () => {
     const reportPath = join(
       workingDirectory,
       ".granttrace",
-      "report.json",
+      "reports",
+      "disposable-comment.json",
     );
     expect((await stat(reportPath)).mode & 0o777).toBe(0o600);
     const report = await readFile(reportPath, "utf8");
@@ -151,7 +152,12 @@ describe("prove CLI workflow", () => {
     expect(result.code).toBe(5);
     expect(result.stderr).toContain("configuration_failure");
     const report = await readFile(
-      join(workingDirectory, ".granttrace", "report.json"),
+      join(
+        workingDirectory,
+        ".granttrace",
+        "reports",
+        "disposable-comment.json",
+      ),
       "utf8",
     );
     expect(report).toContain('"failure": "configuration_failure"');
@@ -211,7 +217,7 @@ function tokenTransport(): InstallationTokenTransport {
           : "ghs_RESTRICTED_TOKEN_CANARY",
         expires_at: "2026-07-23T13:00:00.000Z",
         permissions: negative
-          ? { contents: "read", metadata: "read" }
+          ? { metadata: "read" }
           : { issues: "write", metadata: "read" },
         repositories: [
           {

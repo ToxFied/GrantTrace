@@ -1,7 +1,6 @@
 import type { PermissionLevel } from "../permissions/types.js";
 import { compareAscii } from "../deterministic.js";
 import type { GrantTraceContract } from "./schema.js";
-import { serializeContract } from "./serialize.js";
 
 export type PermissionChange = {
   permission: string;
@@ -14,9 +13,48 @@ export type ContractDiff = {
   escalations: PermissionChange[];
   removals: PermissionChange[];
   reductions: PermissionChange[];
+  scenarioAdditions: string[];
+  scenarioRemovals: string[];
+  routeAdditions: RouteChange[];
+  routeRemovals: RouteChange[];
+  attributionAdditions: AttributionChange[];
+  attributionRemovals: AttributionChange[];
+  routeRequirementChanges: RouteRequirementChange[];
+  manualKeepAdditions: ManualKeepChange[];
+  manualKeepRemovals: ManualKeepChange[];
+  manualKeepChanges: ManualKeepUpdate[];
+  toolVersionChanged: boolean;
+  apiVersionChanged: boolean;
+  catalogChanged: boolean;
   semanticChange: boolean;
   warningOnly: boolean;
   hasBlockingChange: boolean;
+};
+
+export type RouteChange = {
+  method: string;
+  template: string;
+};
+
+export type AttributionChange = RouteChange & {
+  scenario: string;
+};
+
+export type RouteRequirementChange = RouteChange & {
+  alternativesChanged: boolean;
+  evidenceChanged: boolean;
+};
+
+export type ManualKeepChange = {
+  permission: string;
+  level: PermissionLevel;
+  reason: string;
+};
+
+export type ManualKeepUpdate = {
+  permission: string;
+  from: { level: PermissionLevel; reason: string };
+  to: { level: PermissionLevel; reason: string };
 };
 
 export function diffContracts(
@@ -50,67 +88,125 @@ export function diffContracts(
     }
   }
 
-  const semanticChange = serializeContract(previous) !== serializeContract(next);
-  const warningOnly =
-    semanticChange &&
-    isRemovalOnlyContraction(
-      previous,
-      next,
-      additions,
-      escalations,
-      removals,
-      reductions,
-    );
+  const semanticChange = JSON.stringify(previous) !== JSON.stringify(next);
+  const scenarioChanges = diffStrings(
+    previous.scenarios.map((scenario) => scenario.name),
+    next.scenarios.map((scenario) => scenario.name),
+  );
+  const previousRoutes = new Map(
+    previous.routes.map((route) => [routeKey(route), route]),
+  );
+  const nextRoutes = new Map(next.routes.map((route) => [routeKey(route), route]));
+  const routeAdditions: RouteChange[] = [];
+  const routeRemovals: RouteChange[] = [];
+  const attributionAdditions: AttributionChange[] = [];
+  const attributionRemovals: AttributionChange[] = [];
+  const routeRequirementChanges: RouteRequirementChange[] = [];
+  for (const key of [...new Set([...previousRoutes.keys(), ...nextRoutes.keys()])]
+    .sort(compareAscii)) {
+    const before = previousRoutes.get(key);
+    const after = nextRoutes.get(key);
+    if (before === undefined && after !== undefined) {
+      routeAdditions.push({ method: after.method, template: after.template });
+      continue;
+    }
+    if (before !== undefined && after === undefined) {
+      routeRemovals.push({ method: before.method, template: before.template });
+      continue;
+    }
+    if (before === undefined || after === undefined) {
+      continue;
+    }
+    const attribution = diffStrings(before.scenarios, after.scenarios);
+    attribution.additions.forEach((scenario) => {
+      attributionAdditions.push({
+        method: after.method,
+        template: after.template,
+        scenario,
+      });
+    });
+    attribution.removals.forEach((scenario) => {
+      attributionRemovals.push({
+        method: before.method,
+        template: before.template,
+        scenario,
+      });
+    });
+    const alternativesChanged =
+      JSON.stringify(before.alternatives) !== JSON.stringify(after.alternatives);
+    const evidenceChanged =
+      JSON.stringify(before.evidence) !== JSON.stringify(after.evidence);
+    if (alternativesChanged || evidenceChanged) {
+      routeRequirementChanges.push({
+        method: after.method,
+        template: after.template,
+        alternativesChanged,
+        evidenceChanged,
+      });
+    }
+  }
+
+  const manualKeepAdditions: ManualKeepChange[] = [];
+  const manualKeepRemovals: ManualKeepChange[] = [];
+  const manualKeepChanges: ManualKeepUpdate[] = [];
+  for (const permission of [
+    ...new Set([
+      ...Object.keys(previous.manualKeeps),
+      ...Object.keys(next.manualKeeps),
+    ]),
+  ].sort(compareAscii)) {
+    const before = previous.manualKeeps[permission];
+    const after = next.manualKeeps[permission];
+    if (before === undefined && after !== undefined) {
+      manualKeepAdditions.push({ permission, ...after });
+    } else if (before !== undefined && after === undefined) {
+      manualKeepRemovals.push({ permission, ...before });
+    } else if (
+      before !== undefined &&
+      after !== undefined &&
+      (before.level !== after.level || before.reason !== after.reason)
+    ) {
+      manualKeepChanges.push({ permission, from: before, to: after });
+    }
+  }
+
   return {
     additions,
     escalations,
     removals,
     reductions,
+    scenarioAdditions: scenarioChanges.additions,
+    scenarioRemovals: scenarioChanges.removals,
+    routeAdditions,
+    routeRemovals,
+    attributionAdditions,
+    attributionRemovals,
+    routeRequirementChanges,
+    manualKeepAdditions,
+    manualKeepRemovals,
+    manualKeepChanges,
+    toolVersionChanged: previous.toolVersion !== next.toolVersion,
+    apiVersionChanged: previous.apiVersion !== next.apiVersion,
+    catalogChanged:
+      JSON.stringify(previous.catalog) !== JSON.stringify(next.catalog),
     semanticChange,
-    warningOnly,
-    hasBlockingChange: semanticChange && !warningOnly,
+    warningOnly: false,
+    hasBlockingChange: semanticChange,
   };
 }
 
-function isRemovalOnlyContraction(
-  previous: GrantTraceContract,
-  next: GrantTraceContract,
-  additions: PermissionChange[],
-  escalations: PermissionChange[],
-  removals: PermissionChange[],
-  reductions: PermissionChange[],
-): boolean {
-  if (
-    additions.length > 0 ||
-    escalations.length > 0 ||
-    reductions.length > 0 ||
-    removals.length === 0 ||
-    previous.schemaVersion !== next.schemaVersion ||
-    previous.toolVersion !== next.toolVersion ||
-    previous.apiVersion !== next.apiVersion ||
-    JSON.stringify(previous.catalog) !== JSON.stringify(next.catalog) ||
-    JSON.stringify(previous.manualKeeps) !== JSON.stringify(next.manualKeeps) ||
-    previous.unknowns.length > 0 ||
-    next.unknowns.length > 0
-  ) {
-    return false;
-  }
+function diffStrings(
+  previous: readonly string[],
+  next: readonly string[],
+): { additions: string[]; removals: string[] } {
+  const before = new Set(previous);
+  const after = new Set(next);
+  return {
+    additions: [...after].filter((value) => !before.has(value)).sort(compareAscii),
+    removals: [...before].filter((value) => !after.has(value)).sort(compareAscii),
+  };
+}
 
-  const previousScenarios = new Set(
-    previous.scenarios.map((scenario) => scenario.name),
-  );
-  if (
-    next.scenarios.some(
-      (scenario) => !previousScenarios.has(scenario.name),
-    )
-  ) {
-    return false;
-  }
-
-  const previousRoutes = new Set(
-    previous.routes.map((route) => JSON.stringify(route)),
-  );
-  return next.routes.every((route) =>
-    previousRoutes.has(JSON.stringify(route)),
-  );
+function routeKey(route: { method: string; template: string }): string {
+  return `${route.method} ${route.template}`;
 }

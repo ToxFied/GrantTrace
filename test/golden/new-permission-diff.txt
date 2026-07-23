@@ -7,6 +7,9 @@ Observed in
   Route     POST /repos/{owner}/{repo}/issues/{issue_number}/comments
   Evidence  runtime_header, pinned_catalog
 
+Route added
+  POST /repos/{owner}/{repo}/issues/{issue_number}/comments
+
 Next
   Review the evidence, then run:
   granttrace check --accept

@@ -14,6 +14,7 @@ import type {
 } from "./types.js";
 
 export type SolverOptions = {
+  baseline?: PermissionAssignment;
   maxCombinations?: number;
   maxFrontier?: number;
 };
@@ -45,7 +46,8 @@ export function solvePermissionContract(
     throw new SolverLimitError("Solver bounds must be positive.");
   }
 
-  let frontier: PermissionAssignment[] = [{}];
+  const baseline = canonicalizeAssignment(options.baseline ?? {});
+  let frontier: PermissionAssignment[] = [baseline];
   const orderedRequirements = [...requirements].sort((left, right) =>
     compareAscii(routeKey(left), routeKey(right)),
   );
@@ -82,9 +84,26 @@ export function solvePermissionContract(
   }
 
   return {
-    selected: canonicalizeAssignment(selected),
-    frontier: frontier.map(canonicalizeAssignment),
+    selected: removeBaseline(selected, baseline),
+    frontier: frontier.map((assignment) => removeBaseline(assignment, baseline)),
   };
+}
+
+function removeBaseline(
+  assignment: PermissionAssignment,
+  baseline: PermissionAssignment,
+): PermissionAssignment {
+  const additional: PermissionAssignment = {};
+  for (const [permission, level] of Object.entries(assignment)) {
+    const baselineLevel = baseline[permission];
+    if (
+      baselineLevel === undefined ||
+      comparePermissionLevels(level, baselineLevel) > 0
+    ) {
+      additional[permission] = level;
+    }
+  }
+  return canonicalizeAssignment(additional);
 }
 
 export function joinConjunction(

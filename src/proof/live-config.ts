@@ -4,6 +4,10 @@ import { inspect } from "node:util";
 import { z } from "zod";
 
 import { SensitiveValue } from "../security/sensitive-value.js";
+import {
+  resolvePrivateKey,
+  type PrivateKeyProviderKind,
+} from "../security/private-key-provider.js";
 
 const DecimalIdentifierSchema = z
   .string()
@@ -80,8 +84,12 @@ export class LiveFixtureConfig {
   readonly #owner: string;
   readonly #repository: string;
   readonly #issueNumber: string;
+  readonly #privateKeyProvider: PrivateKeyProviderKind;
 
-  private constructor(input: z.infer<typeof LiveEnvironmentSchema>) {
+  private constructor(
+    input: z.infer<typeof LiveEnvironmentSchema>,
+    privateKeyProvider: PrivateKeyProviderKind,
+  ) {
     this.#appId = input.GRANTTRACE_APP_ID;
     this.#installationId = input.GRANTTRACE_INSTALLATION_ID;
     this.#privateKey = new SensitiveValue(
@@ -90,15 +98,21 @@ export class LiveFixtureConfig {
     this.#owner = input.GRANTTRACE_LIVE_OWNER;
     this.#repository = input.GRANTTRACE_LIVE_REPOSITORY;
     this.#issueNumber = input.GRANTTRACE_LIVE_ISSUE_NUMBER;
+    this.#privateKeyProvider = privateKeyProvider;
   }
 
   public static load(environment: NodeJS.ProcessEnv): LiveFixtureConfig {
+    let privateKey: ReturnType<typeof resolvePrivateKey>;
+    try {
+      privateKey = resolvePrivateKey(environment);
+    } catch {
+      throw new LiveConfigError();
+    }
     const parsed = LiveEnvironmentSchema.safeParse({
       GRANTTRACE_APP_ID: environment["GRANTTRACE_APP_ID"],
       GRANTTRACE_INSTALLATION_ID:
         environment["GRANTTRACE_INSTALLATION_ID"],
-      GRANTTRACE_APP_PRIVATE_KEY:
-        environment["GRANTTRACE_APP_PRIVATE_KEY"],
+      GRANTTRACE_APP_PRIVATE_KEY: privateKey.value,
       GRANTTRACE_LIVE_OWNER: environment["GRANTTRACE_LIVE_OWNER"],
       GRANTTRACE_LIVE_REPOSITORY:
         environment["GRANTTRACE_LIVE_REPOSITORY"],
@@ -111,7 +125,7 @@ export class LiveFixtureConfig {
     if (!parsed.success) {
       throw new LiveConfigError();
     }
-    return new LiveFixtureConfig(parsed.data);
+    return new LiveFixtureConfig(parsed.data, privateKey.kind);
   }
 
   public brokerCredentials(): BrokerCredentials {
@@ -132,6 +146,10 @@ export class LiveFixtureConfig {
 
   public toJSON(): { configured: true } {
     return { configured: true };
+  }
+
+  public privateKeyProvider(): PrivateKeyProviderKind {
+    return this.#privateKeyProvider;
   }
 
   public [inspect.custom](): string {

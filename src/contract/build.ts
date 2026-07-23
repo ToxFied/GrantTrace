@@ -5,6 +5,7 @@ import { resolveEvidence } from "../evidence/resolve.js";
 import { canonicalizeAssignment } from "../permissions/canonical.js";
 import { solvePermissionContract } from "../permissions/solver.js";
 import { GITHUB_API_VERSION, TOOL_VERSION } from "../version.js";
+import { MANDATORY_INSTALLATION_PERMISSIONS } from "../proof/permission-baseline.js";
 import type { GrantTraceContract } from "./schema.js";
 
 export function buildContract(
@@ -12,10 +13,12 @@ export function buildContract(
   catalog: PermissionCatalog,
 ): GrantTraceContract {
   const resolution = resolveEvidence(observations, catalog);
-  const solution = solvePermissionContract(resolution.requirements);
+  const solution = solvePermissionContract(resolution.requirements, {
+    baseline: MANDATORY_INSTALLATION_PERMISSIONS,
+  });
 
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     toolVersion: TOOL_VERSION,
     apiVersion: GITHUB_API_VERSION,
     catalog: {
@@ -37,6 +40,7 @@ export function buildContract(
       template: requirement.route.template,
       alternatives: requirement.alternatives,
       evidence: requirement.evidence,
+      scenarios: requirement.scenarios,
     })),
     selectedPermissions: canonicalizeAssignment(solution.selected),
     permissionFrontier: solution.frontier.map(canonicalizeAssignment),

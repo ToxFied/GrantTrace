@@ -56,7 +56,10 @@ export function renderCheckSuccess(contract: GrantTraceContract): string {
   return lines.join("\n");
 }
 
-export function renderAccepted(contract: GrantTraceContract): string {
+export function renderAccepted(
+  contract: GrantTraceContract,
+  options: { removedKeeps?: string[] } = {},
+): string {
   const lines = [
     "GrantTrace contract accepted",
     "",
@@ -66,6 +69,13 @@ export function renderAccepted(contract: GrantTraceContract): string {
     ),
     "",
   ];
+  if ((options.removedKeeps?.length ?? 0) > 0) {
+    lines.push("Manual keeps removed because access is now observed");
+    for (const permission of options.removedKeeps ?? []) {
+      lines.push(`  ${permission}`);
+    }
+    lines.push("");
+  }
   appendManualKeeps(lines, contract);
   lines.push("Coverage", `  ${COVERAGE}`, "");
   return lines.join("\n");
@@ -74,9 +84,31 @@ export function renderAccepted(contract: GrantTraceContract): string {
 export function renderContractDiff(
   diff: ContractDiff,
   next: GrantTraceContract,
+  options: { migratedFromV1?: boolean } = {},
 ): string {
   const lines = ["GrantTrace check failed", ""];
 
+  if (options.migratedFromV1 === true) {
+    lines.push(
+      "Schema migration required",
+      "  v1 -> v2 adds exact route-to-scenario attribution.",
+      "",
+    );
+  }
+  if (diff.toolVersionChanged) {
+    lines.push("Tool contract version changed", "");
+  }
+  if (diff.apiVersionChanged) {
+    lines.push("Pinned GitHub REST API version changed", "");
+  }
+  if (diff.catalogChanged) {
+    lines.push(
+      "Pinned permission catalog changed",
+      `  ${next.catalog.source} ${next.catalog.version}`,
+      `  ${next.catalog.checksum}`,
+      "",
+    );
+  }
   for (const change of diff.additions) {
     lines.push("New permission", `  ${change.permission}: ${change.to}`, "");
     appendRoutes(lines, next, change.permission);
@@ -103,11 +135,79 @@ export function renderContractDiff(
       "",
     );
   }
+  appendNamedChanges(lines, "Scenario added", diff.scenarioAdditions);
+  appendNamedChanges(lines, "Scenario removed", diff.scenarioRemovals);
+  appendRouteChanges(lines, "Route added", diff.routeAdditions);
+  appendRouteChanges(lines, "Route removed", diff.routeRemovals);
+  for (const change of diff.attributionAdditions) {
+    lines.push(
+      "Scenario attribution added",
+      `  ${change.scenario}`,
+      `  ${change.method} ${change.template}`,
+      "",
+    );
+  }
+  for (const change of diff.attributionRemovals) {
+    lines.push(
+      "Scenario attribution removed",
+      `  ${change.scenario}`,
+      `  ${change.method} ${change.template}`,
+      "",
+    );
+  }
+  for (const change of diff.routeRequirementChanges) {
+    const changed = [
+      change.alternativesChanged ? "permission alternatives" : null,
+      change.evidenceChanged ? "evidence provenance" : null,
+    ].filter((value) => value !== null);
+    lines.push(
+      "Route evidence changed",
+      `  ${change.method} ${change.template}`,
+      `  ${changed.join(", ")}`,
+      "",
+    );
+  }
+  for (const change of diff.manualKeepAdditions) {
+    lines.push(
+      "Manual keep added (not proven necessary)",
+      `  ${change.permission}: ${change.level}`,
+      `  Reason: ${change.reason}`,
+      "",
+    );
+  }
+  for (const change of diff.manualKeepRemovals) {
+    lines.push(
+      "Manual keep removed",
+      `  ${change.permission}: ${change.level}`,
+      "",
+    );
+  }
+  for (const change of diff.manualKeepChanges) {
+    lines.push(
+      "Manual keep changed (not proven necessary)",
+      `  ${change.permission}: ${change.from.level} -> ${change.to.level}`,
+      `  Reason: ${change.from.reason} -> ${change.to.reason}`,
+      "",
+    );
+  }
   if (
     diff.additions.length === 0 &&
     diff.escalations.length === 0 &&
     diff.removals.length === 0 &&
-    diff.reductions.length === 0
+    diff.reductions.length === 0 &&
+    diff.scenarioAdditions.length === 0 &&
+    diff.scenarioRemovals.length === 0 &&
+    diff.routeAdditions.length === 0 &&
+    diff.routeRemovals.length === 0 &&
+    diff.attributionAdditions.length === 0 &&
+    diff.attributionRemovals.length === 0 &&
+    diff.routeRequirementChanges.length === 0 &&
+    diff.manualKeepAdditions.length === 0 &&
+    diff.manualKeepRemovals.length === 0 &&
+    diff.manualKeepChanges.length === 0 &&
+    !diff.toolVersionChanged &&
+    !diff.apiVersionChanged &&
+    !diff.catalogChanged
   ) {
     lines.push("Contract evidence changed", "");
   }
@@ -115,31 +215,6 @@ export function renderContractDiff(
   lines.push(
     "Next",
     "  Review the evidence, then run:",
-    "  granttrace check --accept",
-    "",
-  );
-  appendManualKeeps(lines, next);
-  lines.push("Coverage", `  ${COVERAGE}`, "");
-  return lines.join("\n");
-}
-
-export function renderContractWarnings(
-  diff: ContractDiff,
-  next: GrantTraceContract,
-): string {
-  const lines = ["GrantTrace check passed with warnings", ""];
-  for (const change of diff.removals) {
-    lines.push(
-      "Previously observed permission is no longer observed",
-      `  ${change.permission}: ${change.from}`,
-      "",
-    );
-  }
-  lines.push(
-    "This is not evidence that the permission is safe to remove in production.",
-    "",
-    "Optional",
-    "  Review the coverage change, then update the lock with:",
     "  granttrace check --accept",
     "",
   );
@@ -180,6 +255,26 @@ function appendRoutes(
     lines.push(`  Evidence  ${route.evidence.join(", ")}`);
   }
   lines.push("");
+}
+
+function appendNamedChanges(
+  lines: string[],
+  heading: string,
+  values: string[],
+): void {
+  for (const value of values) {
+    lines.push(heading, `  ${value}`, "");
+  }
+}
+
+function appendRouteChanges(
+  lines: string[],
+  heading: string,
+  routes: Array<{ method: string; template: string }>,
+): void {
+  for (const route of routes) {
+    lines.push(heading, `  ${route.method} ${route.template}`, "");
+  }
 }
 
 function appendManualKeeps(

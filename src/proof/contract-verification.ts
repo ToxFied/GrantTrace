@@ -2,7 +2,9 @@ import { buildContract } from "../contract/build.js";
 import type { Observation } from "../contract/observation.js";
 import type { GrantTraceContract } from "../contract/schema.js";
 import { serializeContract } from "../contract/serialize.js";
+import { contractForScenario } from "../contract/scenario.js";
 import { fixtureCatalog } from "../evidence/catalog.js";
+import { GITHUB_API_VERSION, TOOL_VERSION } from "../version.js";
 
 export class ProofContractMismatchError extends Error {
   public constructor() {
@@ -19,9 +21,12 @@ export function validateAcceptedProofContract(
 ): void {
   if (
     contract.unknowns.length > 0 ||
-    contract.scenarios.length !== 1 ||
-    contract.scenarios[0]?.name !== scenario ||
-    Object.keys(contract.manualKeeps).length > 0
+    !contract.scenarios.some((candidate) => candidate.name === scenario) ||
+    contract.apiVersion !== GITHUB_API_VERSION ||
+    contract.toolVersion !== TOOL_VERSION ||
+    contract.catalog.source !== fixtureCatalog.identity.source ||
+    contract.catalog.version !== fixtureCatalog.identity.version ||
+    contract.catalog.checksum !== fixtureCatalog.identity.checksum
   ) {
     throw new ProofContractMismatchError();
   }
@@ -33,12 +38,17 @@ export function verifyProofObservations(
   observations: Observation[],
 ): GrantTraceContract {
   validateAcceptedProofContract(contract, scenario);
+  const expected = contractForScenario(contract, scenario);
   const observed = buildContract(observations, fixtureCatalog);
+  const observedWithManualKeeps = {
+    ...observed,
+    manualKeeps: expected.manualKeeps,
+  };
   if (
     observed.unknowns.length > 0 ||
-    serializeContract(observed) !== serializeContract(contract)
+    serializeContract(observedWithManualKeeps) !== serializeContract(expected)
   ) {
     throw new ProofContractMismatchError();
   }
-  return observed;
+  return observedWithManualKeeps;
 }
