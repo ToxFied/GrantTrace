@@ -12,6 +12,21 @@ export async function runAnalyze(
   args: string[],
   context: CliContext,
 ): Promise<ExitCodeValue> {
+  if (args.length === 1 && (args[0] === "--help" || args[0] === "-h")) {
+    writeLine(
+      context.stdout,
+      [
+        "Analyze an observation file without changing the accepted contract",
+        "",
+        "Usage",
+        "  granttrace analyze <observations.ndjson>",
+        "",
+        "Most users should use granttrace record followed by granttrace check.",
+        "",
+      ].join("\n"),
+    );
+    return ExitCode.success;
+  }
   if (args.length !== 1 || args[0]?.startsWith("-") === true) {
     writeLine(
       context.stderr,

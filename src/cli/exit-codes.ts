@@ -7,6 +7,7 @@ export const ExitCode = {
   contractChanged: 6,
   evidenceBlocked: 7,
   proofFailed: 8,
+  interrupted: 130,
 } as const;
 
 export type ExitCodeValue = (typeof ExitCode)[keyof typeof ExitCode];

@@ -118,6 +118,14 @@ export async function runProofChild(input: {
 
     if (observationsExist) {
       result.observations = await loadObservations(observationsPath);
+      if (
+        result.observations.some(
+          (observation) => observation.scenario !== scenario,
+        )
+      ) {
+        result.outcome = "analysis_failure";
+        return await finishWithCleanup(result, sessionDirectory);
+      }
     }
 
     if (child.timedOut) {
@@ -163,6 +171,7 @@ function spawnChild(
   return new Promise((resolveResult) => {
     const child = spawn(command, args, {
       cwd,
+      detached: process.platform !== "win32",
       env: environment,
       shell: false,
       stdio: "inherit",
@@ -170,11 +179,18 @@ function spawnChild(
     let spawnFailed = false;
     let timedOut = false;
     let forceKillTimer: NodeJS.Timeout | null = null;
+    const terminate = (signal: NodeJS.Signals) => {
+      killProcessTree(child.pid, signal, child);
+    };
+    const interrupt = () => terminate("SIGINT");
+    const terminateSignal = () => terminate("SIGTERM");
+    process.once("SIGINT", interrupt);
+    process.once("SIGTERM", terminateSignal);
     const timeout = setTimeout(() => {
       timedOut = true;
-      child.kill("SIGTERM");
+      terminate("SIGTERM");
       forceKillTimer = setTimeout(() => {
-        child.kill("SIGKILL");
+        terminate("SIGKILL");
       }, 5_000);
       forceKillTimer.unref();
     }, timeoutMs);
@@ -184,6 +200,8 @@ function spawnChild(
       spawnFailed = true;
     });
     child.once("close", (exitCode, signal) => {
+      process.off("SIGINT", interrupt);
+      process.off("SIGTERM", terminateSignal);
       clearTimeout(timeout);
       if (forceKillTimer !== null) {
         clearTimeout(forceKillTimer);
@@ -191,6 +209,22 @@ function spawnChild(
       resolveResult({ exitCode, signal, spawnFailed, timedOut });
     });
   });
+}
+
+function killProcessTree(
+  pid: number | undefined,
+  signal: NodeJS.Signals,
+  child: ReturnType<typeof spawn>,
+): void {
+  if (process.platform !== "win32" && pid !== undefined) {
+    try {
+      process.kill(-pid, signal);
+      return;
+    } catch {
+      // Fall through to direct-child termination.
+    }
+  }
+  child.kill(signal);
 }
 
 async function pathExists(path: string): Promise<boolean> {

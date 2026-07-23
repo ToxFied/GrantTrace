@@ -1,4 +1,9 @@
 import type { GrantTraceContract } from "../contract/schema.js";
+import {
+  manualKeepPermissions,
+  requestedProofPermissions,
+} from "../contract/manual-keeps.js";
+import { contractForScenario } from "../contract/scenario.js";
 import { contractHash } from "../contract/serialize.js";
 import { GITHUB_API_VERSION, TOOL_VERSION } from "../version.js";
 import {
@@ -16,7 +21,10 @@ import {
   type ProofFailure,
 } from "./failure.js";
 import type { LiveFixtureConfig } from "./live-config.js";
-import { runPermissionNegativeControl } from "./negative-control.js";
+import {
+  runPermissionNegativeControls,
+  type LiveReadControlTransport,
+} from "./negative-control.js";
 import { MANDATORY_INSTALLATION_PERMISSIONS } from "./permission-baseline.js";
 import type { ProofRunReport } from "./report.js";
 import {
@@ -27,6 +35,7 @@ import {
 export type ProofExecutionDependencies = {
   tokenTransport?: InstallationTokenTransport;
   commentTransport?: LiveCommentTransport;
+  readControlTransport?: LiveReadControlTransport;
   runChild?: typeof runProofChild;
   now?: Date;
   sourceCommit?: string | null;
@@ -44,6 +53,7 @@ export async function executeProof(input: {
   cwd: string;
   command: string;
   args: string[];
+  timeoutMs?: number;
   baseEnvironment: NodeJS.ProcessEnv;
   dependencies?: ProofExecutionDependencies;
 }): Promise<ProofExecutionResult> {
@@ -65,11 +75,19 @@ export async function executeProof(input: {
     return { report, success: false };
   }
 
+  const scenarioContract = contractForScenario(
+    input.contract,
+    input.scenario,
+  );
   let token;
   try {
+    const requestedPermissions = requestedProofPermissions(
+      scenarioContract.selectedPermissions,
+      manualKeepPermissions(scenarioContract),
+    );
     token = await mintRestrictedInstallationToken(
       input.config,
-      input.contract.selectedPermissions,
+      requestedPermissions,
       {
         ...(dependencies.tokenTransport === undefined
           ? {}
@@ -100,6 +118,7 @@ export async function executeProof(input: {
     token: token.token,
     fixture: input.config.fixtureCoordinates(),
     scenario: input.scenario,
+    ...(input.timeoutMs === undefined ? {} : { timeoutMs: input.timeoutMs }),
   });
   report = withChild(report, child);
 
@@ -146,9 +165,9 @@ export async function executeProof(input: {
     return { report, success: false };
   }
 
-  const negative = await runPermissionNegativeControl({
+  const negative = await runPermissionNegativeControls({
     config: input.config,
-    contract: input.contract,
+    contract: scenarioContract,
     positiveToken: token,
     ...(dependencies.tokenTransport === undefined
       ? {}
@@ -156,19 +175,24 @@ export async function executeProof(input: {
     ...(dependencies.commentTransport === undefined
       ? {}
       : { commentTransport: dependencies.commentTransport }),
+    ...(dependencies.readControlTransport === undefined
+      ? {}
+      : { readTransport: dependencies.readControlTransport }),
     ...(dependencies.now === undefined ? {} : { now: dependencies.now }),
   });
   report = {
     ...report,
-    negativeControl: negative.result,
+    negativeControls: negative.results,
     cleanup:
       negative.cleanup === "pass"
         ? { status: "pass" }
         : { status: "failed", failure: "cleanup_failure" },
   };
-  const negativePassed =
-    negative.result.status === "expected_rejection" ||
-    negative.result.status === "not_applicable";
+  const negativePassed = negative.results.every(
+    (result) =>
+      result.status === "expected_rejection" ||
+      result.status === "not_applicable",
+  );
   return {
     report,
     success: negativePassed && negative.cleanup === "pass",
@@ -180,15 +204,21 @@ function initialReport(
   scenario: string,
   sourceCommit: string | null,
 ): ProofRunReport {
+  const scenarioContract = contractForScenario(contract, scenario);
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     toolVersion: TOOL_VERSION,
     apiVersion: GITHUB_API_VERSION,
     sourceCommit,
     scenario,
     catalog: contract.catalog,
     contractHash: contractHash(contract),
-    selectedPermissions: contract.selectedPermissions,
+    selectedPermissions: scenarioContract.selectedPermissions,
+    manualKeeps: contract.manualKeeps,
+    requestedPermissions: requestedProofPermissions(
+      scenarioContract.selectedPermissions,
+      manualKeepPermissions(contract),
+    ),
     mandatoryPermissions: MANDATORY_INSTALLATION_PERMISSIONS,
     effectivePermissions: null,
     repositoryScopeVerified: false,
@@ -199,7 +229,22 @@ function initialReport(
       observedOperations: 0,
     },
     positiveProof: { status: "not_run" },
-    negativeControl: { status: "not_run" },
+    negativeControls: [
+      {
+        id: "issue-comments-read",
+        mode: "read_only",
+        removedPermission: "issues",
+        status: "not_run",
+        cleanup: "not_required",
+      },
+      {
+        id: "issue-comment-create",
+        mode: "mutating",
+        removedPermission: "issues",
+        status: "not_run",
+        cleanup: "not_required",
+      },
+    ],
     cleanup: { status: "not_run" },
   };
 }

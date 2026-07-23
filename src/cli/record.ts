@@ -17,22 +17,43 @@ import { renderInstrumentationError } from "../reporting/terminal.js";
 import type { CliContext } from "./context.js";
 import { writeLine } from "./context.js";
 import { ExitCode, type ExitCodeValue } from "./exit-codes.js";
+import { parseBoundedDuration } from "./duration.js";
 
 type ChildResult = {
   code: number | null;
   signal: NodeJS.Signals | null;
   spawnFailed: boolean;
+  timedOut: boolean;
 };
 
 export async function runRecord(
   args: string[],
   context: CliContext,
 ): Promise<ExitCodeValue> {
+  if (args.length === 1 && (args[0] === "--help" || args[0] === "-h")) {
+    writeLine(
+      context.stdout,
+      [
+        "Record one named, instrumented test scenario",
+        "",
+        "Usage",
+        "  granttrace record --scenario <safe-name> [--timeout 15m] -- <command> [args...]",
+        "",
+        "The command is launched directly with shell:false. Output is streamed;",
+        "request and response bodies are never retained by GrantTrace.",
+        "",
+        "Next",
+        "  granttrace check",
+        "",
+      ].join("\n"),
+    );
+    return ExitCode.success;
+  }
   const parsed = parseRecordArguments(args);
   if (parsed === null) {
     writeLine(
       context.stderr,
-      "Usage: granttrace record --scenario <safe-name> -- <command> [args...]",
+      "Usage: granttrace record --scenario <safe-name> [--timeout 15m] -- <command> [args...]",
     );
     return ExitCode.usage;
   }
@@ -69,6 +90,7 @@ export async function runRecord(
       parsed.commandArgs,
       context.cwd,
       childEnvironment,
+      parsed.timeoutMs,
     );
 
     if (result.spawnFailed) {
@@ -80,6 +102,23 @@ export async function runRecord(
           "The test process could not be started.",
           "",
           "No contract decision was made.",
+          "",
+        ].join("\n"),
+      );
+      return ExitCode.testFailure;
+    }
+    if (result.timedOut) {
+      writeLine(
+        context.stderr,
+        [
+          "GrantTrace record timed out",
+          "",
+          "The test process exceeded the configured limit and was terminated.",
+          "",
+          "No contract decision was made.",
+          "",
+          "Next",
+          "  Fix the hung scenario or retry with --timeout <duration>.",
           "",
         ].join("\n"),
       );
@@ -106,7 +145,9 @@ export async function runRecord(
           "",
         ].join("\n"),
       );
-      return ExitCode.testFailure;
+      return result.signal === null
+        ? ExitCode.testFailure
+        : ExitCode.interrupted;
     }
 
     const observationsPath = join(sessionDirectory, "observations.ndjson");
@@ -115,7 +156,12 @@ export async function runRecord(
       return ExitCode.instrumentation;
     }
     const observations = await loadObservations(observationsPath);
-    if (observations.length === 0) {
+    if (
+      observations.length === 0 ||
+      observations.some(
+        (observation) => observation.scenario !== scenario,
+      )
+    ) {
       writeLine(context.stderr, renderInstrumentationError());
       return ExitCode.instrumentation;
     }
@@ -143,6 +189,7 @@ export async function runRecord(
         "",
         "Coverage",
         "  This recording covers only REST operations exercised by this scenario.",
+        "  Recording the same scenario name again replaces its prior recording.",
         "",
       ].join("\n"),
     );
@@ -167,6 +214,7 @@ function parseRecordArguments(args: string[]):
       scenario: string;
       command: string;
       commandArgs: string[];
+      timeoutMs: number;
     }
   | null {
   const separator = args.indexOf("--");
@@ -175,23 +223,41 @@ function parseRecordArguments(args: string[]):
   }
 
   const options = args.slice(0, separator);
-  if (
-    options.length !== 2 ||
-    options[0] !== "--scenario" ||
-    options[1] === undefined
-  ) {
+  let scenario: string | null = null;
+  let timeoutMs = 15 * 60 * 1_000;
+  for (let index = 0; index < options.length; index += 1) {
+    const option = options[index];
+    const value = options[index + 1];
+    if (option === "--scenario" && scenario === null && value !== undefined) {
+      scenario = value;
+      index += 1;
+      continue;
+    }
+    if (option === "--timeout" && value !== undefined) {
+      const parsed = parseBoundedDuration(value, {
+        minimumMs: 1_000,
+        maximumMs: 60 * 60 * 1_000,
+      });
+      if (parsed === null) {
+        return null;
+      }
+      timeoutMs = parsed;
+      index += 1;
+      continue;
+    }
     return null;
   }
 
   const command = args[separator + 1];
-  if (command === undefined || command.length === 0) {
+  if (scenario === null || command === undefined || command.length === 0) {
     return null;
   }
 
   return {
-    scenario: options[1],
+    scenario,
     command,
     commandArgs: args.slice(separator + 2),
+    timeoutMs,
   };
 }
 
@@ -216,23 +282,65 @@ function spawnChild(
   args: string[],
   cwd: string,
   environment: NodeJS.ProcessEnv,
+  timeoutMs: number,
 ): Promise<ChildResult> {
   return new Promise((resolveResult) => {
     const child = spawn(command, args, {
       cwd,
+      detached: process.platform !== "win32",
       env: environment,
       shell: false,
       stdio: "inherit",
     });
     let spawnFailed = false;
+    let timedOut = false;
+    let forceKillTimer: NodeJS.Timeout | null = null;
+    const terminate = (signal: NodeJS.Signals) => {
+      killProcessTree(child.pid, signal, child);
+    };
+    const interrupt = () => terminate("SIGINT");
+    const terminateSignal = () => terminate("SIGTERM");
+    process.once("SIGINT", interrupt);
+    process.once("SIGTERM", terminateSignal);
+    const timeout = setTimeout(() => {
+      timedOut = true;
+      terminate("SIGTERM");
+      forceKillTimer = setTimeout(() => {
+        terminate("SIGKILL");
+      }, 5_000);
+      forceKillTimer.unref();
+    }, timeoutMs);
+    timeout.unref();
 
     child.once("error", () => {
       spawnFailed = true;
     });
     child.once("close", (code, signal) => {
-      resolveResult({ code, signal, spawnFailed });
+      process.off("SIGINT", interrupt);
+      process.off("SIGTERM", terminateSignal);
+      clearTimeout(timeout);
+      if (forceKillTimer !== null) {
+        clearTimeout(forceKillTimer);
+      }
+      resolveResult({ code, signal, spawnFailed, timedOut });
     });
   });
+}
+
+function killProcessTree(
+  pid: number | undefined,
+  signal: NodeJS.Signals,
+  child: ReturnType<typeof spawn>,
+): void {
+  if (process.platform !== "win32" && pid !== undefined) {
+    try {
+      process.kill(-pid, signal);
+      return;
+    } catch {
+      // Fall through to direct-child termination.
+    }
+  }
+  child.kill(signal);
 }
 
 async function pathExists(path: string): Promise<boolean> {

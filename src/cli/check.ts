@@ -5,7 +5,7 @@ import { buildContract } from "../contract/build.js";
 import { diffContracts } from "../contract/diff.js";
 import { loadObservations } from "../contract/observation-file.js";
 import {
-  readContract,
+  readContractWithMetadata,
   serializeContract,
   writeContractAtomic,
 } from "../contract/serialize.js";
@@ -16,9 +16,9 @@ import {
   renderAnalysisReport,
   renderCheckSuccess,
   renderContractDiff,
-  renderContractWarnings,
 } from "../reporting/terminal.js";
 import type { Observation } from "../contract/observation.js";
+import { retainUnobservedManualKeeps } from "../contract/manual-keeps.js";
 import type { CliContext } from "./context.js";
 import { writeLine } from "./context.js";
 import { ExitCode, type ExitCodeValue } from "./exit-codes.js";
@@ -37,6 +37,24 @@ export async function runCheck(
   args: string[],
   context: CliContext,
 ): Promise<ExitCodeValue> {
+  if (args.length === 1 && (args[0] === "--help" || args[0] === "-h")) {
+    writeLine(
+      context.stdout,
+      [
+        "Compare recorded scenarios with the accepted permission contract",
+        "",
+        "Usage",
+        "  granttrace check",
+        "  granttrace check --accept",
+        "  granttrace check [--observations <path>] [--lock <path>]",
+        "",
+        "Without --accept, every semantic change exits 6 for CI review.",
+        "--accept writes the exact reviewed schema-v2 contract atomically.",
+        "",
+      ].join("\n"),
+    );
+    return ExitCode.success;
+  }
   const options = parseCheckArguments(args, context.cwd);
   if (options === null) {
     writeLine(
@@ -86,12 +104,17 @@ export async function runCheck(
       return ExitCode.contractChanged;
     }
 
-    const previous = await readContract(options.lockPath);
+    const loadedPrevious = await readContractWithMetadata(options.lockPath);
+    const previous = loadedPrevious.contract;
     const nextWithManualKeeps = {
       ...next,
-      manualKeeps: previous.manualKeeps,
+      manualKeeps: retainUnobservedManualKeeps(
+        previous,
+        next.selectedPermissions,
+      ),
     };
     if (
+      !loadedPrevious.migratedFromV1 &&
       serializeContract(previous) === serializeContract(nextWithManualKeeps)
     ) {
       writeLine(context.stdout, renderCheckSuccess(nextWithManualKeeps));
@@ -100,22 +123,24 @@ export async function runCheck(
 
     if (options.accept) {
       await writeContractAtomic(options.lockPath, nextWithManualKeeps);
-      writeLine(context.stdout, renderAccepted(nextWithManualKeeps));
-      return ExitCode.success;
-    }
-
-    const diff = diffContracts(previous, nextWithManualKeeps);
-    if (!diff.hasBlockingChange) {
+      const removedKeeps = Object.keys(previous.manualKeeps).filter(
+        (permission) =>
+          nextWithManualKeeps.manualKeeps[permission] === undefined,
+      );
       writeLine(
         context.stdout,
-        renderContractWarnings(diff, nextWithManualKeeps),
+        renderAccepted(nextWithManualKeeps, { removedKeeps }),
       );
       return ExitCode.success;
     }
 
+    const diff = diffContracts(previous, nextWithManualKeeps);
+
     writeLine(
       context.stderr,
-      renderContractDiff(diff, nextWithManualKeeps),
+      renderContractDiff(diff, nextWithManualKeeps, {
+        migratedFromV1: loadedPrevious.migratedFromV1,
+      }),
     );
     return ExitCode.contractChanged;
   } catch {

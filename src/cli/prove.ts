@@ -2,7 +2,7 @@ import { execFile } from "node:child_process";
 import { join } from "node:path";
 import { promisify } from "node:util";
 
-import { readContract } from "../contract/serialize.js";
+import { readContractWithMetadata } from "../contract/serialize.js";
 import { ScenarioNameSchema } from "../permissions/schema.js";
 import type { ProofFailure } from "../proof/failure.js";
 import { LiveFixtureConfig } from "../proof/live-config.js";
@@ -14,6 +14,7 @@ import {
 import type { CliContext } from "./context.js";
 import { writeLine } from "./context.js";
 import { ExitCode, type ExitCodeValue } from "./exit-codes.js";
+import { parseBoundedDuration } from "./duration.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -21,11 +22,30 @@ export async function runProve(
   args: string[],
   context: CliContext,
 ): Promise<ExitCodeValue> {
+  if (args.length === 1 && (args[0] === "--help" || args[0] === "-h")) {
+    writeLine(
+      context.stdout,
+      [
+        "Prove one accepted scenario with a restricted installation token",
+        "",
+        "Usage",
+        "  granttrace prove --scenario <safe-name> [--timeout 15m] -- <command> [args...]",
+        "",
+        "The child receives the restricted token, not App broker credentials.",
+        "The proof is scoped to the named scenario and disposable fixture.",
+        "",
+        "Prerequisites",
+        "  granttrace doctor",
+        "",
+      ].join("\n"),
+    );
+    return ExitCode.success;
+  }
   const parsed = parseProveArguments(args);
   if (parsed === null) {
     writeLine(
       context.stderr,
-      "Usage: granttrace prove --scenario <safe-name> -- <command> [args...]",
+      "Usage: granttrace prove --scenario <safe-name> [--timeout 15m] -- <command> [args...]",
     );
     return ExitCode.usage;
   }
@@ -40,9 +60,26 @@ export async function runProve(
   }
 
   try {
-    const contract = await readContract(
+    const loaded = await readContractWithMetadata(
       join(context.cwd, "granttrace.lock.json"),
     );
+    if (loaded.migratedFromV1) {
+      writeLine(
+        context.stderr,
+        [
+          "GrantTrace prove blocked",
+          "",
+          "Schema v1 contracts do not contain exact route-to-scenario attribution.",
+          "",
+          "Next",
+          "  Re-record the scenario if needed, review granttrace check, then run:",
+          "  granttrace check --accept",
+          "",
+        ].join("\n"),
+      );
+      return ExitCode.contractChanged;
+    }
+    const contract = loaded.contract;
     let config: LiveFixtureConfig | null = null;
     try {
       config = LiveFixtureConfig.load(context.environment);
@@ -62,21 +99,34 @@ export async function runProve(
       command: parsed.command,
       args: parsed.commandArgs,
       baseEnvironment: context.environment,
+      timeoutMs: parsed.timeoutMs,
       dependencies: {
         ...context.proofDependencies,
         sourceCommit,
       },
     });
+    const reportPath = join(
+      context.cwd,
+      ".granttrace",
+      "reports",
+      `${scenarioResult.data}.json`,
+    );
     await writeProofReport(
-      join(context.cwd, ".granttrace", "report.json"),
+      reportPath,
       result.report,
     );
 
     if (result.success) {
-      writeLine(context.stdout, renderProofSuccess(result.report));
+      writeLine(
+        context.stdout,
+        renderProofSuccess(result.report, scenarioResult.data),
+      );
       return ExitCode.success;
     }
-    writeLine(context.stderr, renderProofFailure(result.report));
+    writeLine(
+      context.stderr,
+      renderProofFailure(result.report, scenarioResult.data),
+    );
     return exitCodeForReport(result.report);
   } catch {
     writeLine(
@@ -92,6 +142,7 @@ function parseProveArguments(args: string[]):
       scenario: string;
       command: string;
       commandArgs: string[];
+      timeoutMs: number;
     }
   | null {
   const separator = args.indexOf("--");
@@ -99,21 +150,39 @@ function parseProveArguments(args: string[]):
     return null;
   }
   const options = args.slice(0, separator);
-  if (
-    options.length !== 2 ||
-    options[0] !== "--scenario" ||
-    options[1] === undefined
-  ) {
+  let scenario: string | null = null;
+  let timeoutMs = 15 * 60 * 1_000;
+  for (let index = 0; index < options.length; index += 1) {
+    const option = options[index];
+    const value = options[index + 1];
+    if (option === "--scenario" && scenario === null && value !== undefined) {
+      scenario = value;
+      index += 1;
+      continue;
+    }
+    if (option === "--timeout" && value !== undefined) {
+      const parsed = parseBoundedDuration(value, {
+        minimumMs: 1_000,
+        maximumMs: 60 * 60 * 1_000,
+      });
+      if (parsed === null) {
+        return null;
+      }
+      timeoutMs = parsed;
+      index += 1;
+      continue;
+    }
     return null;
   }
   const command = args[separator + 1];
-  if (command === undefined || command.length === 0) {
+  if (scenario === null || command === undefined || command.length === 0) {
     return null;
   }
   return {
-    scenario: options[1],
+    scenario,
     command,
     commandArgs: args.slice(separator + 2),
+    timeoutMs,
   };
 }
 
@@ -135,7 +204,10 @@ async function readSourceCommit(cwd: string): Promise<string | null> {
   }
 }
 
-function renderProofSuccess(report: ProofRunReport): string {
+function renderProofSuccess(
+  report: ProofRunReport,
+  scenario: string,
+): string {
   return [
     "GrantTrace prove passed",
     "",
@@ -143,11 +215,23 @@ function renderProofSuccess(report: ProofRunReport): string {
     `Observed    ${report.child.observedOperations} GitHub REST operation${
       report.child.observedOperations === 1 ? "" : "s"
     }`,
-    `Negative    ${renderNegativeStatus(report)}`,
-    `Report      .granttrace/report.json`,
+    `Report      .granttrace/reports/${scenario}.json`,
+    "",
+    "Negative controls",
+    ...renderNegativeStatuses(report),
     "",
     "Permission contract",
     ...renderPermissions(report.selectedPermissions),
+    "",
+    "Manual keeps (retained, not proven necessary)",
+    ...renderPermissions(
+      Object.fromEntries(
+        Object.entries(report.manualKeeps).map(([permission, keep]) => [
+          permission,
+          keep.level,
+        ]),
+      ),
+    ),
     "",
     "Mandatory effective baseline",
     ...renderPermissions(report.mandatoryPermissions),
@@ -158,16 +242,24 @@ function renderProofSuccess(report: ProofRunReport): string {
   ].join("\n");
 }
 
-function renderProofFailure(report: ProofRunReport): string {
+function renderProofFailure(
+  report: ProofRunReport,
+  scenario: string,
+): string {
   return [
     "GrantTrace prove failed",
     "",
     `Positive    ${renderPositiveStatus(report)}`,
-    `Negative    ${renderNegativeStatus(report)}`,
     `Cleanup     ${report.cleanup.status}`,
-    `Report      .granttrace/report.json`,
+    `Report      .granttrace/reports/${scenario}.json`,
+    "",
+    "Negative controls",
+    ...renderNegativeStatuses(report),
     "",
     "No permission claim was made.",
+    "",
+    "Next",
+    `  ${proofRecovery(report)}`,
     "",
   ].join("\n");
 }
@@ -187,13 +279,53 @@ function renderPositiveStatus(report: ProofRunReport): string {
     : report.positiveProof.status;
 }
 
-function renderNegativeStatus(report: ProofRunReport): string {
-  return report.negativeControl.status === "indeterminate"
-    ? `indeterminate (${report.negativeControl.failure})`
-    : report.negativeControl.status;
+function renderNegativeStatuses(report: ProofRunReport): string[] {
+  return report.negativeControls.map((control) =>
+    control.status === "indeterminate"
+      ? `  ${control.id}: ${control.status} (${control.failure})`
+      : `  ${control.id}: ${control.status}`,
+  );
+}
+
+function proofRecovery(report: ProofRunReport): string {
+  if (report.cleanup.status === "failed") {
+    return "Verify the disposable fixture has no mutation residue before retrying.";
+  }
+  if (report.positiveProof.status === "failed") {
+    switch (report.positiveProof.failure) {
+      case "configuration_failure":
+        return "Run granttrace doctor, then correct the disposable live configuration.";
+      case "contract_mismatch":
+        return "Re-record this scenario, run granttrace check, and review the diff.";
+      case "instrumentation_failure":
+        return "Ensure the scenario uses the instrumented GrantTrace Octokit instance.";
+      case "test_failure":
+      case "test_flake_or_indeterminate":
+        return "Fix or stabilize the scenario, then retry the same proof.";
+      case "rate_limited":
+        return "Wait for the documented GitHub rate-limit window, then retry.";
+      default:
+        return "Resolve the reported proof failure without broadening permissions, then retry.";
+    }
+  }
+  if (
+    report.negativeControls.some(
+      (control) => control.status === "unexpected_pass",
+    )
+  ) {
+    return "Do not accept the claim; investigate why reduced access still succeeded.";
+  }
+  return "Resolve the reported negative-control failure, then retry unchanged.";
 }
 
 function exitCodeForReport(report: ProofRunReport): ExitCodeValue {
+  if (
+    report.child.signal !== null &&
+    report.positiveProof.status === "failed" &&
+    report.positiveProof.failure === "test_failure"
+  ) {
+    return ExitCode.interrupted;
+  }
   if (report.cleanup.status === "failed") {
     return ExitCode.proofFailed;
   }

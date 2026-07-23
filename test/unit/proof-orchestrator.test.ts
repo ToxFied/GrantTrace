@@ -90,7 +90,7 @@ describe("proof orchestration", () => {
     expect(result.success).toBe(true);
     expect(requests.map((request) => request.permissions)).toEqual([
       { issues: "write" },
-      { contents: "read" },
+      {},
     ]);
     expect(result.report).toMatchObject({
       selectedPermissions: { issues: "write" },
@@ -102,7 +102,16 @@ describe("proof orchestration", () => {
       repositoryScopeVerified: true,
       contractMatched: true,
       positiveProof: { status: "pass" },
-      negativeControl: { status: "expected_rejection" },
+      negativeControls: [
+        {
+          id: "issue-comments-read",
+          status: "not_applicable",
+        },
+        {
+          id: "issue-comment-create",
+          status: "expected_rejection",
+        },
+      ],
       cleanup: { status: "pass" },
     });
     const retained = JSON.stringify(result);
@@ -172,9 +181,11 @@ describe("proof orchestration", () => {
         status: "failed",
         failure,
       });
-      expect(result.report.negativeControl).toEqual({
-        status: "not_run",
-      });
+      expect(
+        result.report.negativeControls.every(
+          (control) => control.status === "not_run",
+        ),
+      ).toBe(true);
     },
   );
 
@@ -273,7 +284,7 @@ describe("proof orchestration", () => {
 
     expect(result.success).toBe(false);
     expect(result.report.positiveProof).toEqual({ status: "pass" });
-    expect(result.report.negativeControl).toEqual({
+    expect(result.report.negativeControls[1]).toMatchObject({
       status: "indeterminate",
       failure: "rate_limited",
     });
@@ -293,7 +304,7 @@ function tokenFixture(
           : "ghs_RESTRICTED_TOKEN_CANARY",
         expires_at: "2026-07-23T13:00:00.000Z",
         permissions: negative
-          ? { contents: "read", metadata: "read" }
+          ? { metadata: "read" }
           : { issues: "write", metadata: "read" },
         repositories: [
           {

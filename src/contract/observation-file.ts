@@ -5,6 +5,7 @@ import {
   unlink,
   writeFile,
 } from "node:fs/promises";
+import { randomBytes } from "node:crypto";
 
 import { canonicalDNFKey, canonicalizeDNF } from "../permissions/canonical.js";
 import { compareAscii } from "../deterministic.js";
@@ -77,7 +78,7 @@ export async function writeObservations(
   const content = sortObservations(observations)
     .map(serializeObservation)
     .join("");
-  const temporaryPath = `${path}.tmp-${process.pid}`;
+  const temporaryPath = `${path}.tmp-${process.pid}-${randomBytes(6).toString("hex")}`;
   try {
     await writeFile(temporaryPath, content, {
       encoding: "utf8",

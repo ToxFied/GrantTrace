@@ -1,15 +1,37 @@
 {
   "name": "granttrace",
-  "version": "0.0.0-dev",
+  "version": "0.1.0-beta.1",
   "description": "Test-bound GitHub App REST permission contracts",
   "type": "module",
-  "private": true,
-  "packageManager": "pnpm@10.28.2",
+  "types": "./dist/index.d.ts",
+  "sideEffects": false,
+  "packageManager": "pnpm@10.28.2+sha512.41872f037ad22f7348e3b1debbaf7e867cfd448f2726d9cf74c08f19507c31d2c8e7a11525b983febc2df640b5438dee6023ebb1f84ed43cc2d654d2bc326264",
+  "license": "MIT",
+  "author": "Anestis",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ToxFied/GrantTrace.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ToxFied/GrantTrace/issues"
+  },
+  "homepage": "https://github.com/ToxFied/GrantTrace#readme",
+  "keywords": [
+    "github-app",
+    "permissions",
+    "least-privilege",
+    "security",
+    "cli"
+  ],
   "engines": {
     "node": ">=22"
   },
+  "publishConfig": {
+    "access": "public",
+    "tag": "beta"
+  },
   "bin": {
-    "granttrace": "./dist/cli/main.js"
+    "granttrace": "./dist/cli/bin.js"
   },
   "exports": {
     ".": {
@@ -21,13 +43,25 @@
       "import": "./dist/octokit/index.js"
     }
   },
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md"
+  ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
-    "granttrace": "tsx src/cli/main.ts",
+    "build": "tsc -p tsconfig.build.json && node scripts/prepare-dist.mjs",
+    "clean:dist": "node scripts/clean-dist.mjs",
+    "granttrace": "tsx src/cli/bin.ts",
+    "catalog:review": "node scripts/review-catalog.mjs",
+    "ci:validate": "node scripts/validate-ci.mjs",
+    "contract:reproduce": "node scripts/reproduce-contract.mjs",
+    "leakage:scan": "node scripts/leakage-scan.mjs",
+    "package:smoke": "node scripts/package-smoke.mjs",
+    "prepack": "pnpm clean:dist && pnpm build",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc -p tsconfig.json",
-    "verify": "pnpm typecheck && pnpm test && pnpm build"
+    "verify": "pnpm typecheck && pnpm test && pnpm build && pnpm contract:reproduce && pnpm ci:validate"
   },
   "dependencies": {
     "@octokit/core": "7.0.6",

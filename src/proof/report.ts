@@ -5,6 +5,7 @@ import {
   unlink,
   writeFile,
 } from "node:fs/promises";
+import { randomBytes } from "node:crypto";
 import { dirname } from "node:path";
 
 import { z } from "zod";
@@ -15,8 +16,14 @@ import {
 } from "../permissions/canonical.js";
 import {
   PermissionAssignmentSchema,
+  PermissionLevelSchema,
+  PermissionNameSchema,
   ScenarioNameSchema,
 } from "../permissions/schema.js";
+import {
+  manualKeepPermissions,
+  requestedProofPermissions,
+} from "../contract/manual-keeps.js";
 import { ProofFailureSchema } from "./failure.js";
 import { combineEffectivePermissions } from "./permission-baseline.js";
 
@@ -35,16 +42,48 @@ const PhaseResultSchema = z.discriminatedUnion("status", [
   }),
 ]);
 
-const NegativeControlResultSchema = z.discriminatedUnion("status", [
-  z.strictObject({ status: z.literal("not_run") }),
-  z.strictObject({ status: z.literal("not_applicable") }),
-  z.strictObject({ status: z.literal("expected_rejection") }),
-  z.strictObject({ status: z.literal("unexpected_pass") }),
-  z.strictObject({
-    status: z.literal("indeterminate"),
-    failure: ProofFailureSchema,
-  }),
-]);
+const NegativeControlResultSchema = z
+  .strictObject({
+    id: z.enum(["issue-comments-read", "issue-comment-create"]),
+    mode: z.enum(["read_only", "mutating"]),
+    removedPermission: PermissionNameSchema,
+    status: z.enum([
+      "not_run",
+      "not_applicable",
+      "expected_rejection",
+      "unexpected_pass",
+      "indeterminate",
+    ]),
+    failure: ProofFailureSchema.optional(),
+    cleanup: z.enum(["not_required", "pass", "failed"]),
+  })
+  .superRefine((result, context) => {
+    const expectedMode =
+      result.id === "issue-comments-read" ? "read_only" : "mutating";
+    if (result.mode !== expectedMode || result.removedPermission !== "issues") {
+      context.addIssue({
+        code: "custom",
+        message: "Negative-control identity does not match its definition.",
+      });
+    }
+    if (
+      (result.status === "indeterminate") !==
+      (result.failure !== undefined)
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["failure"],
+        message: "Only an indeterminate control carries a failure class.",
+      });
+    }
+    if (result.mode === "read_only" && result.cleanup !== "not_required") {
+      context.addIssue({
+        code: "custom",
+        path: ["cleanup"],
+        message: "A read-only control never requires cleanup.",
+      });
+    }
+  });
 
 const CleanupResultSchema = z.discriminatedUnion("status", [
   z.strictObject({ status: z.literal("not_run") }),
@@ -57,7 +96,7 @@ const CleanupResultSchema = z.discriminatedUnion("status", [
 
 export const ProofRunReportSchema = z
   .strictObject({
-    schemaVersion: z.literal(1),
+    schemaVersion: z.literal(2),
     toolVersion: z.string().min(1).max(64),
     apiVersion: z.string().regex(/^\d{4}-\d{2}-\d{2}$/u),
     sourceCommit: z
@@ -68,6 +107,14 @@ export const ProofRunReportSchema = z
     catalog: CatalogIdentitySchema,
     contractHash: z.string().regex(/^sha256:[a-f0-9]{64}$/u),
     selectedPermissions: PermissionAssignmentSchema,
+    manualKeeps: z.record(
+      PermissionNameSchema,
+      z.strictObject({
+        level: PermissionLevelSchema,
+        reason: z.string().trim().min(1).max(240),
+      }),
+    ),
+    requestedPermissions: PermissionAssignmentSchema,
     mandatoryPermissions: PermissionAssignmentSchema,
     effectivePermissions: PermissionAssignmentSchema.nullable(),
     repositoryScopeVerified: z.boolean(),
@@ -78,10 +125,46 @@ export const ProofRunReportSchema = z
       observedOperations: z.number().int().min(0).max(10_000),
     }),
     positiveProof: PhaseResultSchema,
-    negativeControl: NegativeControlResultSchema,
+    negativeControls: z.array(NegativeControlResultSchema).min(1).max(16),
     cleanup: CleanupResultSchema,
   })
   .superRefine((report, context) => {
+    if (
+      new Set(report.negativeControls.map((control) => control.id)).size !==
+      report.negativeControls.length
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["negativeControls"],
+        message: "Negative-control identifiers must be unique.",
+      });
+    }
+    if (
+      report.negativeControls.some((control) => control.cleanup === "failed") &&
+      report.cleanup.status !== "failed"
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["cleanup"],
+        message: "A negative-control cleanup failure must fail overall cleanup.",
+      });
+    }
+    const expectedRequested = requestedProofPermissions(
+      report.selectedPermissions,
+      manualKeepPermissions(report),
+    );
+    if (
+      assignmentKey(report.requestedPermissions) !==
+      assignmentKey(expectedRequested)
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["requestedPermissions"],
+        message:
+          "Requested permissions must equal scenario-selected permissions plus manual keeps.",
+      });
+    }
+
     if (
       report.effectivePermissions === null &&
       report.repositoryScopeVerified
@@ -99,7 +182,7 @@ export const ProofRunReportSchema = z
       assignmentKey(report.effectivePermissions) !==
         assignmentKey(
           combineEffectivePermissions(
-            report.selectedPermissions,
+            report.requestedPermissions,
             report.mandatoryPermissions,
           ),
         )
@@ -108,7 +191,7 @@ export const ProofRunReportSchema = z
         code: "custom",
         path: ["effectivePermissions"],
         message:
-          "Effective permissions must equal selected permissions plus the mandatory baseline.",
+          "Effective permissions must equal requested permissions plus the mandatory baseline.",
       });
     }
 
@@ -157,7 +240,7 @@ export function serializeProofReport(input: unknown): string {
   }
 
   const report: ProofRunReport = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     toolVersion: parsed.data.toolVersion,
     apiVersion: parsed.data.apiVersion,
     sourceCommit: parsed.data.sourceCommit,
@@ -170,6 +253,14 @@ export function serializeProofReport(input: unknown): string {
     contractHash: parsed.data.contractHash,
     selectedPermissions: canonicalizeAssignment(
       parsed.data.selectedPermissions,
+    ),
+    manualKeeps: Object.fromEntries(
+      Object.entries(parsed.data.manualKeeps).sort(([left], [right]) =>
+        left < right ? -1 : left > right ? 1 : 0,
+      ),
+    ),
+    requestedPermissions: canonicalizeAssignment(
+      parsed.data.requestedPermissions,
     ),
     mandatoryPermissions: canonicalizeAssignment(
       parsed.data.mandatoryPermissions,
@@ -186,7 +277,7 @@ export function serializeProofReport(input: unknown): string {
       observedOperations: parsed.data.child.observedOperations,
     },
     positiveProof: parsed.data.positiveProof,
-    negativeControl: parsed.data.negativeControl,
+    negativeControls: parsed.data.negativeControls,
     cleanup: parsed.data.cleanup,
   };
 
@@ -199,7 +290,7 @@ export async function writeProofReport(
 ): Promise<void> {
   const content = serializeProofReport(input);
   const directory = dirname(path);
-  const temporaryPath = `${path}.tmp-${process.pid}`;
+  const temporaryPath = `${path}.tmp-${process.pid}-${randomBytes(6).toString("hex")}`;
 
   try {
     await mkdir(directory, { recursive: true, mode: 0o700 });

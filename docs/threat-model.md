@@ -1,138 +1,237 @@
 # Threat model
 
+## Security objective
+
+GrantTrace is designed to make scenario-bound GitHub App REST permission
+evidence deterministic, reviewable, identity-free, and safe to prove against a
+disposable one-repository installation.
+
+It is not designed to sandbox arbitrary test code, protect a compromised
+developer machine, or establish whole-application least privilege.
+
 ## Assets
 
-- GitHub App private key and JWT
+- GitHub App private key and short-lived JWT
 - installation access tokens
-- repository and organization identities
-- concrete resource IDs and paths
-- deterministic permission contract
-- ephemeral observations and proof reports
-- integrity of the pinned route catalog
+- repository and account identities
+- concrete resource identifiers and paths
+- integrity of observations and the accepted contract
+- integrity and provenance of the pinned catalog
+- ephemeral proof reports and cleanup state
+- package and CI supply chain
 
 ## Trust boundaries
 
-GrantTrace trusts its local code and package lock. It does not trust:
+GrantTrace trusts:
 
-- observation or contract files loaded from disk;
-- GitHub response headers;
-- catalog data before schema/checksum validation;
-- CLI arguments as structured data;
-- arbitrary test code;
-- rich Octokit request, response, and error objects.
+- its installed code and resolved dependency graph;
+- the local operating system's file and process primitives;
+- explicitly chosen test code to behave as ordinary trusted project code; and
+- a human reviewer to decide whether contract changes are acceptable.
 
-The current `record` command runs the user's normal test process and inherits
-its normal environment. A malicious or compromised test can read that
-environment, forge the plugin marker, print tokens, or exfiltrate data.
-GrantTrace does not claim to sandbox tests.
+GrantTrace does not trust:
 
-The `prove` path uses a different boundary: it builds a new child environment
-from a small allowlist and adds only a restricted installation token and the
-nonsecret values needed by the focused fixture.
+- observations, contracts, or reports loaded from disk;
+- GitHub response headers or token responses;
+- catalog entries before canonicalization and identity calculation;
+- rich Octokit request, response, and error objects;
+- CLI text as structured data;
+- an arbitrary child command as a source of permission conclusions; or
+- live failures to mean “missing permission” without focused classification.
+
+`record` runs the user's normal test process and inherits its ordinary
+environment. A malicious test can read that environment, forge local marker
+files, print credentials, or exfiltrate data. GrantTrace does not claim to
+contain it.
+
+`prove` uses a narrower boundary: a broker holds App credentials and creates a
+fresh allowlisted child environment containing one restricted installation
+token. This isolates broker credentials; it is still not an OS sandbox.
 
 ## Threats and controls
 
-### Malicious or compromised test code
+### Overclaiming coverage
 
-The recorder observes only opted-in Octokit calls and cannot contain arbitrary
-code. It never captures child stdout/stderr. The proof environment builder
-starts fresh, omits every App/broker credential and existing GitHub token, and
-adds only the short-lived restricted token plus nonsecret recorder/fixture
-configuration. This is credential isolation, not a sandbox for malicious test
-code.
+The terminal, README, contract semantics, and reports consistently bind the
+claim to named, instrumented scenarios. Routes carry deterministic scenario
+attribution in schema v2. Proving one scenario slices and resolves only its
+attributed routes. Unknown and uninstrumented behavior never becomes an empty
+requirement.
+
+### Forged or malformed local artifacts
+
+Observation, contract, and report schemas are strict and resource-bounded.
+Semantic contract validation recomputes selected/frontier permissions from
+routes and verifies scenario attribution. Unknown fields fail instead of being
+spread, preserved, or redacted.
+
+Contracts are written through a sibling temporary file and rename. Local
+observations and proof reports use allowlisted serialization.
 
 ### App private-key leakage
 
-The broker keeps the private key behind a redacting wrapper, creates the App
-JWT in memory, and sends only that JWT to the token transport. The private key
-never enters the child environment, arguments, observations, reports, or logs.
-This boundary has been exercised against the disposable fixture.
+GrantTrace accepts no credentials through CLI arguments.
+
+Exactly one key provider is required:
+
+- an injected environment value;
+- an absolute private-key file with an owned nonsymlink `0700` parent and
+  owned regular `0600` file; or
+- macOS Keychain lookup through `/usr/bin/security` with validated argv.
+
+The key is validated as RSA, bounded in size, wrapped in a redacting value, and
+retained by the token broker. It never enters the proof child, observation,
+contract, report, command, or terminal output. Provider failures never echo
+rejected values.
 
 ### Installation-token leakage
 
-Tokens are treated as opaque. No prefix or fixed length is assumed. The
-recorder never persists authorization headers or rich errors. Redacting
-wrappers make ordinary stringification/inspection safe, and secret-canary
-tests cover installation- and user-token-like values. A proof token lives in
-memory and the restricted child environment only.
+Tokens are opaque; no prefix or fixed length is assumed. A redacting wrapper
+protects ordinary stringification and inspection. Only the proof child
+environment receives the short-lived restricted token as `GITHUB_TOKEN`.
+GrantTrace does not persist authorization headers or rich errors.
 
-### Rich Octokit error leakage
+The proof child can deliberately print or exfiltrate its token. Isolation
+limits its privilege and lifetime; it does not make malicious code safe.
 
-The error object can contain request headers, concrete URL, body, response
-body, and authentication material. Recorder code reads only:
+### Rich Octokit object leakage
 
-- numeric status;
+Request options, response bodies, errors, and headers can contain credentials,
+concrete URLs, and private data. The recorder reads only:
+
+- method;
+- the pre-expansion candidate template;
+- numeric status; and
 - one lower-cased accepted-permissions header.
 
-It constructs a new observation and never serializes or spreads the error.
+It constructs a new strict observation. It never serializes or spreads the
+source object.
 
-### Concrete URL and query leakage
+### Concrete URL, query, and identity leakage
 
-The recorder accepts only a relative, pre-expansion template that exactly
-matches the pinned catalog. It never attempts generic ID redaction. Absolute,
-concrete, query-bearing, or unmatched routes persist only method and a reason
-code; the candidate URL is discarded.
+Only relative canonical templates that exactly match the pinned catalog are
+accepted. GrantTrace does not attempt generic ID redaction. Absolute URLs,
+concrete paths, query-bearing values, and unmatched candidates are discarded;
+only method plus a safe finding remains.
 
-### Request/response body and cookie leakage
+Contracts contain no commands, local paths, owners, repositories, resource
+IDs, timestamps, or machine values. Proof reports omit fixture coordinates and
+raw responses.
 
-Bodies and headers are never members of the observation schema. Tests inject
-body, PEM, cookie, UUID, numeric-ID, query, owner, and repository canaries and
-scan every produced artifact and terminal report.
+### Runtime/catalog contradiction
 
-### Malicious or stale catalog data
+Runtime DNF and catalog DNF are canonicalized independently. Valid
+disagreement blocks. Malformed runtime evidence cannot fall back. Missing
+runtime evidence can use only a known catalog entry.
 
-The catalog boundary canonicalizes and validates DNF. Contracts record catalog
-source, version, and SHA-256 checksum. Solver combination/frontier bounds stop
-adversarial explosion. Runtime/catalog disagreement blocks. The current tiny
-fixture is intentionally not broad coverage.
+Catalog identity covers sorted method/template, canonical DNF, and official
+documentation URL. A catalog or API identity change becomes a contract review.
+Resource bounds prevent adversarial solver explosion.
 
-### GitHub response disagreement
+### Stale or ambiguous catalog evidence
 
-Runtime evidence never silently overrides the catalog and the catalog never
-silently overrides valid runtime evidence. Contradiction is a release-blocking
-finding.
+The catalog is curated from official GitHub documentation for pinned API
+version `2026-03-10`. The review workflow checks duplicate routes, safe
+templates, documentation URLs, deterministic checksum, and exact entry count.
+Conditional requirements without authoritative AND/OR semantics are excluded.
 
-Token responses are independently strict. GrantTrace distinguishes the
-selected contract from GitHub's unavoidable `metadata:read` baseline and
-requires the effective assignment to equal exactly their union. Missing
-metadata, omitted permission evidence, or any other additional permission
-blocks proof.
+The stale flattened `@octokit/app-permissions` data is not imported as truth.
 
-### Child-process command injection
+### Broader-than-requested live tokens
 
-Commands after `--` are passed as an argv array with `shell: false`.
-GrantTrace does not evaluate a command string. An integration test passes shell
-metacharacters and verifies that no sentinel file is created.
+The raw token endpoint response is mandatory. GrantTrace independently
+requires:
 
-The proof runner applies the same rule, streams child output without retaining
-it, and has a bounded timeout with termination and post-close session cleanup.
+```text
+effective
+  = scenario-selected
+  + global manual keeps
+  + mandatory metadata:read
+```
 
-### CI artifact leakage
+Missing permissions, additional permissions, unsupported levels, omitted raw
+scope, broad repository selection, wrong repository, and implausible expiry
+all block. Every token must report exactly one expected repository.
 
-The deterministic contract is allowlisted and identity-free. `.granttrace/`
-is ignored. The proof report uses a separate strict allowlist, mode `0600`,
-and omits secrets, commands, raw URLs, rich errors, and concrete resource
-identities. Unknown report fields are rejected rather than redacted.
-
-### Supply-chain compromise
-
-The project is a single package with a committed pnpm lockfile and few runtime
-dependencies. A future GitHub Action must pin third-party Actions to full
-commit SHAs. Dependency review remains an operator responsibility.
+Manual keeps remain separate from observed evidence and include a human
+reason. They are requested and verified but never called proven necessity.
 
 ### Accidental production targeting
 
-Live configuration requires exact confirmation, numeric fixture identifiers,
-a valid RSA App key, and a repository name ending in
-`-granttrace-fixture`. Live proof requires an explicitly user-created
-disposable App installation restricted to one repository. GrantTrace does not
-modify App permissions or broaden installation scope. Every raw token response
-must independently prove that one-repository scope.
+Live configuration requires:
 
-### Cleanup failure
+- explicit disposable confirmation equal to `1`;
+- a repository name ending in `-granttrace-fixture`;
+- numeric App, installation, and issue identifiers;
+- a valid RSA private key; and
+- a manually created one-repository installation.
 
-Local recorder and proof-session cleanup runs after process close. The live
-fixture scenario deletes its positive comment in `finally`; a deletion failure
-makes the child fail. An unexpected negative-control success is also deleted
-with the positive restricted token before the control fails. Cleanup failure
-is reported separately, and no run with failed cleanup is an unqualified pass.
+GrantTrace never changes App settings or repository selection. These controls
+reduce accidents; operators must still verify the fixture contains no real
+data.
+
+### Command and shell injection
+
+Commands after `--` are passed as an argv array with `shell: false`.
+GrantTrace never evaluates a command string. The macOS Keychain command also
+uses a fixed executable and validated argv.
+
+Record and proof children have bounded timeouts, receive termination followed
+by a bounded force-kill path, and are cleaned only after process close.
+Output is streamed rather than captured.
+
+### Misclassifying failures as permission evidence
+
+Positive child failure is a test result, never negative permission evidence.
+Negative controls run only when removing the target permission makes the
+specific route unsatisfied.
+
+Authentication, authorization, hidden/not-found resources, rate limits,
+expiry, GitHub availability, test failure, timeout/indeterminacy, and cleanup
+failure remain distinct. Unexpected control success fails.
+
+### Mutation residue
+
+The positive example deletes its disposable comment in `finally`. The
+mutating negative control normally expects rejection and creates nothing. If
+it unexpectedly succeeds, cleanup uses the positive token before reporting
+failure.
+
+Cleanup is modeled independently. Any local session or live mutation cleanup
+failure prevents an unqualified pass and remains visible in the strict report.
+
+### CI and artifact leakage
+
+`.granttrace/` is private ignored state. Reports are `0600` within `0700`
+directories and are not uploaded. The package allowlist includes production
+`dist`, `LICENSE`, and `README.md`, excluding tests, observations, reports,
+caches, and development residue.
+
+Leakage checks scan the repository and packed artifact for credential shapes,
+fixture-identity canaries, private material, and forbidden state. These are
+defense in depth, not a substitute for secret revocation after exposure.
+
+### Supply-chain compromise
+
+The project is one package with a committed pnpm lockfile, Node 22 floor, two
+runtime dependencies, a production audit gate, and a clean build before
+packing. CI uses minimal permissions and pins third-party Actions to full
+commit SHAs. Live fixture secrets are absent from offline pull-request jobs.
+
+Dependency, registry, runner, operating-system, and maintainer-account
+compromise remain outside what repository checks can fully prevent.
+
+## Residual risks
+
+- Trusted project tests can expose their environment during `record`.
+- Proof tests can misuse their restricted installation token.
+- Dynamic tests can miss production behavior.
+- GitHub documentation or platform behavior can change after the catalog
+  review date.
+- File modes do not provide equivalent protection on every filesystem.
+- A compromised machine can observe process memory, Keychain access, and file
+  reads.
+- Reviewers can accept an unsafe permission or coverage change.
+
+These risks are why GrantTrace's claim stays scenario-bound and why live proof
+requires a disposable one-repository fixture.

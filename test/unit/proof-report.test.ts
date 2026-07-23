@@ -121,8 +121,8 @@ describe("allowlisted ephemeral proof report", () => {
 
 function validReport(): Record<string, unknown> {
   return {
-    schemaVersion: 1,
-    toolVersion: "0.0.0-dev",
+    schemaVersion: 2,
+    toolVersion: "0.1.0-beta.1",
     apiVersion: "2026-03-10",
     sourceCommit: "abcdef1234567",
     scenario: "triage-integration",
@@ -133,6 +133,11 @@ function validReport(): Record<string, unknown> {
     },
     contractHash: `sha256:${"b".repeat(64)}`,
     selectedPermissions: {
+      issues: "write",
+      contents: "read",
+    },
+    manualKeeps: {},
+    requestedPermissions: {
       issues: "write",
       contents: "read",
     },
@@ -152,7 +157,15 @@ function validReport(): Record<string, unknown> {
       observedOperations: 4,
     },
     positiveProof: { status: "pass" },
-    negativeControl: { status: "not_applicable" },
+    negativeControls: [
+      {
+        id: "issue-comment-create",
+        mode: "mutating",
+        removedPermission: "issues",
+        status: "not_applicable",
+        cleanup: "not_required",
+      },
+    ],
     cleanup: { status: "pass" },
   };
 }

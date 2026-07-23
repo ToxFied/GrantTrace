@@ -22,23 +22,31 @@ const ContractRouteSchema = z.strictObject({
   evidence: z
     .array(z.enum(["runtime_header", "pinned_catalog"]))
     .min(1),
+  scenarios: z.array(ScenarioNameSchema).min(1),
 });
 
 const ManualKeepSchema = z.strictObject({
   level: PermissionLevelSchema,
-  reason: z.string().trim().min(1).max(240),
+  reason: z
+    .string()
+    .trim()
+    .min(1)
+    .max(240)
+    .regex(/^[^\u0000-\u001f\u007f]+$/u),
 });
 
 export const GrantTraceContractSchema = z.strictObject({
-  schemaVersion: z.literal(1),
+  schemaVersion: z.literal(2),
   toolVersion: z.string().min(1).max(64),
   apiVersion: z.string().regex(/^\d{4}-\d{2}-\d{2}$/u),
   catalog: CatalogIdentitySchema,
-  scenarios: z.array(
-    z.strictObject({
-      name: ScenarioNameSchema,
-    }),
-  ),
+  scenarios: z
+    .array(
+      z.strictObject({
+        name: ScenarioNameSchema,
+      }),
+    )
+    .min(1),
   routes: z.array(ContractRouteSchema),
   selectedPermissions: PermissionAssignmentSchema,
   permissionFrontier: z.array(PermissionAssignmentSchema).min(1),
@@ -62,3 +70,41 @@ export const GrantTraceContractSchema = z.strictObject({
 });
 
 export type GrantTraceContract = z.infer<typeof GrantTraceContractSchema>;
+
+export const GrantTraceContractV1Schema = z.strictObject({
+  schemaVersion: z.literal(1),
+  toolVersion: z.string().min(1).max(64),
+  apiVersion: z.string().regex(/^\d{4}-\d{2}-\d{2}$/u),
+  catalog: CatalogIdentitySchema,
+  scenarios: z
+    .array(
+      z.strictObject({
+        name: ScenarioNameSchema,
+      }),
+    )
+    .min(1),
+  routes: z.array(ContractRouteSchema.omit({ scenarios: true })),
+  selectedPermissions: PermissionAssignmentSchema,
+  permissionFrontier: z.array(PermissionAssignmentSchema).min(1),
+  manualKeeps: z.record(PermissionNameSchema, ManualKeepSchema),
+  unknowns: z.array(
+    z.strictObject({
+      scenario: ScenarioNameSchema,
+      method: z.enum([
+        "DELETE",
+        "GET",
+        "HEAD",
+        "PATCH",
+        "POST",
+        "PUT",
+        "UNKNOWN",
+      ]),
+      template: z.string().min(1).max(256).startsWith("/").nullable(),
+      finding: ObservationFindingSchema,
+    }),
+  ),
+});
+
+export type GrantTraceContractV1 = z.infer<
+  typeof GrantTraceContractV1Schema
+>;

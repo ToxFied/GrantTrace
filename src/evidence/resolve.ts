@@ -161,6 +161,8 @@ export function resolveEvidence(
       route,
       alternatives: canonicalizeDNF(alternatives),
       evidence,
+      scenarios: [...new Set(group.map((observation) => observation.scenario))]
+        .sort(compareAscii),
     });
 
     void key;

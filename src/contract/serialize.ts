@@ -1,14 +1,19 @@
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 
 import {
+  assignmentKey,
   canonicalizeAssignment,
   canonicalizeDNF,
+  comparePermissionLevels,
 } from "../permissions/canonical.js";
 import { compareAscii } from "../deterministic.js";
+import { solvePermissionContract } from "../permissions/solver.js";
+import { MANDATORY_INSTALLATION_PERMISSIONS } from "../proof/permission-baseline.js";
 import {
   GrantTraceContractSchema,
+  GrantTraceContractV1Schema,
   type GrantTraceContract,
 } from "./schema.js";
 
@@ -33,6 +38,17 @@ export function contractHash(contract: GrantTraceContract): `sha256:${string}` {
 }
 
 export async function readContract(path: string): Promise<GrantTraceContract> {
+  return (await readContractWithMetadata(path)).contract;
+}
+
+export type ReadContractResult = {
+  contract: GrantTraceContract;
+  migratedFromV1: boolean;
+};
+
+export async function readContractWithMetadata(
+  path: string,
+): Promise<ReadContractResult> {
   let content: string;
   try {
     content = await readFile(path, "utf8");
@@ -49,7 +65,27 @@ export async function readContract(path: string): Promise<GrantTraceContract> {
   }
 
   try {
-    return canonicalizeContract(GrantTraceContractSchema.parse(JSON.parse(content)));
+    const raw: unknown = JSON.parse(content);
+    const current = GrantTraceContractSchema.safeParse(raw);
+    if (current.success) {
+      return {
+        contract: canonicalizeContract(current.data),
+        migratedFromV1: false,
+      };
+    }
+    const legacy = GrantTraceContractV1Schema.parse(raw);
+    const scenarios = legacy.scenarios.map((scenario) => scenario.name);
+    return {
+      contract: canonicalizeContract({
+        ...legacy,
+        schemaVersion: 2,
+        routes: legacy.routes.map((route) => ({
+          ...route,
+          scenarios,
+        })),
+      }),
+      migratedFromV1: true,
+    };
   } catch {
     throw new ContractFileError("Contract file is invalid.");
   }
@@ -61,7 +97,7 @@ export async function writeContractAtomic(
 ): Promise<void> {
   const directory = dirname(path);
   await mkdir(directory, { recursive: true });
-  const temporaryPath = `${path}.tmp-${process.pid}`;
+  const temporaryPath = `${path}.tmp-${process.pid}-${randomBytes(6).toString("hex")}`;
 
   try {
     await writeFile(temporaryPath, serializeContract(contract), {
@@ -78,8 +114,8 @@ export async function writeContractAtomic(
 
 function canonicalizeContract(contract: GrantTraceContract): GrantTraceContract {
   const parsed = GrantTraceContractSchema.parse(contract);
-  return {
-    schemaVersion: 1,
+  const canonical: GrantTraceContract = {
+    schemaVersion: 2,
     toolVersion: parsed.toolVersion,
     apiVersion: parsed.apiVersion,
     catalog: {
@@ -96,6 +132,7 @@ function canonicalizeContract(contract: GrantTraceContract): GrantTraceContract 
         template: route.template,
         alternatives: canonicalizeDNF(route.alternatives),
         evidence: [...new Set(route.evidence)].sort(compareEvidence),
+        scenarios: [...new Set(route.scenarios)].sort(compareAscii),
       }))
       .sort((left, right) =>
         compareAscii(
@@ -110,9 +147,12 @@ function canonicalizeContract(contract: GrantTraceContract): GrantTraceContract 
         compareAscii(JSON.stringify(left), JSON.stringify(right)),
       ),
     manualKeeps: Object.fromEntries(
-      Object.entries(parsed.manualKeeps).sort(([left], [right]) =>
-        compareAscii(left, right),
-      ),
+      Object.entries(parsed.manualKeeps)
+        .sort(([left], [right]) => compareAscii(left, right))
+        .map(([permission, keep]) => [
+          permission,
+          { level: keep.level, reason: keep.reason.trim() },
+        ]),
     ),
     unknowns: [...parsed.unknowns].sort((left, right) =>
       compareAscii(
@@ -129,8 +169,99 @@ function canonicalizeContract(contract: GrantTraceContract): GrantTraceContract 
           right.finding,
         ].join("\u0000"),
       ),
-    ),
+      ),
   };
+  validateContractSemantics(canonical);
+  return canonical;
+}
+
+function validateContractSemantics(contract: GrantTraceContract): void {
+  const scenarioNames = contract.scenarios.map((scenario) => scenario.name);
+  const declaredScenarios = new Set(scenarioNames);
+  if (declaredScenarios.size !== scenarioNames.length) {
+    throw new ContractFileError("Contract scenarios must be unique.");
+  }
+
+  const routeKeys = contract.routes.map(
+    (route) => `${route.method} ${route.template}`,
+  );
+  if (new Set(routeKeys).size !== routeKeys.length) {
+    throw new ContractFileError("Contract routes must be unique.");
+  }
+
+  const attributedScenarios = new Set<string>();
+  for (const route of contract.routes) {
+    for (const scenario of route.scenarios) {
+      if (!declaredScenarios.has(scenario)) {
+        throw new ContractFileError(
+          "Route attribution references an undeclared scenario.",
+        );
+      }
+      attributedScenarios.add(scenario);
+    }
+  }
+  for (const unknown of contract.unknowns) {
+    if (!declaredScenarios.has(unknown.scenario)) {
+      throw new ContractFileError(
+        "Unknown evidence references an undeclared scenario.",
+      );
+    }
+    attributedScenarios.add(unknown.scenario);
+  }
+  if (
+    attributedScenarios.size !== declaredScenarios.size ||
+    [...declaredScenarios].some(
+      (scenario) => !attributedScenarios.has(scenario),
+    )
+  ) {
+    throw new ContractFileError(
+      "Every declared scenario needs route or unknown-evidence attribution.",
+    );
+  }
+
+  const solution = solvePermissionContract(
+    contract.routes.map((route) => ({
+      route: { method: route.method, template: route.template },
+      alternatives: route.alternatives,
+      evidence: route.evidence,
+      scenarios: route.scenarios,
+    })),
+    { baseline: MANDATORY_INSTALLATION_PERMISSIONS },
+  );
+  if (
+    assignmentKey(solution.selected) !==
+      assignmentKey(contract.selectedPermissions) ||
+    solution.frontier.map(assignmentKey).sort(compareAscii).join("\n") !==
+      contract.permissionFrontier
+        .map(assignmentKey)
+        .sort(compareAscii)
+        .join("\n")
+  ) {
+    throw new ContractFileError(
+      "Selected permissions do not exactly match the attributed routes.",
+    );
+  }
+
+  for (const [permission, keep] of Object.entries(contract.manualKeeps)) {
+    const mandatory = MANDATORY_INSTALLATION_PERMISSIONS[permission];
+    if (
+      mandatory !== undefined &&
+      comparePermissionLevels(mandatory, keep.level) >= 0
+    ) {
+      throw new ContractFileError(
+        "A manual keep duplicates the mandatory GitHub baseline.",
+      );
+    }
+    const selected = contract.selectedPermissions[permission];
+    if (
+      selected !== undefined &&
+      comparePermissionLevels(selected, keep.level) >= 0
+    ) {
+      throw new ContractFileError(
+        "A manual keep duplicates observed selected access.",
+      );
+    }
+  }
 }
 
 function compareEvidence(left: string, right: string): number {

@@ -19,7 +19,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 const projectRoot = dirname(
   dirname(dirname(fileURLToPath(new URL(import.meta.url)))),
 );
-const cliPath = join(projectRoot, "src", "cli", "main.ts");
+const cliPath = join(projectRoot, "src", "cli", "bin.ts");
 const tsxImport = import.meta.resolve("tsx");
 const childDirectory = join(projectRoot, "test", "fixtures", "children");
 
@@ -193,7 +193,7 @@ describe("record/check CLI workflow", () => {
     expect(check.stderr).toContain("No observations were found");
   });
 
-  it("warns without failing when a permission is only no longer observed", async () => {
+  it("blocks when a permission is no longer observed until reviewed", async () => {
     expect((await recordFixture("instrumented.ts")).code).toBe(0);
     expect(
       (await recordFixture("contents.ts", "contents-integration")).code,
@@ -209,10 +209,10 @@ describe("record/check CLI workflow", () => {
       ),
     );
     const check = await runCli(["check"]);
-    expect(check.code).toBe(0);
-    expect(check.stdout).toContain("passed with warnings");
-    expect(check.stdout).toContain("contents: read");
-    expect(check.stdout).toContain("not evidence");
+    expect(check.code).toBe(6);
+    expect(check.stderr).toContain("No longer observed");
+    expect(check.stderr).toContain("contents: read");
+    expect(check.stderr).toContain("granttrace check --accept");
   });
 
   it("rejects an excessive aggregate observation file set", async () => {
@@ -247,6 +247,27 @@ describe("record/check CLI workflow", () => {
     ]);
     expect(result.code).toBe(4);
     expect(result.stderr).toContain("could not be started");
+  });
+
+  it("terminates a hung recording at the configured timeout", async () => {
+    const result = await runCli([
+      "record",
+      "--scenario",
+      "triage-integration",
+      "--timeout",
+      "1s",
+      "--",
+      process.execPath,
+      "-e",
+      "setInterval(() => undefined, 1_000)",
+    ]);
+
+    expect(result.code).toBe(4);
+    expect(result.stderr).toContain("GrantTrace record timed out");
+    const sessions = await readdir(
+      join(workingDirectory, ".granttrace", "sessions"),
+    );
+    expect(sessions).toEqual([]);
   });
 
   it("preserves and displays validated manual keeps separately", async () => {

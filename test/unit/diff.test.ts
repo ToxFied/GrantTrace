@@ -33,7 +33,7 @@ describe("contract diff classification", () => {
     expect(diff.hasBlockingChange).toBe(true);
   });
 
-  it("treats a pure route/permission contraction as warning-only", () => {
+  it("blocks a pure route/permission contraction for explicit review", () => {
     const previous = contract({ contents: "read", issues: "write" });
     previous.routes = [
       route("GET", "/repos/{owner}/{repo}/contents/{path}", "contents", "read"),
@@ -51,8 +51,8 @@ describe("contract diff classification", () => {
     expect(diff.removals).toEqual([
       { permission: "contents", from: "read", to: null },
     ]);
-    expect(diff.warningOnly).toBe(true);
-    expect(diff.hasBlockingChange).toBe(false);
+    expect(diff.warningOnly).toBe(false);
+    expect(diff.hasBlockingChange).toBe(true);
   });
 });
 
@@ -60,12 +60,19 @@ function contract(
   selectedPermissions: GrantTraceContract["selectedPermissions"],
 ): GrantTraceContract {
   return {
-    schemaVersion: 1,
-    toolVersion: "0.0.0-dev",
+    schemaVersion: 2,
+    toolVersion: "0.1.0-beta.1",
     apiVersion: "2026-03-10",
     catalog: fixtureCatalog.identity,
     scenarios: [{ name: "triage-integration" }],
-    routes: [],
+    routes: Object.entries(selectedPermissions).map(([permission, level]) =>
+      route(
+        "GET",
+        `/test/{${permission}}`,
+        permission,
+        level,
+      ),
+    ),
     selectedPermissions,
     permissionFrontier: [selectedPermissions],
     manualKeeps: {},
@@ -84,5 +91,6 @@ function route(
     template,
     alternatives: [[{ permission, level }]],
     evidence: ["runtime_header"],
+    scenarios: ["triage-integration"],
   };
 }

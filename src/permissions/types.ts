@@ -22,6 +22,7 @@ export type RouteRequirement = {
   route: CanonicalRoute;
   alternatives: PermissionDNF;
   evidence: EvidenceSource[];
+  scenarios: string[];
 };
 
 export type PermissionAssignment = Record<string, PermissionLevel>;
