@@ -17,7 +17,7 @@ export default function Layout({ children }: LayoutProps<"/docs">) {
               aria-hidden
               className="size-1.5 rounded-full bg-fd-foreground/60 shadow-[0_0_0_3px_color-mix(in_oklab,var(--color-fd-foreground)_10%,transparent)]"
             />
-            GrantTrace 0.1 beta
+            GrantTrace 0.1.0-beta.1
           </div>
         ),
       }}

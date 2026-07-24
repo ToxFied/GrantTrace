@@ -9,9 +9,10 @@ import {
 } from "fumadocs-ui/layouts/docs/page";
 import { createRelativeLink } from "fumadocs-ui/mdx";
 import { notFound } from "next/navigation";
-import { getMDXComponents } from "@/components/mdx";
+import { DocsLink, getMDXComponents } from "@/components/mdx";
 import type { Metadata } from "next";
 import {
+  productionUrl,
   repositoryBranch,
   repositoryUrl,
 } from "@/lib/shared";
@@ -51,7 +52,7 @@ export default async function Page(props: PageProps<"/docs/[[...slug]]">) {
       <DocsBody className="max-w-none [&>h2]:mt-12 [&>h2]:border-b [&>h2]:border-fd-border [&>h2]:pb-2 [&>h2]:tracking-[-0.025em] [&>h3]:mt-8 [&>h3]:tracking-[-0.015em]">
         <MDX
           components={getMDXComponents({
-            a: createRelativeLink(source, page),
+            a: createRelativeLink(source, page, DocsLink),
           })}
         />
       </DocsBody>
@@ -73,5 +74,14 @@ export async function generateMetadata(
   return {
     title: page.data.title,
     description: page.data.description,
+    alternates: {
+      canonical: `${productionUrl}${page.url}`,
+    },
+    openGraph: {
+      title: `${page.data.title} · GrantTrace`,
+      description: page.data.description,
+      url: `${productionUrl}${page.url}`,
+      type: "article",
+    },
   };
 }
