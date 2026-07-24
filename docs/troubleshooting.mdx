@@ -1,0 +1,101 @@
+---
+title: Troubleshooting
+description: Fix common GrantTrace failures from the message or exit code you can see.
+---
+
+## `record` reports no observed operation
+
+- Confirm the child imports `granttrace/octokit`.
+- Confirm the executed path constructs and uses the instrumented Octokit
+  class, not a second plain client.
+- Confirm the child actually makes at least one request before exiting.
+
+An unsupported route is still recorded as a safe blocking finding. In that
+case `record` can succeed and the following `check` exits `7`.
+
+## `check` exits `3`
+
+There are no usable local observations and no accepted contract to compare.
+Record at least one named scenario, then run `check` again. If an accepted
+contract exists, removing the final recording instead produces a reviewable
+contraction (`6`), not this error.
+
+## `check` exits `6`
+
+This is the expected review state, not corrupted evidence. Inspect permission,
+route, evidence-provenance, and scenario-attribution changes. Run
+`check --accept` only after deciding the new contract is intentional.
+
+Never put `--accept` in CI.
+
+## `check` exits `7`
+
+GrantTrace found an unknown or unsupported route, a malformed permission
+header, or a disagreement between runtime and catalog evidence.
+
+Do not add a permission by guess. Check the [REST catalog](catalog.md), adjust
+the scenario, or contribute a catalog entry backed by the pinned official
+GitHub documentation.
+
+## `doctor` says local state is not initialized
+
+Run:
+
+```bash
+pnpm exec granttrace init
+pnpm exec granttrace doctor
+```
+
+Doctor severity is intentional:
+
+- `FAIL` blocks local execution.
+- `WARN` means attempted optional live configuration is incomplete or unsafe;
+  offline record/check work remains available.
+- `INFO` means optional live proof is absent and is nonblocking.
+- `PASS` means that check succeeded.
+
+Stale sessions are a `FAIL`. Inspect them and verify any possible live mutation
+residue before removing them and retrying.
+
+## Live-proof configuration fails
+
+Review the [live-proof setup](live-setup.md). Check the disposable repository
+suffix, explicit confirmation, numeric selectors, and private-key provider.
+Configure exactly one key provider.
+
+`doctor` detects provider conflicts and incomplete live setup without using
+GitHub. The proof preflight repeats authoritative validation of every required
+field before loading credentials or minting a token.
+
+## `prove` reports a contract mismatch
+
+Record the same scenario normally, run `check`, review the diff, and accept it
+only if the behavior change is intentional. Live proof requires exact
+reproduction of the accepted scenario slice.
+
+## A record child times out or its test fails
+
+Treat the result as indeterminate test evidence, not a permission rejection.
+Stabilize the scenario or choose a timeout from one second through 60 minutes
+using `ms`, `s`, or `m`:
+
+```bash
+pnpm exec granttrace record --scenario issue-triage --timeout 30m -- \
+  pnpm test -- issue-triage
+```
+
+An interrupt always discards partial record evidence, even when the child
+handles the signal and exits zero. An unresponsive process group is force-killed
+after a bounded grace period on supported platforms.
+
+## A proof child times out or its test fails
+
+Proof timeouts are also indeterminate, never permission rejections. Use a
+timeout from one second through 30 minutes with the same `ms`, `s`, or `m`
+syntax. A proof interrupt cannot pass even if the child exits zero after
+handling the signal.
+
+## Cleanup fails
+
+Cleanup failure prevents an unqualified pass. Inspect the disposable fixture
+for residue before retrying.

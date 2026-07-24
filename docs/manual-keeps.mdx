@@ -1,0 +1,55 @@
+---
+title: Manual keeps
+description: Retain intentional access without misrepresenting it as observed necessity.
+---
+
+Some GitHub App access may be required by a separately reviewed path that your
+recorded scenarios do not exercise. A manual keep makes that exception
+explicit.
+
+## Add a keep
+
+```bash
+pnpm exec granttrace keep add contents:read \
+  --reason "Required by a separately reviewed webhook recovery path"
+```
+
+Every reason is committed review text: 1–240 characters, identity-free and
+secret-free. Control, formatting, or invisible characters, URLs, and obvious
+private-key or token-shaped strings are rejected and are not echoed. You remain
+responsible for excluding identities or sensitive context that a validator
+cannot recognize mechanically.
+
+```bash
+pnpm exec granttrace keep list
+pnpm exec granttrace keep remove contents
+```
+
+`keep add` and `keep remove` intentionally update the accepted lockfile
+directly. Review and commit that diff.
+
+## What a keep means
+
+A keep is not observed access and GrantTrace never calls it proven necessity.
+It stays separate from `selectedPermissions`.
+
+During live proof:
+
+```text
+requested = scenario-selected permissions + all manual keeps
+effective = requested + mandatory metadata:read
+```
+
+The raw installation-token response must match the effective assignment
+exactly. Additional or missing access blocks the proof.
+
+Keeps are global. Every scenario proof requests every validated keep, so prefer
+small, specific exceptions and revisit them when the separately reviewed path
+changes.
+
+If all scenario recordings are retired, `check --accept` preserves validated
+keeps in the zero-scenario contract until you remove them explicitly. They
+remain retained, unproven access and do not become observed coverage.
+
+You cannot add a keep that duplicates selected access or the mandatory
+`metadata:read` baseline.
