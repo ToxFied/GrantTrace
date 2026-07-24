@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Provider } from "@/components/provider";
-import { deploymentBasePath } from "@/lib/shared";
+import { deploymentBasePath, productionUrl } from "@/lib/shared";
 import "./global.css";
 
 const sans = Geist({
@@ -15,6 +15,7 @@ const mono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(productionUrl),
   title: {
     default: "GrantTrace Docs",
     template: "%s · GrantTrace",
@@ -34,6 +35,7 @@ export const metadata: Metadata = {
     description:
       "Test-bound GitHub App REST permission contracts that stay reviewable in Git.",
     type: "website",
+    siteName: "GrantTrace Docs",
   },
   twitter: {
     card: "summary",

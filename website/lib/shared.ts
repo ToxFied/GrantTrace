@@ -4,3 +4,4 @@ export const docsRoute = "/docs";
 export const docsContentRoute = "/llms.mdx/docs";
 export const repositoryUrl = "https://github.com/ToxFied/GrantTrace";
 export const repositoryBranch = "main";
+export const productionUrl = "https://toxfied.github.io/GrantTrace";

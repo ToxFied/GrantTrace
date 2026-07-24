@@ -15,7 +15,11 @@ Create a production export with:
 pnpm build
 ```
 
-The export is configured for the repository base path when
-`GITHUB_ACTIONS=true`. It is intentionally not deployed by this repository
-before the public release. The repository owner must choose and configure
-hosting separately.
+The production site is deployed through `.github/workflows/docs-pages.yml`:
+
+- Documentation: <https://toxfied.github.io/GrantTrace/docs/>
+- Repository root: <https://toxfied.github.io/GrantTrace/> (redirects to the
+  documentation)
+
+The static export uses the `/GrantTrace` repository base path whenever
+`GITHUB_ACTIONS=true`.

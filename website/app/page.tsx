@@ -1,4 +1,15 @@
-import { deploymentBasePath } from "@/lib/shared";
+import type { Metadata } from "next";
+import { deploymentBasePath, productionUrl } from "@/lib/shared";
+
+export const metadata: Metadata = {
+  alternates: {
+    canonical: `${productionUrl}/docs/`,
+  },
+  robots: {
+    index: false,
+    follow: true,
+  },
+};
 
 export default function Page() {
   const docsUrl = `${deploymentBasePath}/docs/`;
