@@ -34,6 +34,12 @@
         "runtime_header",
         "pinned_catalog"
       ],
+      "scenarioEvidence": {
+        "disposable-comment": [
+          "runtime_header",
+          "pinned_catalog"
+        ]
+      },
       "scenarios": [
         "disposable-comment"
       ]

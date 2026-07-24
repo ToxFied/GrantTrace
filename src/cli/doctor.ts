@@ -1,4 +1,4 @@
-import { access, readFile, readdir, stat } from "node:fs/promises";
+import { access } from "node:fs/promises";
 import { join } from "node:path";
 
 import { readContractWithMetadata } from "../contract/serialize.js";
@@ -11,6 +11,10 @@ import { LiveFixtureConfig } from "../proof/live-config.js";
 import type { CliContext } from "./context.js";
 import { writeLine } from "./context.js";
 import { ExitCode, type ExitCodeValue } from "./exit-codes.js";
+import {
+  inspectLocalState,
+  stateIgnorePresent,
+} from "../security/local-state.js";
 
 export async function runDoctor(
   args: string[],
@@ -41,51 +45,100 @@ export async function runDoctor(
 
   const nodeMajor = Number.parseInt(process.versions.node.split(".")[0] ?? "", 10);
   const nodeReady = Number.isInteger(nodeMajor) && nodeMajor >= 22;
-  lines.push(status(nodeReady, `Node ${process.versions.node}`, "Node 22+ required"));
+  lines.push(
+    diagnostic(
+      nodeReady ? "PASS" : "FAIL",
+      nodeReady ? `Node ${process.versions.node}` : "Node 22+ required",
+    ),
+  );
   blocking ||= !nodeReady;
 
   const ignored = await stateIgnorePresent(context.cwd);
-  lines.push(status(ignored, ".granttrace/ is ignored", ".granttrace/ is not ignored"));
-
-  const state = await localState(context.cwd);
   lines.push(
-    status(
-      state.ready,
-      `Local state is private; ${state.observationFiles} scenario recording${
-        state.observationFiles === 1 ? "" : "s"
-      } found`,
-      "Local state is not initialized",
+    diagnostic(
+      ignored ? "PASS" : "FAIL",
+      ignored ? ".granttrace/ is ignored" : ".granttrace/ is not ignored",
     ),
   );
+  blocking ||= !ignored;
+
+  const state = await inspectLocalState(context.cwd);
+  lines.push(
+    diagnostic(
+      state.ready ? "PASS" : "FAIL",
+      state.ready
+        ? `Local state is private; ${state.observationFiles} scenario recording${
+        state.observationFiles === 1 ? "" : "s"
+          } found`
+        : localStateMessage(state.issue),
+    ),
+  );
+  blocking ||= !state.ready;
+  if (state.staleSessions > 0) {
+    lines.push(
+      diagnostic(
+        "FAIL",
+        `${state.staleSessions} stale session artifact${
+          state.staleSessions === 1 ? "" : "s"
+        } require review`,
+      ),
+    );
+    blocking = true;
+  }
 
   const contract = await contractState(context.cwd);
-  lines.push(status(contract.ready, contract.message, contract.message));
+  lines.push(
+    diagnostic(
+      contract.invalid ? "FAIL" : contract.ready ? "PASS" : "INFO",
+      contract.message,
+    ),
+  );
   blocking ||= contract.invalid;
 
   const provider = configuredPrivateKeyProvider(context.environment);
+  const liveAttempted =
+    provider !== null ||
+    [
+      "GRANTTRACE_APP_ID",
+      "GRANTTRACE_INSTALLATION_ID",
+      "GRANTTRACE_APP_PRIVATE_KEY",
+      "GRANTTRACE_APP_PRIVATE_KEY_FILE",
+      "GRANTTRACE_APP_PRIVATE_KEY_KEYCHAIN_SERVICE",
+      "GRANTTRACE_APP_PRIVATE_KEY_KEYCHAIN_ACCOUNT",
+      "GRANTTRACE_LIVE_OWNER",
+      "GRANTTRACE_LIVE_REPOSITORY",
+      "GRANTTRACE_LIVE_ISSUE_NUMBER",
+      "GRANTTRACE_LIVE_CONFIRM_DISPOSABLE",
+    ].some((name) => (context.environment[name]?.trim().length ?? 0) > 0);
   let liveReady = false;
   let providerProblem: string | null = null;
-  if (provider !== null) {
-    try {
-      resolvePrivateKey(context.environment);
-      LiveFixtureConfig.load(context.environment);
-      liveReady = true;
-    } catch (error) {
-      liveReady = false;
-      providerProblem =
-        error instanceof PrivateKeyProviderError
-          ? providerFailureMessage(error.code)
-          : null;
-    }
+  try {
+    resolvePrivateKey(context.environment);
+    LiveFixtureConfig.load(context.environment);
+    liveReady = true;
+  } catch (error) {
+    liveReady = false;
+    providerProblem =
+      error instanceof PrivateKeyProviderError &&
+      error.code !== "missing_provider"
+        ? providerFailureMessage(error.code)
+        : null;
   }
   lines.push(
-    status(
-      liveReady,
-      `Optional live proof is configured (${provider ?? "unknown"} provider)`,
-      provider === null
-        ? "Optional live proof is not configured"
+    diagnostic(
+      liveReady
+        ? "PASS"
+        : !liveAttempted && providerProblem === null
+          ? "INFO"
+          : "WARN",
+      liveReady
+        ? `Optional live proof is configured (${provider ?? "unknown"} provider)`
         : providerProblem ??
-          `Optional live proof configuration is incomplete (${provider} provider)`,
+            (!liveAttempted
+              ? "Optional live proof is not configured"
+              : provider === null
+                ? "Optional live proof configuration is incomplete"
+                : `Optional live proof configuration is incomplete (${provider} provider)`),
     ),
   );
 
@@ -96,7 +149,7 @@ export async function runDoctor(
       "  Local verification is blocked.",
       "",
       "Next",
-      "  Fix the failed item above, then run granttrace doctor again.",
+      "  Fix the failed item above, verify any live mutation residue, then run granttrace doctor again.",
       "",
     );
   } else if (!state.ready) {
@@ -114,7 +167,7 @@ export async function runDoctor(
       "  Local recording and checks are ready.",
       "",
       "Next",
-      contract.ready
+      state.observationFiles > 0 || contract.ready
         ? "  granttrace check"
         : "  Record a scenario, then run granttrace check.",
       "",
@@ -146,43 +199,27 @@ function providerFailureMessage(
   }
 }
 
-function status(ok: boolean, success: string, failure: string): string {
-  return `  ${ok ? "PASS" : "INFO"}  ${ok ? success : failure}`;
+function diagnostic(
+  level: "FAIL" | "INFO" | "PASS" | "WARN",
+  message: string,
+): string {
+  return `  ${level.padEnd(4, " ")}  ${message}`;
 }
 
-async function stateIgnorePresent(cwd: string): Promise<boolean> {
-  try {
-    const content = await readFile(join(cwd, ".gitignore"), "utf8");
-    return content
-      .split(/\r?\n/u)
-      .map((line) => line.trim())
-      .includes(".granttrace/");
-  } catch {
-    return false;
-  }
-}
-
-async function localState(cwd: string): Promise<{
-  ready: boolean;
-  observationFiles: number;
-}> {
-  const stateDirectory = join(cwd, ".granttrace");
-  try {
-    const stateStat = await stat(stateDirectory);
-    if (!stateStat.isDirectory() || (stateStat.mode & 0o077) !== 0) {
-      return { ready: false, observationFiles: 0 };
-    }
-    const observationDirectory = join(stateDirectory, "observations");
-    await access(observationDirectory);
-    const entries = await readdir(observationDirectory, { withFileTypes: true });
-    return {
-      ready: true,
-      observationFiles: entries.filter(
-        (entry) => entry.isFile() && entry.name.endsWith(".ndjson"),
-      ).length,
-    };
-  } catch {
-    return { ready: false, observationFiles: 0 };
+function localStateMessage(
+  issue: Awaited<ReturnType<typeof inspectLocalState>>["issue"],
+): string {
+  switch (issue) {
+    case "missing":
+      return "Local state is not initialized";
+    case "unsafe_root":
+      return "Local state root is not a private directory owned by the current user";
+    case "unsafe_observations":
+      return "Observation state is not a private directory owned by the current user";
+    case "unsafe_artifact":
+      return "Local state contains an unsafe mode, symlink, or artifact";
+    case null:
+      return "Local state is ready";
   }
 }
 
@@ -195,11 +232,13 @@ async function contractState(cwd: string): Promise<{
     const result = await readContractWithMetadata(
       join(cwd, "granttrace.lock.json"),
     );
-    if (result.migratedFromV1) {
+    if (result.migratedFromV1 || result.migratedFromLegacyV2) {
       return {
         ready: false,
         invalid: false,
-        message: "Contract is schema v1; run granttrace check --accept after review",
+        message: result.migratedFromV1
+          ? "Contract is schema v1; run granttrace check --accept after review"
+          : "Contract needs scenario-provenance review; run granttrace check",
       };
     }
     return {

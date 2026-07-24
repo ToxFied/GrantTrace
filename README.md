@@ -1,151 +1,169 @@
+<h1 align="center">
+  <picture>
+    <source
+      media="(prefers-color-scheme: dark)"
+      srcset=".github/assets/granttrace-hero-dark.svg"
+    >
+    <img
+      src=".github/assets/granttrace-hero-light.svg"
+      width="760"
+      alt="GrantTrace — Scenario-bound GitHub App REST permission contracts"
+    >
+  </picture>
+</h1>
+
 <p align="center">
-  <img src="./granttrace-mark.svg" width="88" height="88" alt="GrantTrace">
+  <a href="https://toxfied.github.io/GrantTrace/docs/"><strong>Documentation</strong></a>
+  &nbsp;·&nbsp;
+  <a href="#quick-start">Quickstart</a>
+  &nbsp;·&nbsp;
+  <a href="#workflow">Workflow</a>
+  &nbsp;·&nbsp;
+  <a href="#cli-reference">CLI</a>
+  &nbsp;·&nbsp;
+  <a href="docs/threat-model.md">Security</a>
 </p>
 
-<h1 align="center">GrantTrace</h1>
+<p align="center">
+  <code>Node.js 22+</code>
+  &nbsp;
+  <code>GitHub REST 2026-03-10</code>
+  &nbsp;
+  <code>MIT</code>
+</p>
 
-[Documentation](https://toxfied.github.io/GrantTrace/docs/) ·
-[Repository](https://github.com/ToxFied/GrantTrace)
+GrantTrace turns the GitHub REST operations exercised by named test scenarios
+into a deterministic permission contract you can review in Git.
 
-GrantTrace makes GitHub App REST permission changes reproducible and
-reviewable. It is for teams that exercise their GitHub App through repeatable
-integration scenarios and want permission changes to become explicit code
-review.
+> **Guarantee boundary**
+>
+> GrantTrace reports the permissions those scenarios demonstrably require. It
+> does not claim whole-application least privilege; untested paths, GraphQL,
+> clients outside the supported recording path, and behavior outside recorded
+> scenarios stay outside the result.
 
-Its exact guarantee is deliberately narrow:
-
-> For the GitHub REST operations exercised by these named, instrumented
-> scenarios, these are the permissions the scenarios demonstrably require.
-
-GrantTrace does not claim whole-application least privilege. Untested paths,
-GraphQL calls, uninstrumented clients, and behavior outside the recorded
-scenarios are outside the result.
-
-The workflow is:
+## Workflow
 
 ```text
-instrument test scenarios
-  -> record safe route evidence
-  -> review a deterministic contract diff
-  -> accept granttrace.lock.json
-  -> fail CI on future permission or coverage changes
-  -> optionally prove one scenario with a restricted live token
+run a scenario through GrantTrace → review its permission diff
+→ commit granttrace.lock.json → check it in CI → optionally prove live
 ```
 
-## Status and requirements
+```text
+$ granttrace check
 
-GrantTrace is prepared as `granttrace@0.1.0-beta.1` for Node.js 22 or newer.
-The package has not been published yet. Until it is, use a repository checkout
-or a locally packed tarball. After publication, the intended install command
-is:
+GrantTrace contract review required
+
+New permission
+  issues: write
+
+Observed in
+  Route     POST /repos/{owner}/{repo}/issues/{issue_number}/comments
+  Scenarios triage-integration
+  Evidence  Runtime response header, Pinned permission catalog
+```
+
+Contracts are deterministic and identity-free. They contain no repository
+names, resource IDs, commands, tokens, private keys, local paths, or timestamps.
+
+## Quick start
+
+### Requirements
+
+- Node.js 22 or newer
+- A repeatable Node.js test or integration scenario
+- GitHub REST API version `2026-03-10` (pinned by GrantTrace)
+
+### Install
+
+Once the beta is published:
 
 ```bash
 pnpm add --save-dev granttrace@beta
 ```
 
-The GitHub REST API version is explicitly pinned to `2026-03-10`.
-
-To install the exact pre-publication tarball from a checkout:
+Until then, install GrantTrace `0.1.0-beta.1` from a package archive built from
+source:
 
 ```bash
+git clone https://github.com/ToxFied/GrantTrace.git
+cd GrantTrace
+corepack enable
 pnpm install --frozen-lockfile
 mkdir -p /tmp/granttrace-pack
 npm pack --pack-destination /tmp/granttrace-pack
+```
 
-# Run this in the consuming project:
+Install the resulting archive in your project:
+
+```bash
 pnpm add --save-dev /tmp/granttrace-pack/granttrace-0.1.0-beta.1.tgz
 ```
 
-`pnpm package:smoke` performs a stricter temporary clean-install check without
-leaving the tarball or consumer project behind.
-
-## Quickstart: first contract in 10–15 minutes
-
-### 1. Initialize local state
-
-From the project whose GitHub App tests you want to trace:
-
-```bash
-pnpm exec granttrace init
-pnpm exec granttrace doctor
-```
-
-`init` creates private `.granttrace/` state and adds it to `.gitignore`. It
-does not create credentials or change GitHub settings. `doctor` checks Node,
-local file modes, the accepted contract, and optional live-proof
-configuration without printing credential values or fixture identities.
-
-When working from this repository before publication, substitute
+The source-packaging block is temporary release plumbing, not the intended
+consumer onboarding. When developing GrantTrace itself, substitute
 `pnpm granttrace` for `pnpm exec granttrace`.
 
-### 2. Instrument the Octokit instance used by a test
-
-```ts
-import { Octokit } from "@octokit/core";
-import { grantTrace } from "granttrace/octokit";
-
-const TracedOctokit = Octokit.plugin(grantTrace);
-
-export const octokit = new TracedOctokit({
-  auth: process.env.GITHUB_TOKEN,
-});
-```
-
-The plugin is inert unless the process is launched by `granttrace record` or
-`granttrace prove`. During those sessions it pins API version `2026-03-10`.
-An explicitly conflicting version fails instead of producing evidence against
-the wrong catalog.
-
-Every GitHub REST request covered by the scenario must use this instrumented
-instance. GrantTrace cannot observe arbitrary network traffic.
-
-### 3. Record one named scenario
+### 1. Record a scenario
 
 ```bash
-pnpm exec granttrace record --scenario issue-triage -- \
+pnpm exec granttrace record issue-triage -- \
   pnpm test -- issue-triage
 ```
 
-The command after `--` is passed as argv with `shell: false`. Output is
-streamed to the terminal and not retained. The default timeout is 15 minutes;
+That is the complete standard setup. GrantTrace injects its recorder into the
+Node child, observes supported GitHub REST calls made through global `fetch`
+(including standard Octokit clients), creates private `.granttrace/` state,
+and adds that directory to `.gitignore`. You do not need to replace your
+Octokit constructor or run `init`.
+
+The command after `--` runs directly without a shell. Output is streamed to the
+terminal and not retained. The default timeout is 15 minutes;
 use `--timeout 30s`, `--timeout 5m`, or another value from one second through
-one hour when needed.
+one hour when needed. Terminal interrupts are remembered even if the child
+handles the signal and exits `0`; partial observations are discarded, and an
+unresponsive child is force-killed after a bounded grace period.
 
 Successful recording writes
-`.granttrace/observations/issue-triage.ndjson`. Recording the same scenario
-again atomically replaces that scenario's prior observations.
+`.granttrace/observations/issue-triage.ndjson`, then calculates and displays the
+contract diff in the same flow. Recording the same scenario again atomically
+replaces that scenario's prior observations.
 
-### 4. Review and accept
+On the first recording, GrantTrace creates nonsymlink `.granttrace/` state with
+private modes and ownership checks, then adds it to `.gitignore` before the
+test process can start. Existing unsafe or stale state blocks execution.
+`granttrace init` remains available for explicit setup and `granttrace doctor`
+for optional diagnostics.
 
-```bash
-pnpm exec granttrace check
-```
+### 2. Review and accept
 
-On a new or changed contract, `check` explains permission additions,
+In an interactive terminal, `record` explains permission additions,
 escalations, reductions, removals, route changes, evidence changes, and
-route-to-scenario attribution changes, then exits `6`. Nothing is accepted
-automatically.
+route-to-scenario attribution changes, then asks whether to accept the exact
+diff. Acceptance is always explicit.
 
-After reviewing the evidence:
+In CI or any noninteractive terminal, GrantTrace never accepts. A changed
+contract exits `6`; review it locally. You can also separate recording from
+review with `granttrace check` and explicitly write the reviewed contract with
+`granttrace check --accept`.
 
-```bash
-pnpm exec granttrace check --accept
-pnpm exec granttrace check
-```
+Commit the resulting identity-free `granttrace.lock.json`. CI can then run
+`granttrace check`; an unchanged contract exits `0`.
 
-`--accept` is the only recording workflow that writes
-`granttrace.lock.json`. Commit that identity-free file. A subsequent unchanged
-check exits `0`.
+If your project uses a custom fetch implementation, transport, unusual runtime,
+or advanced Octokit plugin composition, use the explicit adapter documented in
+[Octokit and custom transports](docs/instrument-octokit.mdx). GrantTrace never
+claims to observe requests outside its supported automatic or explicit
+instrumentation paths.
 
 The repository includes a fully local example:
 
 ```bash
-pnpm granttrace record --scenario disposable-comment -- \
+pnpm granttrace record disposable-comment -- \
   node --import tsx examples/triage-bot/scenario.ts
-pnpm granttrace check
 ```
 
-## Multiple scenarios
+## Working with multiple scenarios
 
 Record each scenario independently. `check` reads all sorted `.ndjson` files
 under `.granttrace/observations/`, attributes each canonical route to the
@@ -153,8 +171,8 @@ scenario names that exercised it, and solves one deterministic aggregate
 contract.
 
 ```bash
-pnpm exec granttrace record --scenario issue-triage -- pnpm test -- issue-triage
-pnpm exec granttrace record --scenario release-read -- pnpm test -- release-read
+pnpm exec granttrace record issue-triage -- pnpm test -- issue-triage
+pnpm exec granttrace record release-read -- pnpm test -- release-read
 pnpm exec granttrace scenario list
 pnpm exec granttrace check
 ```
@@ -167,20 +185,26 @@ pnpm exec granttrace check
 ```
 
 Removing local observations never edits the accepted contract. Review the
-coverage removal first, then use `check --accept`.
+coverage removal first, then use `check --accept`. Retiring the final scenario
+is also reviewable: acceptance writes a deterministic schema-v2 contract with
+zero scenarios, routes, selected permissions, and unknowns rather than
+silently deleting the lock. Validated manual keeps remain until explicitly
+removed; they remain retained, unproven access.
 
 Live proof is also scenario-scoped:
 
 ```bash
-pnpm exec granttrace prove --scenario issue-triage -- \
+pnpm exec granttrace prove issue-triage -- \
   pnpm test -- issue-triage
 ```
 
 For that run GrantTrace selects only routes attributed to `issue-triage`,
 recomputes its permission solution, and requires the live observations to
-reproduce that scenario slice exactly.
+reproduce that scenario slice exactly. Standard Node global-`fetch` and Octokit
+traffic is observed automatically here too; custom transports and runtimes use
+the same [explicit fallback](docs/instrument-octokit.mdx).
 
-## Evidence and solving
+## Evidence model
 
 GrantTrace reads GitHub's `X-Accepted-GitHub-Permissions` response header and
 checks it against a pinned offline catalog:
@@ -205,11 +229,13 @@ The stale flattened `@octokit/app-permissions` package is not treated as
 authoritative evidence because it cannot represent GitHub's AND/OR
 alternatives accurately.
 
-## Schema v2 and v1 migration
+## Contract format and migration
 
-Schema v2 stores stable route-to-scenario attribution. Contracts contain no
-timestamp, command, local path, machine value, repository identity, resource
-identity, token, or private key.
+Schema v2 stores stable route-to-scenario attribution and the exact evidence
+provenance used by each scenario on a shared route. A reviewed zero-scenario v2
+contract represents an explicit retirement of all recorded coverage. Contracts
+contain no timestamp, command, local path, machine value, repository identity,
+resource identity, token, or private key.
 
 Schema v1 remains readable. Because v1 did not say which scenario exercised
 which route, the reader conservatively attributes every legacy route to every
@@ -217,6 +243,10 @@ declared scenario for review. It never invents narrower attribution and never
 rewrites the file silently. Record the current scenarios, run `check`, review
 the attribution diff, and run `check --accept` to write v2. `prove` blocks a
 contract that was only conservatively migrated in memory.
+
+Legacy schema-v2 contracts without per-scenario provenance remain readable.
+`check` requires an explicit review and acceptance to write scenario-specific
+provenance, while `prove` and `keep` remain blocked.
 
 ## Manual keeps
 
@@ -230,10 +260,13 @@ pnpm exec granttrace keep list
 pnpm exec granttrace keep remove contents
 ```
 
-Every keep needs a human reason of at most 240 characters. It is stored
-separately from observed `selectedPermissions`; GrantTrace never calls it
-observed or proven necessary. A keep cannot duplicate selected access or the
-mandatory `metadata:read` baseline.
+Every keep needs a human reason of at most 240 characters. Reasons are
+committed in `granttrace.lock.json`, so they must contain no credential,
+identity, URL, or other sensitive value. Control, formatting, invisible, URL,
+and obvious private-key/token-shaped text is rejected rather than echoed or
+stored. A reason is stored separately from observed `selectedPermissions`;
+GrantTrace never calls the keep observed or proven necessary. A keep cannot
+duplicate selected access or the mandatory `metadata:read` baseline.
 
 During every scenario proof:
 
@@ -257,30 +290,41 @@ installation and repository:
 
 ```bash
 pnpm exec granttrace doctor
-pnpm exec granttrace prove --scenario issue-triage -- \
+pnpm exec granttrace prove issue-triage -- \
   pnpm test -- issue-triage
 ```
 
 GrantTrace:
 
 1. loads the accepted schema-v2 contract;
-2. requests a one-repository installation token for the scenario-selected
+2. rebinds every accepted route and permission DNF to the exact pinned catalog;
+3. requests a one-repository installation token for the scenario-selected
    permissions plus manual keeps;
-3. requires the raw response to report exactly that request plus GitHub's
+4. requires the raw response to report exactly that request plus GitHub's
    mandatory `metadata:read`;
-4. verifies one expected repository and a fresh, approximately one-hour
+5. verifies one expected repository and a fresh, approximately one-hour
    expiry;
-5. launches the child with the restricted token, never the App private key or
+6. launches the child with the restricted token, never the App private key or
    App/installation broker identifiers;
-6. reproduces the accepted scenario contract exactly;
-7. runs applicable safe negative controls; and
-8. reports cleanup independently.
+7. reproduces the accepted scenario contract exactly;
+8. runs applicable safe negative controls; and
+9. reports cleanup independently.
+
+Catalog rebinding happens before any token is minted. Production proof has no
+broad-token discovery or feasibility preflight: it mints only the restricted
+positive and applicable negative-control tokens described by the accepted
+contract. The proof-child timeout defaults to 15 minutes and is bounded from
+one second through 30 minutes.
+
+Live proof currently runs only on Unix-like systems, where GrantTrace can
+terminate and verify the managed child process group. Windows remains supported
+for installation, recording, checking, analysis, and contract review.
 
 The built-in framework currently has a read-only issue-comments control and a
 reversible comment-creation control. A control removes `issues` only when the
-target route would become unsatisfied. Unsupported controls are
-`not_applicable`; unexpected success fails. A mutating unexpected success is
-cleaned up with the positive token, and cleanup failure prevents a pass.
+target route would become unsatisfied. Unsupported controls are marked not
+applicable; unexpected success fails. A mutating unexpected success is cleaned
+up with the positive token, and cleanup failure prevents a pass.
 
 Authentication, authorization, rate limiting, token expiry, hidden resources,
 GitHub outages, test failure, indeterminate timeout, and cleanup failure remain
@@ -296,29 +340,33 @@ check the committed contract:
 
 ```bash
 pnpm install --frozen-lockfile
-pnpm exec granttrace record --scenario issue-triage -- \
+pnpm exec granttrace record --no-review issue-triage -- \
   pnpm test -- issue-triage
-pnpm exec granttrace record --scenario release-read -- \
+pnpm exec granttrace record --no-review release-read -- \
   pnpm test -- release-read
 pnpm exec granttrace check
 ```
 
+`--no-review` defers the aggregate comparison until every scenario has been
+recorded. Use it only when a final `granttrace check` is guaranteed, as above.
 Do not use `--accept` in CI. Exit `6` means the contract needs human review;
 exit `7` means evidence is unknown, malformed, unsupported, or contradictory.
 
 GrantTrace's own workflow runs typechecking, tests, build, production audit,
 deterministic contract reproduction, package smoke tests, CI-policy
-validation, and leakage scans. Third-party Actions are pinned to full commit
-SHAs with minimal permissions. Live proof is deliberately absent from
-untrusted pull-request workflows and requires no fixture secrets.
+validation, and leakage scans. Package smoke covers npm and strict pnpm
+consumers; macOS and Windows portability jobs repeat it in addition to the
+Linux verification job. Third-party Actions are pinned to full commit SHAs
+with minimal permissions. Live proof is deliberately absent from untrusted
+pull-request workflows and requires no fixture secrets.
 
-## Stored data and privacy
+## Privacy and local state
 
 Commit:
 
 - `granttrace.lock.json`: deterministic schema/API/catalog identity, named
   scenarios, canonical templates, safe permission evidence, route
-  attribution, selected/frontier assignments, and reasoned manual keeps.
+  attribution, selected/frontier assignments, and documented manual keeps.
 
 Keep local and ignored:
 
@@ -331,33 +379,37 @@ Observations and contracts never store raw URLs, query strings, request or
 response bodies, headers, errors, commands, tokens, private keys, owner/repo
 names, or resource IDs. Report files use mode `0600`; report/session
 directories use `0700`. Rich unknown fields are rejected rather than copied
-or redacted.
+or redacted. Local state directories and managed artifacts must be regular
+files/directories rather than symlinks, with ownership enforced where the
+platform exposes it. Observation and contract reads
+are size-bounded, reject nonregular files, use no-follow opens where the
+platform provides them, and verify that the opened file is the one inspected.
 
 The test process is trusted code. `record` inherits its ordinary environment,
 and test code can print or exfiltrate its own secrets. `prove` constructs a
 fresh allowlisted environment that isolates broker credentials, but it is not
 an OS sandbox.
 
-## Commands and exit behavior
+## CLI reference
 
 | Command | Purpose |
 | --- | --- |
-| `granttrace init` | Create private ignored local state |
+| `granttrace init` | Explicitly create private ignored local state |
 | `granttrace doctor` | Diagnose local and optional live prerequisites safely |
-| `granttrace record --scenario NAME -- COMMAND` | Record one instrumented scenario |
+| `granttrace record NAME -- COMMAND` | Auto-initialize, record one scenario, and review its diff |
 | `granttrace scenario list` | List local scenario recordings |
 | `granttrace scenario remove NAME` | Remove one local recording |
 | `granttrace check` | Compare all recordings with the accepted contract |
 | `granttrace check --accept` | Atomically accept the reviewed contract |
 | `granttrace keep add/remove/list` | Manage reasoned, unproven access |
-| `granttrace prove --scenario NAME -- COMMAND` | Prove one accepted scenario live |
+| `granttrace prove NAME -- COMMAND` | Prove one accepted scenario live |
 | `granttrace analyze OBSERVATIONS` | Inspect one lower-level NDJSON file |
 
 | Exit | Meaning |
 | ---: | --- |
 | `0` | Success |
 | `2` | Invalid command usage |
-| `3` | No instrumentation or no safe observations |
+| `3` | No supported operation was observed |
 | `4` | Child test failed or could not start |
 | `5` | Invalid/unsafe artifact, configuration failure, or analysis failure |
 | `6` | Contract review or schema migration required |
@@ -367,22 +419,39 @@ an OS sandbox.
 
 The CLI emits plain text without ANSI color, so output is stable under
 `NO_COLOR` and in noninteractive CI. `record` and `prove` accept bounded
-timeouts and terminate a timed-out child before cleaning its session.
+timeouts and terminate a timed-out child before cleaning its session. Record
+allows at most one hour; proof allows at most 30 minutes. A terminal interrupt
+is remembered independently of the child's exit code, escalates to a bounded
+force-kill when necessary, and exits `130` without accepting partial evidence.
 
 ## Troubleshooting
 
 `record` says no operation was observed:
 
-- confirm the child imports `granttrace/octokit`;
-- confirm the scenario uses the instrumented Octokit class, not another
-  client instance; and
-- confirm it executes at least one supported REST template.
+- confirm the command starts a Node.js process and makes at least one GitHub
+  REST request through global `fetch` or a standard Octokit client;
+- check whether the client replaces global `fetch`, uses a custom transport,
+  starts a worker or subprocess that discards the injected Node options, or
+  runs in a different runtime; and
+- use the explicit GrantTrace Octokit adapter for those advanced cases.
 
-`check` exits `6`:
+An unsupported route is recorded as a safe blocking finding, and `record`
+exits `7` before offering acceptance.
+
+`record` or `prove` says local state is blocked:
+
+- run `granttrace init`, then `granttrace doctor`;
+- do not replace `.granttrace/` or its managed subdirectories with symlinks;
+- if doctor reports stale session artifacts, inspect them and any possible
+  fixture mutation residue before removing the stale artifacts; and
+- retry only after doctor has no `FAIL` result.
+
+`record` or `check` exits `6`:
 
 - this is the expected review state, not corrupted evidence;
 - inspect permission, route, evidence, and attribution changes; and
-- run `check --accept` only after deciding the new coverage is intentional.
+- accept at the interactive prompt, or run `check --accept`, only after
+  deciding the new coverage is intentional.
 
 `check` exits `7`:
 
@@ -404,7 +473,7 @@ timeouts and terminate a timed-out child before cleaning its session.
 - stabilize the same scenario or choose a bounded `--timeout`; and
 - inspect the fixture for residue before retrying after any cleanup failure.
 
-## Package development
+## Development
 
 ```bash
 pnpm install --frozen-lockfile
@@ -415,39 +484,35 @@ pnpm package:smoke
 pnpm leakage:scan
 ```
 
-`pnpm pack` runs a clean production build. Apart from npm's required
+`npm pack` runs the package's clean production prepack build. Apart from npm's required
 `package.json`, the package allowlist contains only `dist`, `LICENSE`, and this
-README. Package smoke testing installs the tarball into a clean temporary
-project and exercises the installed executable and offline workflow.
+README. Package smoke testing checks the tarball with clean npm and strict
+pnpm consumers, including public imports and TypeScript resolution, installed
+CLI behavior, and an offline record/check/accept workflow.
 
 Contributions that alter catalog evidence, contract serialization, proof
 accounting, or credential boundaries need focused tests and documentation.
 See [CONTRIBUTING.md](CONTRIBUTING.md).
 
-## Public-beta readiness
-
-- [x] Honest coverage-bound guarantee
-- [x] Deterministic schema-v2 multi-scenario contracts
-- [x] Explicit manual keeps with human reasons
-- [x] Fail-closed runtime/catalog evidence
-- [x] 49 official-docs-backed route templates
-- [x] Restricted scenario proof and exact effective-permission accounting
-- [x] Read-only and reversible mutating negative controls
-- [x] Environment, private-file, and macOS Keychain key providers
-- [x] Least-privileged offline CI and package/leakage smoke tests
-- [ ] Repository owner makes the repository public
-- [ ] Package owner publishes `granttrace@0.1.0-beta.1` with the beta tag
-
-Neither of the final two release actions is performed by the build or test
-workflow.
-
-## Scope
+## Limitations
 
 Unsupported: GraphQL, Actions `GITHUB_TOKEN`, OAuth Apps, user-to-server
 tokens, personal access tokens, Git transport, GHES, webhook inference,
 static whole-program analysis, arbitrary HTTP interception, and access levels
 beyond `read`/`write`.
 
-Read the [protocol](docs/protocol.md), [threat model](docs/threat-model.md),
-[limitations](docs/limitations.md), [catalog coverage](docs/catalog.md), and
-[platform feasibility record](docs/feasibility.md) for the exact boundaries.
+## Documentation
+
+| Document | What it covers |
+| --- | --- |
+| [Protocol](docs/protocol.md) | Contract semantics, evidence resolution, and proof behavior |
+| [Threat model](docs/threat-model.md) | Trust boundaries, protected assets, and mitigations |
+| [Live setup](docs/live-setup.md) | Disposable fixture and credential-provider configuration |
+| [Catalog coverage](docs/catalog.md) | Supported REST route templates and official sources |
+| [Limitations](docs/limitations.md) | Exact product boundaries and unsupported cases |
+| [Platform evidence](docs/feasibility.md) | External evidence behind the protocol's design constraints |
+| [Contributing](CONTRIBUTING.md) | Local development, tests, and catalog-change policy |
+
+## License
+
+[MIT](LICENSE) © 2026 Anestis

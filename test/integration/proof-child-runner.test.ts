@@ -1,4 +1,4 @@
-import { access, chmod, mkdtemp, rm } from "node:fs/promises";
+import { access, chmod, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -61,6 +61,21 @@ describe("restricted proof child runner", () => {
     }
   });
 
+  it("automatically captures an ordinary Octokit scenario", async () => {
+    const result = await runFixture("automatic.ts");
+
+    expect(result.outcome).toBe("pass");
+    expect(result.exitCode).toBe(0);
+    expect(result.observations).toHaveLength(1);
+    expect(result.observations[0]).toMatchObject({
+      scenario: "triage-integration",
+      method: "POST",
+      routeTemplate:
+        "/repos/{owner}/{repo}/issues/{issue_number}/comments",
+    });
+    expect(result.sessionCleanup).toBe("pass");
+  });
+
   it("distinguishes child-test failure while retaining safe evidence", async () => {
     const result = await runFixture("failing-instrumented.ts");
 
@@ -120,6 +135,39 @@ describe("restricted proof child runner", () => {
     expect(result.sessionCleanup).toBe("pass");
   });
 
+  it.skipIf(process.platform === "win32")(
+    "kills a stubborn proof descendant before cleaning the session",
+    async () => {
+      const descendantPidPath = join(
+        workingDirectory,
+        "proof-descendant.pid",
+      );
+      const result = await runProofChild({
+        cwd: workingDirectory,
+        command: process.execPath,
+        args: [
+          "--import",
+          tsxImport,
+          join(childDirectory, "signal-handling.ts"),
+          descendantPidPath,
+        ],
+        baseEnvironment: process.env,
+        token: new SensitiveValue(
+          "ghs_RESTRICTED_PROOF_CHILD_CANARY",
+        ),
+        fixture,
+        scenario: "triage-integration",
+        timeoutMs: 1_000,
+      });
+
+      expect(result.outcome).toBe("timeout");
+      expect(result.sessionCleanup).toBe("pass");
+      await expectProcessGone(
+        Number(await readFile(descendantPidPath, "utf8")),
+      );
+    },
+  );
+
   it("passes arguments literally and never invokes a shell", async () => {
     const sentinel = join(workingDirectory, "shell-injection-canary");
     const result = await runProofChild({
@@ -166,3 +214,18 @@ describe("restricted proof child runner", () => {
     });
   }
 });
+
+async function expectProcessGone(pid: number): Promise<void> {
+  expect(Number.isSafeInteger(pid) && pid > 0).toBe(true);
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    try {
+      process.kill(pid, 0);
+    } catch {
+      return;
+    }
+    await new Promise((resolveDelay) => {
+      setTimeout(resolveDelay, 10);
+    });
+  }
+  throw new Error("Restricted proof descendant remained alive.");
+}

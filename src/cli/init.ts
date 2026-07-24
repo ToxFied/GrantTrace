@@ -1,7 +1,6 @@
 import {
-  chmod,
-  mkdir,
   readFile,
+  lstat,
   rename,
   unlink,
   writeFile,
@@ -11,6 +10,7 @@ import { join } from "node:path";
 import type { CliContext } from "./context.js";
 import { writeLine } from "./context.js";
 import { ExitCode, type ExitCodeValue } from "./exit-codes.js";
+import { initializeLocalState } from "../security/local-state.js";
 
 export async function runInit(
   args: string[],
@@ -38,12 +38,7 @@ export async function runInit(
   }
 
   try {
-    const stateDirectory = join(context.cwd, ".granttrace");
-    const observationsDirectory = join(stateDirectory, "observations");
-    await mkdir(observationsDirectory, { recursive: true, mode: 0o700 });
-    await chmod(stateDirectory, 0o700);
-    await chmod(observationsDirectory, 0o700);
-    const ignoreChanged = await ensureStateIsIgnored(context.cwd);
+    const { ignoreChanged } = await initializeProjectState(context.cwd);
 
     writeLine(
       context.stdout,
@@ -55,16 +50,11 @@ export async function runInit(
         })`,
         "",
         "Next",
-        "  1. Instrument the Octokit instance used by one test scenario.",
-        "  2. Record it:",
-        "     granttrace record --scenario <name> -- <test-command>",
-        "  3. Review the proposed contract:",
-        "     granttrace check",
-        "  4. Accept it after review:",
-        "     granttrace check --accept",
+        "  Run one named scenario:",
+        "  granttrace record <name> -- <test-command>",
         "",
-        "Guide",
-        "  See README.md#quickstart for the Octokit snippet.",
+        "GrantTrace automatically observes standard Node fetch and Octokit.",
+        "Custom transports can use the granttrace/octokit adapter.",
         "",
       ].join("\n"),
     );
@@ -75,7 +65,7 @@ export async function runInit(
       [
         "GrantTrace init failed",
         "",
-        "Local state or .gitignore could not be updated safely.",
+        "GrantTrace could not create local state or update .gitignore.",
         "",
         "Next",
         "  Check that the current project directory is writable, then retry.",
@@ -86,10 +76,21 @@ export async function runInit(
   }
 }
 
-async function ensureStateIsIgnored(cwd: string): Promise<boolean> {
+export async function initializeProjectState(
+  cwd: string,
+): Promise<{ ignoreChanged: boolean }> {
+  await initializeLocalState(cwd);
+  return { ignoreChanged: await ensureStateIsIgnored(cwd) };
+}
+
+export async function ensureStateIsIgnored(cwd: string): Promise<boolean> {
   const ignorePath = join(cwd, ".gitignore");
   let existing = "";
   try {
+    const details = await lstat(ignorePath);
+    if (!details.isFile() || details.isSymbolicLink()) {
+      throw new Error("Unsafe .gitignore entry.");
+    }
     existing = await readFile(ignorePath, "utf8");
   } catch (error) {
     if (!isMissingFile(error)) {
@@ -100,7 +101,7 @@ async function ensureStateIsIgnored(cwd: string): Promise<boolean> {
     existing
       .split(/\r?\n/u)
       .map((line) => line.trim())
-      .includes(".granttrace/")
+    .some((line) => line === ".granttrace/" || line === "/.granttrace/")
   ) {
     return false;
   }

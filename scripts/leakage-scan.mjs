@@ -1,7 +1,6 @@
 import {
   mkdtemp,
   readFile,
-  readdir,
   rm,
   stat,
 } from "node:fs/promises";
@@ -16,6 +15,10 @@ import {
 } from "node:path";
 
 import { parseNpmPackOutput } from "./lib/npm-pack.mjs";
+import {
+  invocationArgs,
+  npmInvocation,
+} from "./lib/package-manager.mjs";
 import { portableEnvironment, run } from "./lib/process.mjs";
 import { projectRoot, readPackageManifest } from "./lib/project.mjs";
 import { readTarGzip } from "./lib/tar.mjs";
@@ -56,7 +59,21 @@ const tracked = await run("git", ["ls-files", "-z"], {
   environment: portableEnvironment(),
   outputLimit: 10 * 1024 * 1024,
 });
+const deleted = new Set(
+  (
+    await run("git", ["ls-files", "--deleted", "-z"], {
+      cwd: projectRoot,
+      environment: portableEnvironment(),
+      outputLimit: 10 * 1024 * 1024,
+    })
+  ).stdout
+    .split("\0")
+    .filter(Boolean),
+);
 for (const relativePath of tracked.stdout.split("\0").filter(Boolean)) {
+  if (deleted.has(relativePath)) {
+    continue;
+  }
   if (isSensitiveRepositoryPath(relativePath)) {
     findings.push({ path: relativePath, rule: "sensitive-path" });
     continue;
@@ -79,7 +96,7 @@ try {
   const tarballPaths =
     process.argv.length > 2
       ? process.argv.slice(2).map((path) => resolve(process.cwd(), path))
-      : await findOrCreateTarball(temporaryRoot);
+      : [await createFreshTarball(temporaryRoot)];
 
   for (const tarballPath of tarballPaths) {
     const archive = await readFileBounded(tarballPath, 25 * 1024 * 1024);
@@ -138,20 +155,8 @@ if (findings.length > 0) {
   console.log("Leakage scan passed for tracked files and package contents.");
 }
 
-async function findOrCreateTarball(directory) {
-  const existing = [];
-  for (const entry of await readdir(projectRoot, { withFileTypes: true })) {
-    if (entry.isFile() && entry.name.endsWith(".tgz")) {
-      const path = join(projectRoot, entry.name);
-      existing.push({ path, modified: (await stat(path)).mtimeMs });
-    }
-  }
-  if (existing.length > 0) {
-    existing.sort((left, right) => right.modified - left.modified);
-    return [existing[0].path];
-  }
-
-  const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
+async function createFreshTarball(directory) {
+  const npm = await npmInvocation();
   const cache = join(directory, "npm-cache");
   const userConfig = join(directory, "empty-npmrc");
   const { mkdir, writeFile } = await import("node:fs/promises");
@@ -160,8 +165,13 @@ async function findOrCreateTarball(directory) {
     writeFile(userConfig, "", { mode: 0o600 }),
   ]);
   const packed = await run(
-    npmCommand,
-    ["pack", "--json", "--pack-destination", directory],
+    npm.command,
+    invocationArgs(npm, [
+      "pack",
+      "--json",
+      "--pack-destination",
+      directory,
+    ]),
     {
       cwd: projectRoot,
       environment: portableEnvironment({
@@ -174,7 +184,7 @@ async function findOrCreateTarball(directory) {
     },
   );
   const { filename } = parseNpmPackOutput(packed.stdout);
-  return [join(directory, filename)];
+  return join(directory, filename);
 }
 
 async function readFileBounded(path, maximum = MAX_SCANNED_FILE_BYTES) {

@@ -7,15 +7,15 @@ description: Commands, options, scenario naming, timeouts, and exit codes.
 
 | Command | Purpose |
 | --- | --- |
-| `granttrace init` | Create private ignored local state |
+| `granttrace init` | Explicitly create private ignored local state |
 | `granttrace doctor` | Diagnose local and optional live prerequisites safely |
-| `granttrace record --scenario NAME -- COMMAND` | Record one instrumented scenario |
+| `granttrace record NAME -- COMMAND` | Auto-initialize, record one scenario, and review its diff |
 | `granttrace scenario list` | List local scenario recordings |
 | `granttrace scenario remove NAME` | Remove one local recording |
 | `granttrace check` | Compare all recordings with the accepted contract |
 | `granttrace check --accept` | Atomically accept the reviewed contract |
 | `granttrace keep add/remove/list` | Manage reasoned, unproven access |
-| `granttrace prove --scenario NAME -- COMMAND` | Prove one accepted scenario live |
+| `granttrace prove NAME -- COMMAND` | Prove one accepted scenario live |
 | `granttrace analyze OBSERVATIONS` | Inspect one lower-level NDJSON file |
 
 Run `granttrace <command> --help` for its complete usage.
@@ -23,19 +23,37 @@ Run `granttrace <command> --help` for its complete usage.
 ## `record`
 
 ```text
-granttrace record --scenario <name> [--timeout 15m] -- <command> [args...]
+granttrace record [--no-review] <name> [--timeout 15m] -- <command> [args...]
 ```
 
 The scenario name is 1–64 lowercase letters, numbers, hyphens, or underscores.
 It cannot begin or end with a hyphen or underscore.
+The legacy `--scenario <name>` spelling remains compatible.
 
 Durations accept `ms`, `s`, or `m`; the effective minimum is one second.
 Recording defaults to 15 minutes and allows at most 60 minutes.
 
 The child command is passed as an argument array with `shell: false`. Its output
-streams to the terminal and is not retained. Run `granttrace init` first:
-recording refuses to launch from missing, unsafe, symlinked, unignored, or stale
-local state.
+streams to the terminal and is not retained. On first use, recording creates
+private `.granttrace/` state and adds it to `.gitignore` before launching the
+child. Unsafe, symlinked, or stale existing state still blocks execution
+instead of being silently repaired.
+
+For the standard Node.js path, GrantTrace injects a preload that observes
+supported GitHub REST requests through global `fetch`, including requests from
+standard Octokit clients. Custom fetch implementations, transports, unusual
+runtimes, and subprocesses that discard the injected Node options need the
+[explicit fallback](/docs/instrument-octokit).
+
+After a successful recording, `record` calculates and prints the aggregate
+contract diff. If the diff is safe and stdin and stdout are interactive TTYs,
+it asks for explicit acceptance with a default of no. In noninteractive
+environments it never prompts or accepts; a semantic change exits `6`.
+
+`--no-review` saves the recording without calculating the aggregate diff. It
+exists for multi-scenario automation, where each intermediate aggregate is
+intentionally incomplete. Use it only when a later `granttrace check` is
+guaranteed.
 
 ## `check`
 
@@ -64,11 +82,11 @@ granttrace keep list
 ## `prove`
 
 ```text
-granttrace prove --scenario <name> [--timeout 15m] -- <command> [args...]
+granttrace prove <name> [--timeout 15m] -- <command> [args...]
 ```
 
 The scenario must exist in an accepted schema-v2 contract. See
-[live proof](live-proof.mdx). Proof requires initialized safe local state and
+[live proof](/docs/live-proof). Proof requires initialized safe local state and
 complete live setup. It defaults to 15 minutes and allows at most 30 minutes;
 durations accept `ms`, `s`, or `m` with an effective one-second minimum.
 
@@ -85,7 +103,7 @@ artifact and any possible mutation residue before removing it and retrying.
 | ---: | --- |
 | `0` | Success |
 | `2` | Invalid command usage |
-| `3` | No instrumentation or no safe observations |
+| `3` | No supported operation was observed |
 | `4` | Child test failed, timed out, or could not start |
 | `5` | Invalid or unsafe artifact, configuration failure, or analysis failure |
 | `6` | Contract review or schema migration required |

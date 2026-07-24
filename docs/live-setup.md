@@ -152,13 +152,17 @@ providers are warnings because they do not block offline work; `prove` repeats
 strict validation and refuses to continue until every required live field is
 safe.
 
+Doctor labels local blockers `FAIL`, incomplete optional live setup `WARN`,
+unconfigured optional features `INFO`, and satisfied checks `PASS`. Inspect
+stale session artifacts and any possible fixture residue before removing them.
+
 ## 6. Prove one accepted scenario
 
 First make sure current recordings have an accepted schema-v2 contract:
 
 ```bash
 granttrace check
-granttrace prove --scenario <safe-name> -- <command> [args...]
+granttrace prove <safe-name> -- <command> [args...]
 ```
 
 Before it loads credentials or mints a token, proof requires exact tool, API,
@@ -166,9 +170,15 @@ and catalog identity and rebinds every accepted route DNF to the current pinned
 catalog. Production proof has no broad-token discovery path; it mints only the
 restricted positive and applicable negative-control tokens.
 
-The command must use the GrantTrace Octokit plugin and clean up every resource
-it intentionally creates. `examples/live-issue-comment/scenario.ts` shows the
-reversible comment pattern.
+Live proof is Unix-like only because GrantTrace must be able to terminate and
+verify the managed child process group. Windows remains supported for package
+installation, recording, checking, analysis, and contract review.
+
+The standard Node global-`fetch` and Octokit path is instrumented automatically.
+Custom fetch implementations, transports, or runtimes need the
+[explicit fallback](/docs/instrument-octokit). The command must clean up every
+resource it intentionally creates. `examples/live-issue-comment/scenario.ts`
+shows the reversible comment pattern.
 
 The broker retains the App ID, installation ID, and private key. The child
 gets only:
@@ -237,5 +247,5 @@ manual workflow is added later:
 - never upload `.granttrace/` as an artifact; and
 - retain the fixture-only repository and exact one-repository validation.
 
-GrantTrace's production CI is intentionally offline and requires no fixture
-credentials.
+GrantTrace's package-verification workflow is offline and requires no fixture
+credentials. Documentation deployment runs separately.

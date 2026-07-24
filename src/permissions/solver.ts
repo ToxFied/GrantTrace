@@ -69,12 +69,7 @@ export function solvePermissionContract(
       }
     }
 
-    frontier = pruneDominated([...combined.values()]);
-    if (frontier.length > maxFrontier) {
-      throw new SolverLimitError(
-        `Permission frontier reached ${frontier.length} candidates; the supported limit is ${maxFrontier}.`,
-      );
-    }
+    frontier = pruneDominatedBounded([...combined.values()], maxFrontier);
   }
 
   frontier.sort(compareAssignments);
@@ -151,14 +146,37 @@ export function assignmentDominates(
 export function pruneDominated(
   assignments: PermissionAssignment[],
 ): PermissionAssignment[] {
-  return assignments.filter(
-    (assignment, index) =>
-      !assignments.some(
-        (candidate, candidateIndex) =>
-          candidateIndex !== index &&
-          assignmentDominates(candidate, assignment),
-      ),
-  );
+  return pruneDominatedBounded(assignments, Number.POSITIVE_INFINITY);
+}
+
+function pruneDominatedBounded(
+  assignments: PermissionAssignment[],
+  maximum: number,
+): PermissionAssignment[] {
+  const ordered = [...assignments].sort((left, right) => {
+    const privilegeDifference =
+      totalPrivilege(left) - totalPrivilege(right);
+    return privilegeDifference !== 0
+      ? privilegeDifference
+      : compareAscii(assignmentKey(left), assignmentKey(right));
+  });
+  const frontier: PermissionAssignment[] = [];
+  for (const assignment of ordered) {
+    if (
+      frontier.some((candidate) =>
+        assignmentDominates(candidate, assignment),
+      )
+    ) {
+      continue;
+    }
+    frontier.push(assignment);
+    if (frontier.length > maximum) {
+      throw new SolverLimitError(
+        `Permission frontier reached more than ${maximum} candidates; the supported limit is ${maximum}.`,
+      );
+    }
+  }
+  return frontier;
 }
 
 function routeKey(requirement: RouteRequirement): string {
@@ -208,6 +226,13 @@ function countWrites(assignment: PermissionAssignment): number {
 function accessWeight(assignment: PermissionAssignment): number {
   return Object.values(assignment).reduce(
     (total, level) => total + (level === "write" ? 4 : 1),
+    0,
+  );
+}
+
+function totalPrivilege(assignment: PermissionAssignment): number {
+  return Object.values(assignment).reduce(
+    (total, level) => total + (level === "write" ? 2 : 1),
     0,
   );
 }

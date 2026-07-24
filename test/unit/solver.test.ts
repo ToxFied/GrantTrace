@@ -107,6 +107,7 @@ function requirement(
     route: { method, template },
     alternatives,
     evidence: ["runtime_header"],
+    scenarioEvidence: { "solver-test": ["runtime_header"] },
     scenarios: ["solver-test"],
   };
 }

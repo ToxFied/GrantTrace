@@ -21,17 +21,27 @@ import {
   ScenarioNameSchema,
 } from "../permissions/schema.js";
 import {
+  findManualKeepConflicts,
   manualKeepPermissions,
   requestedProofPermissions,
 } from "../contract/manual-keeps.js";
 import { ProofFailureSchema } from "./failure.js";
-import { combineEffectivePermissions } from "./permission-baseline.js";
+import {
+  combineEffectivePermissions,
+  MANDATORY_INSTALLATION_PERMISSIONS,
+} from "./permission-baseline.js";
+import { isSafeReviewText } from "../security/review-text.js";
 
 const CatalogIdentitySchema = z.strictObject({
   source: z.string().min(1).max(64).regex(/^[a-z0-9_-]+$/u),
   version: z.string().min(1).max(80).regex(/^[a-zA-Z0-9._-]+$/u),
   checksum: z.string().regex(/^sha256:[a-f0-9]{64}$/u),
 });
+
+const REQUIRED_NEGATIVE_CONTROL_IDS = [
+  "issue-comment-create",
+  "issue-comments-read",
+] as const;
 
 const PhaseResultSchema = z.discriminatedUnion("status", [
   z.strictObject({ status: z.literal("not_run") }),
@@ -83,6 +93,28 @@ const NegativeControlResultSchema = z
         message: "A read-only control never requires cleanup.",
       });
     }
+    if (
+      result.mode === "mutating" &&
+      result.status === "unexpected_pass" &&
+      result.cleanup === "not_required"
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["cleanup"],
+        message: "An unexpected mutation requires a terminal cleanup result.",
+      });
+    }
+    if (
+      result.mode === "mutating" &&
+      result.status !== "unexpected_pass" &&
+      result.cleanup !== "not_required"
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["cleanup"],
+        message: "A mutation that did not occur never requires cleanup.",
+      });
+    }
   });
 
 const CleanupResultSchema = z.discriminatedUnion("status", [
@@ -111,7 +143,7 @@ export const ProofRunReportSchema = z
       PermissionNameSchema,
       z.strictObject({
         level: PermissionLevelSchema,
-        reason: z.string().trim().min(1).max(240),
+        reason: z.string().trim().min(1).max(240).refine(isSafeReviewText),
       }),
     ),
     requestedPermissions: PermissionAssignmentSchema,
@@ -139,6 +171,20 @@ export const ProofRunReportSchema = z
         message: "Negative-control identifiers must be unique.",
       });
     }
+    const controlIds = report.negativeControls
+      .map((control) => control.id)
+      .sort();
+    if (
+      JSON.stringify(controlIds) !==
+      JSON.stringify(REQUIRED_NEGATIVE_CONTROL_IDS)
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["negativeControls"],
+        message:
+          "Proof reports must include every built-in negative control exactly once.",
+      });
+    }
     if (
       report.negativeControls.some((control) => control.cleanup === "failed") &&
       report.cleanup.status !== "failed"
@@ -147,6 +193,20 @@ export const ProofRunReportSchema = z
         code: "custom",
         path: ["cleanup"],
         message: "A negative-control cleanup failure must fail overall cleanup.",
+      });
+    }
+    if (
+      findManualKeepConflicts(
+        report,
+        report.selectedPermissions,
+        MANDATORY_INSTALLATION_PERMISSIONS,
+      ).length > 0
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["manualKeeps"],
+        message:
+          "Manual keeps cannot duplicate selected access or the mandatory baseline.",
       });
     }
     const expectedRequested = requestedProofPermissions(
@@ -162,6 +222,17 @@ export const ProofRunReportSchema = z
         path: ["requestedPermissions"],
         message:
           "Requested permissions must equal scenario-selected permissions plus manual keeps.",
+      });
+    }
+    if (
+      assignmentKey(report.mandatoryPermissions) !==
+      assignmentKey(MANDATORY_INSTALLATION_PERMISSIONS)
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["mandatoryPermissions"],
+        message:
+          "Mandatory permissions must exactly match GrantTrace's GitHub baseline.",
       });
     }
 
@@ -220,6 +291,41 @@ export const ProofRunReportSchema = z
         path: ["positiveProof"],
         message:
           "A passing proof requires verified scope, effective permissions, a passing child, and observations.",
+      });
+    }
+    if (
+      report.positiveProof.status === "pass" &&
+      report.cleanup.status === "not_run"
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["cleanup"],
+        message: "A completed positive proof requires terminal cleanup.",
+      });
+    }
+    if (
+      report.positiveProof.status === "pass" &&
+      report.cleanup.status === "pass" &&
+      report.negativeControls.some((control) => control.status === "not_run")
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["negativeControls"],
+        message:
+          "A clean completed proof requires terminal negative controls.",
+      });
+    }
+    if (
+      report.positiveProof.status !== "pass" &&
+      report.negativeControls.some(
+        (control) => control.status !== "not_run",
+      )
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["negativeControls"],
+        message:
+          "Negative controls cannot run before the positive proof passes.",
       });
     }
   });

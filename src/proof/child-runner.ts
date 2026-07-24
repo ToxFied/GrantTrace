@@ -1,8 +1,5 @@
-import { spawn } from "node:child_process";
 import {
   access,
-  chmod,
-  mkdir,
   mkdtemp,
   rm,
 } from "node:fs/promises";
@@ -13,23 +10,23 @@ import {
 } from "../contract/observation-file.js";
 import type { Observation } from "../contract/observation.js";
 import { ScenarioNameSchema } from "../permissions/schema.js";
+import { injectRuntimePreload } from "../runtime/injection.js";
 import {
   createProofChildEnvironment,
 } from "../security/proof-environment.js";
 import type { SensitiveValue } from "../security/sensitive-value.js";
 import type { FixtureCoordinates } from "./live-config.js";
-
-type ChildProcessResult = {
-  exitCode: number | null;
-  signal: NodeJS.Signals | null;
-  spawnFailed: boolean;
-  timedOut: boolean;
-};
+import { runManagedChild } from "../security/managed-child.js";
+import {
+  ensurePrivateStateSubdirectory,
+  initializeLocalState,
+} from "../security/local-state.js";
 
 export type ProofChildOutcome =
   | "pass"
   | "spawn_failure"
   | "timeout"
+  | "interrupted"
   | "test_failure"
   | "instrumentation_failure"
   | "analysis_failure";
@@ -57,13 +54,13 @@ export async function runProofChild(input: {
   if (
     !Number.isInteger(timeoutMs) ||
     timeoutMs < 1_000 ||
-    timeoutMs > 60 * 60 * 1_000
+    timeoutMs > 30 * 60 * 1_000
   ) {
     throw new Error("The proof child timeout is outside the safe range.");
   }
-  const sessionsDirectory = join(
+  await initializeLocalState(input.cwd);
+  const sessionsDirectory = await ensurePrivateStateSubdirectory(
     input.cwd,
-    ".granttrace",
     "proof-sessions",
   );
   let sessionDirectory: string | null = null;
@@ -75,35 +72,37 @@ export async function runProofChild(input: {
   };
 
   try {
-    await mkdir(sessionsDirectory, { recursive: true, mode: 0o700 });
-    await chmod(join(input.cwd, ".granttrace"), 0o700);
-    await chmod(sessionsDirectory, 0o700);
     sessionDirectory = await mkdtemp(
       join(sessionsDirectory, "session-"),
     );
-    await chmod(sessionDirectory, 0o700);
 
-    const environment = createProofChildEnvironment({
-      baseEnvironment: input.baseEnvironment,
-      token: input.token,
-      fixture: input.fixture,
-      scenario,
-      sessionDirectory,
-    });
-    const child = await spawnChild(
-      input.command,
-      input.args,
-      input.cwd,
+    const environment = injectRuntimePreload(
+      createProofChildEnvironment({
+        baseEnvironment: input.baseEnvironment,
+        token: input.token,
+        fixture: input.fixture,
+        scenario,
+        sessionDirectory,
+      }),
+    );
+    const child = await runManagedChild({
+      command: input.command,
+      args: input.args,
+      cwd: input.cwd,
       environment,
       timeoutMs,
-    );
+    });
 
     result = {
       outcome: child.spawnFailed ? "spawn_failure" : "analysis_failure",
-      exitCode: child.exitCode,
-      signal: child.signal,
+      exitCode: child.interruptedBy === null ? child.exitCode : null,
+      signal: child.interruptedBy ?? child.signal,
       observations: [],
     };
+    if (child.processTreeCleanupFailed) {
+      result.outcome = "analysis_failure";
+      return await finishWithCleanup(result, sessionDirectory, true);
+    }
     if (child.spawnFailed) {
       return await finishWithCleanup(result, sessionDirectory);
     }
@@ -128,7 +127,9 @@ export async function runProofChild(input: {
       }
     }
 
-    if (child.timedOut) {
+    if (child.interruptedBy !== null) {
+      result.outcome = "interrupted";
+    } else if (child.timedOut) {
       result.outcome = "timeout";
     } else if (!pluginLoaded) {
       result.outcome = "instrumentation_failure";
@@ -149,8 +150,10 @@ export async function runProofChild(input: {
 async function finishWithCleanup(
   result: Omit<ProofChildResult, "sessionCleanup">,
   sessionDirectory: string | null,
+  processTreeCleanupFailed = false,
 ): Promise<ProofChildResult> {
-  let sessionCleanup: ProofChildResult["sessionCleanup"] = "pass";
+  let sessionCleanup: ProofChildResult["sessionCleanup"] =
+    processTreeCleanupFailed ? "cleanup_failure" : "pass";
   if (sessionDirectory !== null) {
     try {
       await rm(sessionDirectory, { recursive: true, force: true });
@@ -159,72 +162,6 @@ async function finishWithCleanup(
     }
   }
   return { ...result, sessionCleanup };
-}
-
-function spawnChild(
-  command: string,
-  args: string[],
-  cwd: string,
-  environment: NodeJS.ProcessEnv,
-  timeoutMs: number,
-): Promise<ChildProcessResult> {
-  return new Promise((resolveResult) => {
-    const child = spawn(command, args, {
-      cwd,
-      detached: process.platform !== "win32",
-      env: environment,
-      shell: false,
-      stdio: "inherit",
-    });
-    let spawnFailed = false;
-    let timedOut = false;
-    let forceKillTimer: NodeJS.Timeout | null = null;
-    const terminate = (signal: NodeJS.Signals) => {
-      killProcessTree(child.pid, signal, child);
-    };
-    const interrupt = () => terminate("SIGINT");
-    const terminateSignal = () => terminate("SIGTERM");
-    process.once("SIGINT", interrupt);
-    process.once("SIGTERM", terminateSignal);
-    const timeout = setTimeout(() => {
-      timedOut = true;
-      terminate("SIGTERM");
-      forceKillTimer = setTimeout(() => {
-        terminate("SIGKILL");
-      }, 5_000);
-      forceKillTimer.unref();
-    }, timeoutMs);
-    timeout.unref();
-
-    child.once("error", () => {
-      spawnFailed = true;
-    });
-    child.once("close", (exitCode, signal) => {
-      process.off("SIGINT", interrupt);
-      process.off("SIGTERM", terminateSignal);
-      clearTimeout(timeout);
-      if (forceKillTimer !== null) {
-        clearTimeout(forceKillTimer);
-      }
-      resolveResult({ exitCode, signal, spawnFailed, timedOut });
-    });
-  });
-}
-
-function killProcessTree(
-  pid: number | undefined,
-  signal: NodeJS.Signals,
-  child: ReturnType<typeof spawn>,
-): void {
-  if (process.platform !== "win32" && pid !== undefined) {
-    try {
-      process.kill(-pid, signal);
-      return;
-    } catch {
-      // Fall through to direct-child termination.
-    }
-  }
-  child.kill(signal);
 }
 
 async function pathExists(path: string): Promise<boolean> {

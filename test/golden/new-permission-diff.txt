@@ -1,11 +1,15 @@
-GrantTrace check failed
+GrantTrace contract review required
 
 New permission
   issues: write
 
 Observed in
   Route     POST /repos/{owner}/{repo}/issues/{issue_number}/comments
-  Evidence  runtime_header, pinned_catalog
+  Scenarios triage-integration
+  Evidence  Runtime response header, Pinned permission catalog
+
+Scenario added
+  triage-integration
 
 Route added
   POST /repos/{owner}/{repo}/issues/{issue_number}/comments
@@ -13,6 +17,9 @@ Route added
 Next
   Review the evidence, then run:
   granttrace check --accept
+
+Mandatory GitHub baseline (not selected or manually kept)
+  metadata: read
 
 Coverage
   This contract describes only GitHub REST operations observed in the selected scenarios.

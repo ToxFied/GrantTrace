@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { PermissionDNFSchema, ScenarioNameSchema } from "../permissions/schema.js";
+import { isSyntacticallySafeTemplate } from "../routes/canonical.js";
 import type { PermissionDNF } from "../permissions/types.js";
 
 export const ObservationFindingSchema = z.enum([
@@ -31,6 +32,7 @@ export const ObservationSchema = z
       .min(1)
       .max(256)
       .startsWith("/")
+      .refine(isSyntacticallySafeTemplate)
       .nullable(),
     status: z.number().int().min(100).max(599).nullable(),
     requirements: PermissionDNFSchema.nullable(),

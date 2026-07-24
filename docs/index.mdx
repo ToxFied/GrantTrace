@@ -3,20 +3,20 @@ title: Overview
 description: Scenario-bound GitHub App REST permission contracts.
 ---
 
-GrantTrace turns the REST operations exercised by named, instrumented test
-scenarios into a deterministic permission contract you can review in Git.
+GrantTrace turns the GitHub REST operations exercised by named test scenarios
+into a deterministic permission contract you can review in Git.
 
 <Callout type="info" title="Guarantee boundary">
   GrantTrace reports the permissions those scenarios demonstrably require. It
   does not claim whole-application least privilege; untested paths, GraphQL,
-  uninstrumented clients, and behavior outside recorded scenarios stay outside
-  the result.
+  clients outside the supported recording path, and behavior outside recorded
+  scenarios stay outside the result.
 </Callout>
 
 ## Workflow
 
 ```text
-instrument scenario → record route evidence → review contract diff
+run a scenario through GrantTrace → review its permission diff
 → commit granttrace.lock.json → check it in CI → optionally prove live
 ```
 
@@ -29,8 +29,8 @@ instrument scenario → record route evidence → review contract diff
     href="/docs/getting-started"
   />
   <Card
-    title="Octokit setup"
-    description="Instrument @octokit/core to capture canonical REST routes."
+    title="Custom transports"
+    description="Use explicit instrumentation only when automatic recording cannot observe your client."
     href="/docs/instrument-octokit"
   />
   <Card
@@ -44,10 +44,3 @@ instrument scenario → record route evidence → review contract diff
     href="/docs/cli-reference"
   />
 </Cards>
-
-<Callout type="warn" title="Public beta">
-  GrantTrace is prepared as `granttrace@0.1.0-beta.1` but is not published at
-  the time of this repository snapshot. The guides show the intended
-  `granttrace@beta` install command; use a repository checkout or packed
-  tarball until publication.
-</Callout>

@@ -117,6 +117,81 @@ describe("allowlisted ephemeral proof report", () => {
       }),
     ).toThrow(ProofReportError);
   });
+
+  it("rejects manual keeps that duplicate selected or mandatory access", () => {
+    expect(() =>
+      serializeProofReport({
+        ...validReport(),
+        manualKeeps: {
+          issues: {
+            level: "read",
+            reason: "Retained for a separately reviewed integration.",
+          },
+        },
+      }),
+    ).toThrow(ProofReportError);
+
+    expect(() =>
+      serializeProofReport({
+        ...validReport(),
+        manualKeeps: {
+          metadata: {
+            level: "read",
+            reason: "Retained for a separately reviewed integration.",
+          },
+        },
+        requestedPermissions: {
+          contents: "read",
+          issues: "write",
+          metadata: "read",
+        },
+      }),
+    ).toThrow(ProofReportError);
+  });
+
+  it("requires the exact mandatory baseline", () => {
+    for (const mandatoryPermissions of [
+      {},
+      { metadata: "read", actions: "read" },
+    ]) {
+      expect(() =>
+        serializeProofReport({
+          ...validReport(),
+          mandatoryPermissions,
+        }),
+      ).toThrow(ProofReportError);
+    }
+  });
+
+  it("does not accept terminal negative controls before positive proof", () => {
+    for (const positiveProof of [
+      { status: "not_run" },
+      {
+        status: "failed",
+        failure: "test_failure",
+      },
+    ]) {
+      expect(() =>
+        serializeProofReport({
+          ...validReport(),
+          positiveProof,
+          cleanup: { status: "not_run" },
+        }),
+      ).toThrow(ProofReportError);
+    }
+  });
+
+  it("requires every built-in negative control exactly once", () => {
+    const report = validReport() as {
+      negativeControls: unknown[];
+    };
+    expect(() =>
+      serializeProofReport({
+        ...report,
+        negativeControls: report.negativeControls.slice(0, 1),
+      }),
+    ).toThrow(ProofReportError);
+  });
 });
 
 function validReport(): Record<string, unknown> {
@@ -158,6 +233,13 @@ function validReport(): Record<string, unknown> {
     },
     positiveProof: { status: "pass" },
     negativeControls: [
+      {
+        id: "issue-comments-read",
+        mode: "read_only",
+        removedPermission: "issues",
+        status: "not_applicable",
+        cleanup: "not_required",
+      },
       {
         id: "issue-comment-create",
         mode: "mutating",

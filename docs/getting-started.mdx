@@ -12,48 +12,33 @@ description: Create, review, and commit your first permission contract.
 
 <Step>
 
-### Install and initialize
+### Install
 
-After the public beta is published:
+Install GrantTrace `0.1.0-beta.1` from a package archive built from source.
+Run these commands from the project where you want to use GrantTrace:
+
+```bash title="Terminal"
+granttrace_checkout="$(mktemp -d)/GrantTrace"
+git clone https://github.com/ToxFied/GrantTrace.git "$granttrace_checkout"
+corepack enable
+pnpm --dir "$granttrace_checkout" install --frozen-lockfile
+npm --prefix "$granttrace_checkout" pack \
+  --pack-destination "$granttrace_checkout"
+pnpm add --save-dev \
+  "$granttrace_checkout/granttrace-0.1.0-beta.1.tgz"
+```
+
+This source-packaging step is temporary. Once the beta is published, installation
+becomes:
 
 ```bash title="Terminal"
 pnpm add --save-dev granttrace@beta
-pnpm exec granttrace init
-pnpm exec granttrace doctor
 ```
 
-`init` creates private `.granttrace/` state and adds it to `.gitignore`.
-`doctor` checks the local state and accepted contract without printing
-credentials or fixture identities. `FAIL` blocks local execution, `WARN`
-describes an attempted but incomplete optional live setup, and `INFO` means
-optional live proof is absent. Stale sessions are a `FAIL`; inspect them and any
-possible mutation residue before removing them.
-
-<Callout title="Working from this repository">
-  Before publication, use a checkout and substitute `pnpm granttrace` for
-  `pnpm exec granttrace`. You can also run `npm pack` and install the resulting
-  tarball in a consuming project.
+<Callout title="Developing GrantTrace">
+  When working on GrantTrace itself, substitute `pnpm granttrace` for
+  `pnpm exec granttrace`.
 </Callout>
-
-</Step>
-
-<Step>
-
-### Instrument Octokit
-
-```ts title="octokit.ts"
-import { GrantTraceOctokit } from "granttrace/octokit";
-
-export const octokit = new GrantTraceOctokit({
-  auth: process.env.GITHUB_TOKEN,
-});
-```
-
-The pre-composed constructor is the supported default and needs no separate
-Octokit dependency in the consuming project. The plugin is inert outside
-`record` and `prove`. Every REST request you want covered must use the
-instrumented instance. See [Octokit setup](instrument-octokit.mdx) for
-integration guidance and the exact-version manual composition option.
 
 </Step>
 
@@ -62,35 +47,46 @@ integration guidance and the exact-version manual composition option.
 ### Record a scenario
 
 ```bash title="Terminal"
-pnpm exec granttrace record --scenario issue-triage -- \
+pnpm exec granttrace record issue-triage -- \
   pnpm test -- issue-triage
 ```
 
+No source edit or separate initialization is required for the standard Node.js
+path. GrantTrace injects a preload into the child process and observes supported
+GitHub REST calls through Node's global `fetch`. Standard Octokit clients use
+that path automatically.
+
 The command after `--` is passed as an argument array without a shell. Output
 streams to your terminal. Recording the same scenario name again atomically
-replaces its previous local observation file.
+replaces its previous local observation file. On the first recording,
+GrantTrace creates private `.granttrace/` state and adds it to `.gitignore`
+before the test process can start.
+
+`granttrace init` remains available when you want to prepare the project
+explicitly. `granttrace doctor` is optional diagnostics, not an onboarding
+step.
 
 </Step>
 
 <Step>
 
-### Review and accept
+### Review the diff
 
-```bash title="Terminal"
-pnpm exec granttrace check
+The same `record` command prints the permission, route, evidence, and
+attribution diff. In an interactive terminal it asks whether to accept that
+exact change. The default answer is no; acceptance always requires a person.
+
+In CI or another noninteractive terminal, GrantTrace never prompts or accepts.
+A changed contract exits `6`. Review it locally, or use
+`granttrace check` followed by `granttrace check --accept` when you want the
+review and acceptance as separate commands.
+
+Commit `granttrace.lock.json`. Keep `.granttrace/` local and ignored. That is
+the full normal onboarding flow:
+
+```text
+install → record → review → commit
 ```
-
-A new or changed contract prints the permission, route, evidence, and
-attribution diff, then exits `6`. Nothing is accepted automatically.
-
-After reviewing the change:
-
-```bash
-pnpm exec granttrace check --accept
-pnpm exec granttrace check
-```
-
-Commit `granttrace.lock.json`. Keep `.granttrace/` local and ignored.
 
 </Step>
 
@@ -99,14 +95,13 @@ Commit `granttrace.lock.json`. Keep `.granttrace/` local and ignored.
 ## Add more scenarios
 
 ```bash
-pnpm exec granttrace record --scenario release-read -- \
+pnpm exec granttrace record release-read -- \
   pnpm test -- release-read
 pnpm exec granttrace scenario list
-pnpm exec granttrace check
 ```
 
-`check` solves one aggregate contract while preserving which scenario
-exercised each route.
+Each successful recording solves one aggregate contract while preserving which
+scenario exercised each route.
 
 Removing the final recording is also a reviewable contraction. After
 `check --accept`, the v2 contract has zero observed scenarios, routes, selected
@@ -116,7 +111,7 @@ necessity.
 
 ## Next steps
 
-- [Share one instrumented Octokit path](instrument-octokit.mdx)
-- [Add the contract check to CI](ci.mdx)
-- [Retain intentional unobserved access](manual-keeps.mdx)
-- [Configure an optional live proof](live-proof.mdx)
+- [Handle custom transports and runtimes](/docs/instrument-octokit)
+- [Add the contract check to CI](/docs/ci)
+- [Retain intentional unobserved access](/docs/manual-keeps)
+- [Configure an optional live proof](/docs/live-proof)

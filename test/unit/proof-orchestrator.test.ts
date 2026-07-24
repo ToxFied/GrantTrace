@@ -146,9 +146,38 @@ describe("proof orchestration", () => {
     expect(result.report.effectivePermissions).toBeNull();
   });
 
+  it("reports an unknown scenario as a contract mismatch before minting", async () => {
+    let tokenCalled = false;
+    const result = await executeProof({
+      config,
+      contract,
+      scenario: "not-recorded",
+      cwd: "/tmp/proof-orchestrator",
+      command: "unused",
+      args: [],
+      baseEnvironment: {},
+      dependencies: {
+        tokenTransport: {
+          async createInstallationToken() {
+            tokenCalled = true;
+            throw new Error("must not mint");
+          },
+        },
+      },
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.report.positiveProof).toEqual({
+      status: "failed",
+      failure: "contract_mismatch",
+    });
+    expect(tokenCalled).toBe(false);
+  });
+
   it.each([
     ["spawn_failure", "test_failure"],
     ["test_failure", "test_failure"],
+    ["interrupted", "test_failure"],
     ["instrumentation_failure", "instrumentation_failure"],
     ["timeout", "test_flake_or_indeterminate"],
     ["analysis_failure", "test_flake_or_indeterminate"],
@@ -168,7 +197,12 @@ describe("proof orchestration", () => {
           runChild: async () => ({
             outcome,
             exitCode: outcome === "test_failure" ? 9 : null,
-            signal: outcome === "timeout" ? "SIGTERM" : null,
+            signal:
+              outcome === "timeout"
+                ? "SIGTERM"
+                : outcome === "interrupted"
+                  ? "SIGINT"
+                  : null,
             observations: [],
             sessionCleanup: "pass",
           }),
@@ -188,6 +222,47 @@ describe("proof orchestration", () => {
       ).toBe(true);
     },
   );
+
+  it("rejects a catalog-divergent lock before token minting or child launch", async () => {
+    const divergent = structuredClone(contract);
+    divergent.routes[0]!.alternatives = [
+      [{ permission: "contents", level: "read" }],
+    ];
+    divergent.selectedPermissions = { contents: "read" };
+    divergent.permissionFrontier = [{ contents: "read" }];
+    let tokenCalled = false;
+    let childCalled = false;
+
+    const result = await executeProof({
+      config,
+      contract: divergent,
+      scenario: "disposable-comment",
+      cwd: "/tmp/proof-orchestrator",
+      command: "unused",
+      args: [],
+      baseEnvironment: {},
+      dependencies: {
+        tokenTransport: {
+          async createInstallationToken() {
+            tokenCalled = true;
+            throw new Error("must not mint");
+          },
+        },
+        runChild: async () => {
+          childCalled = true;
+          return passingChild();
+        },
+      },
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.report.positiveProof).toEqual({
+      status: "failed",
+      failure: "contract_mismatch",
+    });
+    expect(tokenCalled).toBe(false);
+    expect(childCalled).toBe(false);
+  });
 
   it("blocks a passing child whose observations do not reproduce the contract", async () => {
     const different: Observation = {

@@ -40,6 +40,7 @@ export function buildContract(
       template: requirement.route.template,
       alternatives: requirement.alternatives,
       evidence: requirement.evidence,
+      scenarioEvidence: requirement.scenarioEvidence,
       scenarios: requirement.scenarios,
     })),
     selectedPermissions: canonicalizeAssignment(solution.selected),

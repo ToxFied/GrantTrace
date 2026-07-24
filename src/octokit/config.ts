@@ -4,7 +4,7 @@ import { isAbsolute, join } from "node:path";
 import { z } from "zod";
 
 import type { PermissionCatalog } from "../evidence/catalog.js";
-import { fixtureCatalog } from "../evidence/catalog.js";
+import { githubPermissionCatalog } from "../evidence/catalog.js";
 import { ScenarioNameSchema } from "../permissions/schema.js";
 
 const RecorderEnvironmentSchema = z.strictObject({
@@ -37,14 +37,14 @@ export function loadRecorderConfig(
   return createRecorderConfig(
     parsed.GRANTTRACE_SCENARIO,
     parsed.GRANTTRACE_SESSION_DIR,
-    fixtureCatalog,
+    githubPermissionCatalog,
   );
 }
 
 export function createRecorderConfig(
   scenarioInput: string,
   sessionDirectory: string,
-  catalog: PermissionCatalog = fixtureCatalog,
+  catalog: PermissionCatalog = githubPermissionCatalog,
 ): RecorderConfig {
   const scenario = ScenarioNameSchema.parse(scenarioInput);
   validateSessionDirectory(sessionDirectory);

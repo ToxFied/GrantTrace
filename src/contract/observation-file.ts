@@ -1,7 +1,6 @@
 import {
   appendFile,
   rename,
-  readFile,
   unlink,
   writeFile,
 } from "node:fs/promises";
@@ -10,6 +9,10 @@ import { randomBytes } from "node:crypto";
 import { canonicalDNFKey, canonicalizeDNF } from "../permissions/canonical.js";
 import { compareAscii } from "../deterministic.js";
 import { ObservationSchema, type Observation } from "./observation.js";
+import {
+  BoundedFileError,
+  readBoundedRegularFile,
+} from "../security/bounded-file.js";
 
 const MAX_OBSERVATION_BYTES = 10 * 1024 * 1024;
 const MAX_OBSERVATIONS = 10_000;
@@ -33,17 +36,20 @@ export async function appendObservation(
 export async function loadObservations(path: string): Promise<Observation[]> {
   let content: string;
   try {
-    content = await readFile(path, "utf8");
+    content = (
+      await readBoundedRegularFile(path, MAX_OBSERVATION_BYTES)
+    ).toString("utf8");
   } catch (error) {
+    if (error instanceof BoundedFileError && error.code === "too_large") {
+      throw new ObservationFileError(
+        "Observation file exceeds the size limit.",
+      );
+    }
     throw new ObservationFileError(
       isMissingFile(error)
         ? "Observation file does not exist."
         : "Observation file could not be read.",
     );
-  }
-
-  if (Buffer.byteLength(content, "utf8") > MAX_OBSERVATION_BYTES) {
-    throw new ObservationFileError("Observation file exceeds the size limit.");
   }
 
   const lines = content.split(/\r?\n/u).filter((line) => line.length > 0);

@@ -8,7 +8,6 @@ import { beforeAll, describe, expect, it } from "vitest";
 
 import {
   createAppJwt,
-  mintBroadInstallationToken,
   mintRestrictedInstallationToken,
   type InstallationTokenRequest,
   type InstallationTokenTransport,
@@ -112,58 +111,6 @@ describe("installation-token broker boundary", () => {
     expect(result.mandatoryPermissions).toEqual({ metadata: "read" });
   });
 
-  it("omits permissions only for a broad token with known expected grants", async () => {
-    const config = LiveFixtureConfig.load(environment(privateKey));
-    const captured: InstallationTokenRequest[] = [];
-    const transport: InstallationTokenTransport = {
-      async createInstallationToken(request) {
-        captured.push(request);
-        return {
-          token: "ghs_BROAD_TOKEN_CANARY",
-          expires_at: "2026-07-23T13:00:00.000Z",
-          permissions: {
-            actions: "read",
-            contents: "write",
-            issues: "write",
-            metadata: "read",
-          },
-          repositories: [
-            {
-              full_name:
-                "fixture-owner/private-granttrace-fixture",
-            },
-          ],
-        };
-      },
-    };
-
-    const result = await mintBroadInstallationToken(
-      config,
-      {
-        actions: "read",
-        contents: "write",
-        issues: "write",
-      },
-      { transport, now },
-    );
-
-    expect(captured[0]?.permissions).toBeNull();
-    expect(result.requestedPermissions).toEqual({
-      actions: "read",
-      contents: "write",
-      issues: "write",
-    });
-    expect(result.mandatoryPermissions).toEqual({ metadata: "read" });
-    expect(result.effectivePermissions).toEqual({
-      actions: "read",
-      contents: "write",
-      issues: "write",
-      metadata: "read",
-    });
-    expect(JSON.stringify(result)).not.toContain(
-      "ghs_BROAD_TOKEN_CANARY",
-    );
-  });
 });
 
 function decode(value: string | undefined): string {

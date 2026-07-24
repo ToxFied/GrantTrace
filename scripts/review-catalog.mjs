@@ -41,7 +41,7 @@ const entries = catalogModule.GITHUB_REST_CATALOG_ENTRIES;
 const catalog = catalogModule.githubPermissionCatalog;
 if (!Array.isArray(entries) || entries.length < 25) {
   throw new Error(
-    "The starter catalog does not contain 25 reviewable official-doc entries.",
+    "The catalog must contain at least 25 reviewed official-documentation entries.",
   );
 }
 if (

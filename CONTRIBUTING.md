@@ -36,7 +36,8 @@ change:
 - Unknown routes and malformed or contradictory evidence fail closed.
 - AND/OR permission alternatives remain exact.
 - `metadata:read` is a mandatory baseline, not selected evidence.
-- Manual keeps are reasoned and requested but never called proven necessity.
+- Manual keeps use validated identity-free, secret-free committed reasons and
+  are requested but never called observed or proven necessity.
 - Effective live access must equal selected plus manual keeps plus the
   mandatory baseline.
 - Credentials never enter CLI arguments, contracts, observations, reports, or
@@ -75,6 +76,12 @@ Apart from npm's required `package.json`, `pnpm pack` must contain only
 production `dist`, `LICENSE`, and `README.md`. Never include tests, local
 observations, proof reports, credentials, fixture identities, caches, or
 development residue.
+
+`pnpm package:smoke` creates one fresh npm tarball, compares npm's returned
+manifest with that archive, and installs the same package into both an npm
+consumer and a strict isolated, non-hoisting pnpm consumer. It checks public
+exports and types plus the installed CLI and offline record/check workflow. CI
+repeats the smoke test on Linux, macOS, and Windows.
 
 Do not publish npm packages, create releases/tags, deploy, change repository
 visibility, expose secrets, or run a live fixture proof as part of a normal

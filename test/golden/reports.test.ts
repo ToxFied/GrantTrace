@@ -23,6 +23,7 @@ describe("golden output", () => {
     const contract = buildContract(observations, fixtureCatalog);
     const emptyPrevious = {
       ...contract,
+      scenarios: [],
       routes: [],
       selectedPermissions: {},
       permissionFrontier: [{}],

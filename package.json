@@ -1,11 +1,16 @@
 {
   "name": "granttrace",
   "version": "0.1.0-beta.1",
-  "description": "Test-bound GitHub App REST permission contracts",
+  "description": "Scenario-bound GitHub App REST permission contracts",
   "type": "module",
   "types": "./dist/index.d.ts",
   "sideEffects": false,
   "packageManager": "pnpm@10.28.2+sha512.41872f037ad22f7348e3b1debbaf7e867cfd448f2726d9cf74c08f19507c31d2c8e7a11525b983febc2df640b5438dee6023ebb1f84ed43cc2d654d2bc326264",
+  "pnpm": {
+    "ignoredBuiltDependencies": [
+      "esbuild"
+    ]
+  },
   "license": "MIT",
   "author": "Anestis",
   "repository": {
@@ -54,6 +59,7 @@
     "docs:build": "pnpm --dir website build",
     "docs:dev": "pnpm --dir website dev",
     "docs:typecheck": "pnpm --dir website typecheck",
+    "docs:validate": "node scripts/validate-docs.mjs",
     "granttrace": "tsx src/cli/bin.ts",
     "catalog:review": "node scripts/review-catalog.mjs",
     "ci:validate": "node scripts/validate-ci.mjs",

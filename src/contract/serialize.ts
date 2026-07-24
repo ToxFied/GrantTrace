@@ -1,21 +1,26 @@
 import { createHash, randomBytes } from "node:crypto";
-import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
+import { mkdir, rename, unlink, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 
 import {
   assignmentKey,
   canonicalizeAssignment,
   canonicalizeDNF,
-  comparePermissionLevels,
 } from "../permissions/canonical.js";
 import { compareAscii } from "../deterministic.js";
 import { solvePermissionContract } from "../permissions/solver.js";
 import { MANDATORY_INSTALLATION_PERMISSIONS } from "../proof/permission-baseline.js";
 import {
   GrantTraceContractSchema,
+  GrantTraceContractLegacyV2Schema,
   GrantTraceContractV1Schema,
   type GrantTraceContract,
 } from "./schema.js";
+import {
+  BoundedFileError,
+  readBoundedRegularFile,
+} from "../security/bounded-file.js";
+import { findManualKeepConflicts } from "./manual-keeps.js";
 
 const MAX_CONTRACT_BYTES = 5 * 1024 * 1024;
 
@@ -43,6 +48,7 @@ export async function readContract(path: string): Promise<GrantTraceContract> {
 
 export type ReadContractResult = {
   contract: GrantTraceContract;
+  migratedFromLegacyV2: boolean;
   migratedFromV1: boolean;
 };
 
@@ -51,17 +57,18 @@ export async function readContractWithMetadata(
 ): Promise<ReadContractResult> {
   let content: string;
   try {
-    content = await readFile(path, "utf8");
+    content = (await readBoundedRegularFile(path, MAX_CONTRACT_BYTES)).toString(
+      "utf8",
+    );
   } catch (error) {
+    if (error instanceof BoundedFileError && error.code === "too_large") {
+      throw new ContractFileError("Contract file exceeds the size limit.");
+    }
     throw new ContractFileError(
       isMissingFile(error)
         ? "Contract file does not exist."
         : "Contract file could not be read.",
     );
-  }
-
-  if (Buffer.byteLength(content, "utf8") > MAX_CONTRACT_BYTES) {
-    throw new ContractFileError("Contract file exceeds the size limit.");
   }
 
   try {
@@ -70,6 +77,26 @@ export async function readContractWithMetadata(
     if (current.success) {
       return {
         contract: canonicalizeContract(current.data),
+        migratedFromLegacyV2: false,
+        migratedFromV1: false,
+      };
+    }
+    const legacyV2 = GrantTraceContractLegacyV2Schema.safeParse(raw);
+    if (legacyV2.success) {
+      return {
+        contract: canonicalizeContract({
+          ...legacyV2.data,
+          routes: legacyV2.data.routes.map((route) => ({
+            ...route,
+            scenarioEvidence: Object.fromEntries(
+              route.scenarios.map((scenario) => [
+                scenario,
+                route.evidence,
+              ]),
+            ),
+          })),
+        }),
+        migratedFromLegacyV2: true,
         migratedFromV1: false,
       };
     }
@@ -81,9 +108,13 @@ export async function readContractWithMetadata(
         schemaVersion: 2,
         routes: legacy.routes.map((route) => ({
           ...route,
+          scenarioEvidence: Object.fromEntries(
+            scenarios.map((scenario) => [scenario, route.evidence]),
+          ),
           scenarios,
         })),
       }),
+      migratedFromLegacyV2: false,
       migratedFromV1: true,
     };
   } catch {
@@ -132,6 +163,14 @@ function canonicalizeContract(contract: GrantTraceContract): GrantTraceContract 
         template: route.template,
         alternatives: canonicalizeDNF(route.alternatives),
         evidence: [...new Set(route.evidence)].sort(compareEvidence),
+        scenarioEvidence: Object.fromEntries(
+          Object.entries(route.scenarioEvidence)
+            .sort(([left], [right]) => compareAscii(left, right))
+            .map(([scenario, evidence]) => [
+              scenario,
+              [...new Set(evidence)].sort(compareEvidence),
+            ]),
+        ),
         scenarios: [...new Set(route.scenarios)].sort(compareAscii),
       }))
       .sort((left, right) =>
@@ -191,6 +230,28 @@ function validateContractSemantics(contract: GrantTraceContract): void {
 
   const attributedScenarios = new Set<string>();
   for (const route of contract.routes) {
+    const scenarioEvidenceNames = Object.keys(route.scenarioEvidence);
+    if (
+      scenarioEvidenceNames.length !== route.scenarios.length ||
+      route.scenarios.some(
+        (scenario) => route.scenarioEvidence[scenario] === undefined,
+      ) ||
+      scenarioEvidenceNames.some(
+        (scenario) => !route.scenarios.includes(scenario),
+      )
+    ) {
+      throw new ContractFileError(
+        "Route evidence attribution must exactly match route scenarios.",
+      );
+    }
+    const evidenceUnion = [
+      ...new Set(Object.values(route.scenarioEvidence).flat()),
+    ].sort(compareEvidence);
+    if (JSON.stringify(evidenceUnion) !== JSON.stringify(route.evidence)) {
+      throw new ContractFileError(
+        "Route evidence must equal its scenario evidence union.",
+      );
+    }
     for (const scenario of route.scenarios) {
       if (!declaredScenarios.has(scenario)) {
         throw new ContractFileError(
@@ -224,6 +285,7 @@ function validateContractSemantics(contract: GrantTraceContract): void {
       route: { method: route.method, template: route.template },
       alternatives: route.alternatives,
       evidence: route.evidence,
+      scenarioEvidence: route.scenarioEvidence,
       scenarios: route.scenarios,
     })),
     { baseline: MANDATORY_INSTALLATION_PERMISSIONS },
@@ -242,25 +304,19 @@ function validateContractSemantics(contract: GrantTraceContract): void {
     );
   }
 
-  for (const [permission, keep] of Object.entries(contract.manualKeeps)) {
-    const mandatory = MANDATORY_INSTALLATION_PERMISSIONS[permission];
-    if (
-      mandatory !== undefined &&
-      comparePermissionLevels(mandatory, keep.level) >= 0
-    ) {
+  for (const conflict of findManualKeepConflicts(
+    contract,
+    contract.selectedPermissions,
+    MANDATORY_INSTALLATION_PERMISSIONS,
+  )) {
+    if (conflict.kind === "mandatory_baseline") {
       throw new ContractFileError(
         "A manual keep duplicates the mandatory GitHub baseline.",
       );
     }
-    const selected = contract.selectedPermissions[permission];
-    if (
-      selected !== undefined &&
-      comparePermissionLevels(selected, keep.level) >= 0
-    ) {
-      throw new ContractFileError(
-        "A manual keep duplicates observed selected access.",
-      );
-    }
+    throw new ContractFileError(
+      "A manual keep duplicates observed selected access.",
+    );
   }
 }
 
