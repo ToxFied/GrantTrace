@@ -1,4 +1,7 @@
-# Threat model
+---
+title: Threat model
+description: Assets, trust boundaries, controls, and residual risks.
+---
 
 ## Security objective
 
@@ -66,7 +69,10 @@ routes and verifies scenario attribution. Unknown fields fail instead of being
 spread, preserved, or redacted.
 
 Contracts are written through a sibling temporary file and rename. Local
-observations and proof reports use allowlisted serialization.
+observations and proof reports use allowlisted serialization. Reads are
+size-bounded and accept only regular files; symlinks and other special files
+are rejected. GrantTrace uses no-follow opens where available and compares the
+opened file with the inspected file before reading.
 
 ### App private-key leakage
 
@@ -139,6 +145,12 @@ The stale flattened `@octokit/app-permissions` data is not imported as truth.
 
 ### Broader-than-requested live tokens
 
+Before credentials are loaded, proof requires exact tool, API, and catalog
+identity and rebinds every accepted route DNF to the current pinned catalog.
+Production proof has no broad-token discovery or feasibility path: it mints
+only the restricted positive and applicable negative-control tokens after that
+validation succeeds.
+
 The raw token endpoint response is mandatory. GrantTrace independently
 requires:
 
@@ -178,7 +190,9 @@ uses a fixed executable and validated argv.
 
 Record and proof children have bounded timeouts, receive termination followed
 by a bounded force-kill path, and are cleaned only after process close.
-Output is streamed rather than captured.
+Output is streamed rather than captured. A parent terminal interrupt is
+tracked independently, so a child that handles the signal and exits zero
+cannot turn an interrupted session into accepted evidence.
 
 ### Misclassifying failures as permission evidence
 
@@ -199,6 +213,14 @@ failure.
 
 Cleanup is modeled independently. Any local session or live mutation cleanup
 failure prevents an unqualified pass and remains visible in the strict report.
+
+### Unsafe or stale local state
+
+Managed `.granttrace/` directories must be owned, nonsymlink directories with
+mode `0700`; managed observations and reports are regular `0600` files.
+`record` and `prove` require initialized ignored state and refuse to start
+while stale session artifacts exist. The operator must inspect possible live
+residue before removing a stale proof session.
 
 ### CI and artifact leakage
 

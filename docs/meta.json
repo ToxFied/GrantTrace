@@ -1,0 +1,27 @@
+{
+  "title": "GrantTrace",
+  "description": "Scenario-bound GitHub App permission contracts.",
+  "root": true,
+  "pages": [
+    "index",
+    "---Start---",
+    "getting-started",
+    "instrument-octokit",
+    "troubleshooting",
+    "---Understand---",
+    "how-it-works",
+    "manual-keeps",
+    "security",
+    "limitations",
+    "---Operate---",
+    "ci",
+    "live-proof",
+    "live-setup",
+    "---Reference---",
+    "cli-reference",
+    "catalog",
+    "protocol",
+    "threat-model",
+    "!feasibility"
+  ]
+}
