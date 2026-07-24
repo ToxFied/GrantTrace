@@ -8,6 +8,8 @@ import {
   PermissionNameSchema,
   ScenarioNameSchema,
 } from "../permissions/schema.js";
+import { isSyntacticallySafeTemplate } from "../routes/canonical.js";
+import { isSafeReviewText } from "../security/review-text.js";
 
 const CatalogIdentitySchema = z.strictObject({
   source: z.string().min(1).max(64).regex(/^[a-z0-9_-]+$/u),
@@ -15,14 +17,21 @@ const CatalogIdentitySchema = z.strictObject({
   checksum: z.string().regex(/^sha256:[a-f0-9]{64}$/u),
 });
 
+const EvidenceSourcesSchema = z
+  .array(z.enum(["runtime_header", "pinned_catalog"]))
+  .min(1);
+
 const ContractRouteSchema = z.strictObject({
   method: z.enum(["DELETE", "GET", "HEAD", "PATCH", "POST", "PUT"]),
-  template: z.string().min(1).max(256).startsWith("/"),
+  template: z.string().refine(isSyntacticallySafeTemplate),
   alternatives: PermissionDNFSchema,
-  evidence: z
-    .array(z.enum(["runtime_header", "pinned_catalog"]))
-    .min(1),
+  evidence: EvidenceSourcesSchema,
+  scenarioEvidence: z.record(ScenarioNameSchema, EvidenceSourcesSchema),
   scenarios: z.array(ScenarioNameSchema).min(1),
+});
+
+const LegacyContractRouteSchema = ContractRouteSchema.omit({
+  scenarioEvidence: true,
 });
 
 const ManualKeepSchema = z.strictObject({
@@ -32,7 +41,7 @@ const ManualKeepSchema = z.strictObject({
     .trim()
     .min(1)
     .max(240)
-    .regex(/^[^\u0000-\u001f\u007f]+$/u),
+    .refine(isSafeReviewText),
 });
 
 export const GrantTraceContractSchema = z.strictObject({
@@ -45,8 +54,7 @@ export const GrantTraceContractSchema = z.strictObject({
       z.strictObject({
         name: ScenarioNameSchema,
       }),
-    )
-    .min(1),
+    ),
   routes: z.array(ContractRouteSchema),
   selectedPermissions: PermissionAssignmentSchema,
   permissionFrontier: z.array(PermissionAssignmentSchema).min(1),
@@ -63,13 +71,51 @@ export const GrantTraceContractSchema = z.strictObject({
         "PUT",
         "UNKNOWN",
       ]),
-      template: z.string().min(1).max(256).startsWith("/").nullable(),
+      template: z
+        .string()
+        .refine(isSyntacticallySafeTemplate)
+        .nullable(),
       finding: ObservationFindingSchema,
     }),
   ),
 });
 
 export type GrantTraceContract = z.infer<typeof GrantTraceContractSchema>;
+
+export const GrantTraceContractLegacyV2Schema = z.strictObject({
+  schemaVersion: z.literal(2),
+  toolVersion: z.string().min(1).max(64),
+  apiVersion: z.string().regex(/^\d{4}-\d{2}-\d{2}$/u),
+  catalog: CatalogIdentitySchema,
+  scenarios: z.array(
+    z.strictObject({
+      name: ScenarioNameSchema,
+    }),
+  ),
+  routes: z.array(LegacyContractRouteSchema),
+  selectedPermissions: PermissionAssignmentSchema,
+  permissionFrontier: z.array(PermissionAssignmentSchema).min(1),
+  manualKeeps: z.record(PermissionNameSchema, ManualKeepSchema),
+  unknowns: z.array(
+    z.strictObject({
+      scenario: ScenarioNameSchema,
+      method: z.enum([
+        "DELETE",
+        "GET",
+        "HEAD",
+        "PATCH",
+        "POST",
+        "PUT",
+        "UNKNOWN",
+      ]),
+      template: z
+        .string()
+        .refine(isSyntacticallySafeTemplate)
+        .nullable(),
+      finding: ObservationFindingSchema,
+    }),
+  ),
+});
 
 export const GrantTraceContractV1Schema = z.strictObject({
   schemaVersion: z.literal(1),
@@ -83,7 +129,12 @@ export const GrantTraceContractV1Schema = z.strictObject({
       }),
     )
     .min(1),
-  routes: z.array(ContractRouteSchema.omit({ scenarios: true })),
+  routes: z.array(
+    ContractRouteSchema.omit({
+      scenarioEvidence: true,
+      scenarios: true,
+    }),
+  ),
   selectedPermissions: PermissionAssignmentSchema,
   permissionFrontier: z.array(PermissionAssignmentSchema).min(1),
   manualKeeps: z.record(PermissionNameSchema, ManualKeepSchema),

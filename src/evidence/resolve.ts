@@ -70,100 +70,62 @@ export function resolveEvidence(
       method: first.method,
       template: first.routeTemplate,
     };
-    const blocking = group.find(
-      (observation) =>
-        observation.finding === "malformed_header" ||
-        observation.finding === "evidence_contradiction" ||
-        observation.finding === "unsupported_api" ||
-        observation.finding === "unresolved_route",
-    );
-    if (blocking !== undefined) {
-      unknowns.push({
-        scenario: blocking.scenario,
-        method: blocking.method,
-        template: route.template,
-        finding: blocking.finding ?? "unresolved_route",
-      });
-      continue;
-    }
-
-    const runtimeEvidence = uniqueEvidence(
-      group
-        .filter(
-          (observation) =>
-            observation.evidenceSource === "runtime_header" &&
-            observation.requirements !== null,
-        )
-        .map((observation) => observation.requirements)
-        .filter((value) => value !== null),
-    );
-    const embeddedCatalogEvidence = uniqueEvidence(
-      group
-        .filter(
-          (observation) =>
-            observation.evidenceSource === "pinned_catalog" &&
-            observation.requirements !== null,
-        )
-        .map((observation) => observation.requirements)
-        .filter((value) => value !== null),
-    );
     const catalogEvidence = catalog.lookup(route);
-
-    if (runtimeEvidence.length > 1 || embeddedCatalogEvidence.length > 1) {
-      unknowns.push({
-        scenario: first.scenario,
-        method: route.method,
-        template: route.template,
-        finding: "evidence_contradiction",
-      });
-      continue;
+    const successful: Array<{
+      scenario: string;
+      alternatives: NonNullable<Observation["requirements"]>;
+      evidence: EvidenceSource[];
+    }> = [];
+    const byScenario = new Map<string, Observation[]>();
+    for (const observation of group) {
+      const scenarioGroup = byScenario.get(observation.scenario) ?? [];
+      scenarioGroup.push(observation);
+      byScenario.set(observation.scenario, scenarioGroup);
+    }
+    for (const [scenario, scenarioGroup] of [...byScenario.entries()].sort(
+      ([left], [right]) => compareAscii(left, right),
+    )) {
+      const resolved = resolveScenarioRoute(
+        scenarioGroup,
+        route,
+        catalogEvidence,
+      );
+      if ("unknown" in resolved) {
+        unknowns.push({ scenario, ...resolved.unknown });
+      } else {
+        successful.push({ scenario, ...resolved });
+      }
     }
 
-    const runtime = runtimeEvidence[0] ?? null;
-    const embeddedCatalog = embeddedCatalogEvidence[0] ?? null;
-    if (
-      (embeddedCatalog !== null &&
-        catalogEvidence !== null &&
-        canonicalDNFKey(embeddedCatalog) !== canonicalDNFKey(catalogEvidence)) ||
-      (runtime !== null &&
-        catalogEvidence !== null &&
-        canonicalDNFKey(runtime) !== canonicalDNFKey(catalogEvidence))
-    ) {
-      unknowns.push({
-        scenario: first.scenario,
-        method: route.method,
-        template: route.template,
-        finding: "evidence_contradiction",
-      });
-      continue;
+    if (successful.length > 0) {
+      const alternativeKeys = new Set(
+        successful.map((item) => canonicalDNFKey(item.alternatives)),
+      );
+      if (alternativeKeys.size !== 1) {
+        for (const item of successful) {
+          unknowns.push({
+            scenario: item.scenario,
+            method: route.method,
+            template: route.template,
+            finding: "evidence_contradiction",
+          });
+        }
+      } else {
+        const scenarioEvidence = Object.fromEntries(
+          successful.map((item) => [item.scenario, item.evidence]),
+        );
+        requirements.push({
+          route,
+          alternatives: canonicalizeDNF(successful[0]!.alternatives),
+          evidence: (["runtime_header", "pinned_catalog"] as const).filter(
+            (source) =>
+              successful.some((item) => item.evidence.includes(source)),
+          ),
+          scenarioEvidence,
+          scenarios: successful.map((item) => item.scenario),
+        });
+      }
     }
-
-    const alternatives = runtime ?? embeddedCatalog ?? catalogEvidence;
-    if (alternatives === null) {
-      unknowns.push({
-        scenario: first.scenario,
-        method: route.method,
-        template: route.template,
-        finding: "missing_evidence",
-      });
-      continue;
-    }
-
-    const evidence: EvidenceSource[] = [];
-    if (runtime !== null) {
-      evidence.push("runtime_header");
-    }
-    if (catalogEvidence !== null || embeddedCatalog !== null) {
-      evidence.push("pinned_catalog");
-    }
-
-    requirements.push({
-      route,
-      alternatives: canonicalizeDNF(alternatives),
-      evidence,
-      scenarios: [...new Set(group.map((observation) => observation.scenario))]
-        .sort(compareAscii),
-    });
 
     void key;
   }
@@ -172,6 +134,101 @@ export function resolveEvidence(
     requirements,
     unknowns: deduplicateUnknowns(unknowns),
   };
+}
+
+function resolveScenarioRoute(
+  group: Observation[],
+  route: { method: string; template: string },
+  catalogEvidence: ReturnType<PermissionCatalog["lookup"]>,
+):
+  | {
+      alternatives: NonNullable<Observation["requirements"]>;
+      evidence: EvidenceSource[];
+    }
+  | {
+      unknown: Omit<ContractUnknown, "scenario">;
+    } {
+  const blocking = group.find(
+    (observation) =>
+      observation.finding === "malformed_header" ||
+      observation.finding === "evidence_contradiction" ||
+      observation.finding === "unsupported_api" ||
+      observation.finding === "unresolved_route",
+  );
+  if (blocking !== undefined) {
+    return {
+      unknown: {
+        method: blocking.method,
+        template: route.template,
+        finding: blocking.finding ?? "unresolved_route",
+      },
+    };
+  }
+
+  const runtimeEvidence = uniqueEvidence(
+    group.flatMap((observation) =>
+      observation.evidenceSource === "runtime_header" &&
+      observation.requirements !== null
+        ? [observation.requirements]
+        : [],
+    ),
+  );
+  const embeddedCatalogEvidence = uniqueEvidence(
+    group.flatMap((observation) =>
+      observation.evidenceSource === "pinned_catalog" &&
+      observation.requirements !== null
+        ? [observation.requirements]
+        : [],
+    ),
+  );
+  if (runtimeEvidence.length > 1 || embeddedCatalogEvidence.length > 1) {
+    return {
+      unknown: {
+        method: route.method,
+        template: route.template,
+        finding: "evidence_contradiction",
+      },
+    };
+  }
+
+  const runtime = runtimeEvidence[0] ?? null;
+  const embeddedCatalog = embeddedCatalogEvidence[0] ?? null;
+  if (
+    (embeddedCatalog !== null &&
+      catalogEvidence !== null &&
+      canonicalDNFKey(embeddedCatalog) !== canonicalDNFKey(catalogEvidence)) ||
+    (runtime !== null &&
+      catalogEvidence !== null &&
+      canonicalDNFKey(runtime) !== canonicalDNFKey(catalogEvidence))
+  ) {
+    return {
+      unknown: {
+        method: route.method,
+        template: route.template,
+        finding: "evidence_contradiction",
+      },
+    };
+  }
+
+  const alternatives = runtime ?? embeddedCatalog ?? catalogEvidence;
+  if (alternatives === null) {
+    return {
+      unknown: {
+        method: route.method,
+        template: route.template,
+        finding: "missing_evidence",
+      },
+    };
+  }
+
+  const evidence: EvidenceSource[] = [];
+  if (runtime !== null) {
+    evidence.push("runtime_header");
+  }
+  if (catalogEvidence !== null || embeddedCatalog !== null) {
+    evidence.push("pinned_catalog");
+  }
+  return { alternatives, evidence };
 }
 
 function uniqueEvidence(

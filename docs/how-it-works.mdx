@@ -7,12 +7,14 @@ description: Understand scenario coverage, evidence sources, and deterministic s
 
 GrantTrace answers a narrow question:
 
-> Which GitHub App REST permissions do these named, instrumented scenarios
+> Which GitHub App REST permissions do these named, recorded scenarios
 > demonstrably require?
 
 That boundary matters. GrantTrace does not infer unexecuted paths, intercept
 arbitrary HTTP traffic, inspect GraphQL, or prove that production behavior is
-fully covered.
+fully covered. Automatic recording observes supported Node.js global `fetch`
+calls, including standard Octokit traffic. Requests that bypass that path are
+outside the result unless they use GrantTrace's explicit adapter.
 
 ## Scenarios make coverage explicit
 
@@ -24,6 +26,10 @@ coverage change.
 Local recordings are kept under `.granttrace/observations/`. They are input to
 `check`, not an append-only history. Recording the same name replaces its
 previous successful observation set.
+
+`record` then solves the aggregate contract and presents the same diff as
+`check`. An interactive terminal can explicitly accept it in place. A
+noninteractive run never accepts and exits `6` when review is required.
 
 ## Two evidence sources
 
@@ -76,7 +82,7 @@ This is a stable review policy, not a universal definition of optimal access.
 - canonical permission requirements and evidence provenance;
 - route-to-scenario attribution;
 - selected permissions and the full nondominated frontier;
-- separately reasoned manual keeps; and
+- separately documented manual keeps; and
 - safe blocking findings.
 
 The mandatory `metadata:read` baseline participates in solving and live-token
@@ -88,5 +94,5 @@ GrantTrace does not intentionally store raw URLs, query strings, request or
 response bodies, commands, tokens, private keys, owners, repositories, or
 resource identifiers in observations, contracts, or proof reports.
 
-See the [protocol](protocol.md) for the normative model and
-[security and privacy](security.mdx) for the trust boundary.
+See the [protocol](/docs/protocol) for the normative model and
+[security and privacy](/docs/security) for the trust boundary.

@@ -34,7 +34,8 @@ GrantTrace trusts:
 
 GrantTrace does not trust:
 
-- observations, contracts, or reports loaded from disk;
+- observation and contract files loaded from disk;
+- proof-report objects before strict allowlisted serialization;
 - GitHub response headers or token responses;
 - catalog entries before canonicalization and identity calculation;
 - rich Octokit request, response, and error objects;
@@ -49,30 +50,35 @@ contain it.
 
 `prove` uses a narrower boundary: a broker holds App credentials and creates a
 fresh allowlisted child environment containing one restricted installation
-token. This isolates broker credentials; it is still not an OS sandbox.
+token and GrantTrace's recorder preload. Parent `NODE_OPTIONS` is not inherited.
+This isolates broker credentials; it is still not an OS sandbox.
 
 ## Threats and controls
 
 ### Overclaiming coverage
 
 The terminal, README, contract semantics, and reports consistently bind the
-claim to named, instrumented scenarios. Routes carry deterministic scenario
-attribution in schema v2. Proving one scenario slices and resolves only its
-attributed routes. Unknown and uninstrumented behavior never becomes an empty
-requirement.
+claim to named, recorded scenarios. Routes carry deterministic scenario
+attribution and per-scenario evidence provenance in schema v2. Proving one
+scenario slices and resolves only its attributed routes and exact provenance.
+Unknown and unobserved behavior never becomes an empty requirement. Automatic
+recording is limited to supported Node global-`fetch` traffic. A custom
+transport, different runtime, or child that drops the injected preload is
+outside the result unless it uses the explicit GrantTrace adapter.
 
 ### Forged or malformed local artifacts
 
-Observation, contract, and report schemas are strict and resource-bounded.
+Observation and contract input schemas are strict and resource-bounded;
+proof-report objects are strictly validated before serialization.
 Semantic contract validation recomputes selected/frontier permissions from
 routes and verifies scenario attribution. Unknown fields fail instead of being
 spread, preserved, or redacted.
 
 Contracts are written through a sibling temporary file and rename. Local
-observations and proof reports use allowlisted serialization. Reads are
-size-bounded and accept only regular files; symlinks and other special files
-are rejected. GrantTrace uses no-follow opens where available and compares the
-opened file with the inspected file before reading.
+observations and proof reports use allowlisted serialization. Contract and
+observation reads are size-bounded and accept only regular files; symlinks and
+other special files are rejected. GrantTrace uses no-follow opens where
+available and compares the opened file with the inspected file before reading.
 
 ### App private-key leakage
 
@@ -100,25 +106,29 @@ GrantTrace does not persist authorization headers or rich errors.
 The proof child can deliberately print or exfiltrate its token. Isolation
 limits its privilege and lifetime; it does not make malicious code safe.
 
-### Rich Octokit object leakage
+### Recorder input leakage
 
-Request options, response bodies, errors, and headers can contain credentials,
-concrete URLs, and private data. The recorder reads only:
+Fetch and Octokit request options, response bodies, errors, and headers can
+contain credentials, concrete URLs, and private data. The recorder reads only
+the minimum fields required to resolve a catalog route and permission evidence:
 
 - method;
-- the pre-expansion candidate template;
+- a supported GitHub REST path for catalog matching, or the explicit adapter's
+  pre-expansion candidate template;
 - numeric status; and
 - one lower-cased accepted-permissions header.
 
-It constructs a new strict observation. It never serializes or spreads the
-source object.
+It resolves a catalog template and constructs a new strict observation. It
+never serializes or spreads the source object or persists the concrete URL.
 
 ### Concrete URL, query, and identity leakage
 
-Only relative canonical templates that exactly match the pinned catalog are
-accepted. GrantTrace does not attempt generic ID redaction. Absolute URLs,
-concrete paths, query-bearing values, and unmatched candidates are discarded;
-only method plus a safe finding remains.
+Only a supported GitHub REST request that resolves uniquely to the pinned
+catalog, or an explicit relative canonical template that exactly matches it,
+is accepted. GrantTrace does not attempt generic ID redaction. Unrelated
+origins are ignored. Ambiguous or unmatched GitHub paths and unsafe candidates
+are discarded; only method plus a safe finding remains. Query values are never
+persisted.
 
 Contracts contain no commands, local paths, owners, repositories, resource
 IDs, timestamps, or machine values. Proof reports omit fixture coordinates and
@@ -218,9 +228,9 @@ failure prevents an unqualified pass and remains visible in the strict report.
 
 Managed `.granttrace/` directories must be owned, nonsymlink directories with
 mode `0700`; managed observations and reports are regular `0600` files.
-`record` and `prove` require initialized ignored state and refuse to start
-while stale session artifacts exist. The operator must inspect possible live
-residue before removing a stale proof session.
+`record` initializes ignored state when it is absent. `record` and `prove`
+refuse to start when existing state is unsafe or stale. The operator must
+inspect possible live residue before removing a stale proof session.
 
 ### CI and artifact leakage
 

@@ -48,7 +48,7 @@ export async function runCli(
     return ExitCode.success;
   }
 
-  writeLine(context.stderr, `Unknown command: ${command}`);
+  writeLine(context.stderr, "Unknown command.");
   writeLine(context.stderr, "");
   writeLine(context.stderr, helpText());
   return ExitCode.usage;
@@ -57,28 +57,36 @@ export async function runCli(
 function helpText(): string {
   return [
     `GrantTrace ${TOOL_VERSION}`,
-    "Test-bound GitHub App permission contracts",
+    "Scenario-bound GitHub App REST permission contracts",
     "",
-    "Usage",
-    "  granttrace record --scenario <safe-name> [--timeout 15m] -- <command> [args...]",
-    "  granttrace check [--accept]",
-    "  granttrace prove --scenario <safe-name> [--timeout 15m] -- <command> [args...]",
-    "  granttrace keep add <permission>:<read|write> --reason <text>",
-    "  granttrace keep remove <permission>",
-    "  granttrace scenario list|remove <name>",
-    "  granttrace doctor",
-    "  granttrace init",
-    "  granttrace analyze <observations.ndjson>",
+    "Core workflow",
+    "  granttrace record     Run, observe, review, and optionally accept a scenario",
+    "  granttrace check      Review or accept the aggregate contract",
+    "  granttrace scenario   List or retire scenario recordings",
+    "",
+    "Setup and diagnostics",
+    "  granttrace init       Explicitly create private ignored local state",
+    "  granttrace doctor     Diagnose local and optional live prerequisites",
+    "",
+    "Access exceptions",
+    "  granttrace keep add|remove|list",
+    "                         Manage documented permission exceptions",
+    "",
+    "Live verification",
+    "  granttrace prove      Prove one accepted scenario with restricted access",
+    "",
+    "Advanced",
+    "  granttrace analyze    Analyze one NDJSON file without writing",
     "",
     "Start",
-    "  granttrace init",
+    "  granttrace record <name> -- <test-command>",
     "",
     "Guarantee",
-    "  For the GitHub REST operations exercised by named, instrumented",
-    "  scenarios, GrantTrace reports the permissions those scenarios",
+    "  For the GitHub REST operations observed in named scenarios,",
+    "  GrantTrace reports the permissions those scenarios",
     "  demonstrably require. Untested behavior is outside the claim.",
     "",
-    "Run granttrace <command> --help for command details.",
+    "Run granttrace <command> --help for command-specific usage.",
     "",
   ].join("\n");
 }

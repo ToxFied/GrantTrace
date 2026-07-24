@@ -1,8 +1,5 @@
-import { spawn } from "node:child_process";
 import {
   access,
-  chmod,
-  mkdir,
   mkdtemp,
   rm,
 } from "node:fs/promises";
@@ -12,19 +9,28 @@ import {
   loadObservations,
   writeObservations,
 } from "../contract/observation-file.js";
+import type { Observation } from "../contract/observation.js";
 import { ScenarioNameSchema } from "../permissions/schema.js";
 import { renderInstrumentationError } from "../reporting/terminal.js";
+import { injectRuntimePreload } from "../runtime/injection.js";
 import type { CliContext } from "./context.js";
 import { writeLine } from "./context.js";
 import { ExitCode, type ExitCodeValue } from "./exit-codes.js";
-import { parseBoundedDuration } from "./duration.js";
-
-type ChildResult = {
-  code: number | null;
-  signal: NodeJS.Signals | null;
-  spawnFailed: boolean;
-  timedOut: boolean;
-};
+import { runCheck } from "./check.js";
+import {
+  ensureStateIsIgnored,
+  initializeProjectState,
+} from "./init.js";
+import { parseScenarioCommand } from "./scenario-command.js";
+import { formatDuration } from "./duration.js";
+import { runManagedChild } from "../security/managed-child.js";
+import {
+  acquireLocalOperationLock,
+  ensurePrivateStateSubdirectory,
+  inspectLocalState,
+  type LocalOperationLock,
+  stateIgnorePresent,
+} from "../security/local-state.js";
 
 export async function runRecord(
   args: string[],
@@ -34,29 +40,51 @@ export async function runRecord(
     writeLine(
       context.stdout,
       [
-        "Record one named, instrumented test scenario",
+        "Record one named test scenario",
         "",
         "Usage",
-        "  granttrace record --scenario <safe-name> [--timeout 15m] -- <command> [args...]",
+        "  granttrace record <name> [--timeout 15m] -- <command> [args...]",
+        "  granttrace record --scenario <name> ...  (legacy)",
         "",
-        "The command is launched directly with shell:false. Output is streamed;",
+        "GrantTrace prepares local state, automatically observes standard Node",
+        "GitHub REST traffic, and presents the resulting contract for review.",
+        "In an interactive terminal, confirm with y to accept it.",
+        "",
+        "The command runs directly without a shell. Output is streamed;",
         "request and response bodies are never retained by GrantTrace.",
         "",
-        "Next",
-        "  granttrace check",
+        "Use --no-review only when a later granttrace check is guaranteed.",
         "",
       ].join("\n"),
     );
     return ExitCode.success;
   }
-  const parsed = parseRecordArguments(args);
-  if (parsed === null) {
+  const reviewOptions = parseReviewOptions(args);
+  if (reviewOptions === null) {
     writeLine(
       context.stderr,
-      "Usage: granttrace record --scenario <safe-name> [--timeout 15m] -- <command> [args...]",
+      "GrantTrace record usage error: provide --no-review at most once before --.",
     );
     return ExitCode.usage;
   }
+  const parsedResult = parseScenarioCommand(
+    reviewOptions.args,
+    60 * 60 * 1_000,
+  );
+  if (!parsedResult.success) {
+    writeLine(
+      context.stderr,
+      [
+        `GrantTrace record usage error: ${parsedResult.message}`,
+        "",
+        "Usage",
+        "  granttrace record <name> [--timeout 15m] -- <command> [args...]",
+        "",
+      ].join("\n"),
+    );
+    return ExitCode.usage;
+  }
+  const parsed = parsedResult.value;
 
   let scenario: string;
   try {
@@ -69,34 +97,150 @@ export async function runRecord(
     return ExitCode.usage;
   }
 
+  let state = await inspectLocalState(context.cwd);
+  let initialized = false;
+  try {
+    if (state.issue === "missing") {
+      await initializeProjectState(context.cwd);
+      initialized = true;
+      state = await inspectLocalState(context.cwd);
+    } else if (
+      state.ready &&
+      state.staleSessions === 0 &&
+      !(await stateIgnorePresent(context.cwd))
+    ) {
+      await ensureStateIsIgnored(context.cwd);
+      initialized = true;
+    }
+  } catch {
+    writeLine(
+      context.stderr,
+      [
+        "GrantTrace record blocked",
+        "",
+        "Private ignored local state could not be prepared safely.",
+        "",
+        "Next",
+        "  Run granttrace init for details.",
+        "  Run granttrace doctor after correcting the local state.",
+        "",
+      ].join("\n"),
+    );
+    return ExitCode.analysisFailure;
+  }
+
+  if (
+    !state.ready ||
+    state.staleSessions > 0 ||
+    !(await stateIgnorePresent(context.cwd))
+  ) {
+    writeLine(
+      context.stderr,
+      [
+        "GrantTrace record blocked",
+        "",
+        "Private ignored local state is required before a child can run.",
+        "",
+        "Next",
+        "  granttrace init",
+        "  granttrace doctor",
+        "",
+      ].join("\n"),
+    );
+    return ExitCode.analysisFailure;
+  }
+
+  if (initialized) {
+    writeLine(
+      context.stdout,
+      [
+        "GrantTrace initialized",
+        "  Local state  .granttrace/ (private, ignored)",
+        "",
+      ].join("\n"),
+    );
+  }
+
   const stateDirectory = join(context.cwd, ".granttrace");
-  const sessionsDirectory = join(stateDirectory, "sessions");
+  let sessionsDirectory: string;
+  try {
+    sessionsDirectory = await ensurePrivateStateSubdirectory(
+      context.cwd,
+      "sessions",
+    );
+  } catch {
+    writeLine(
+      context.stderr,
+      "GrantTrace record blocked: local session state is unsafe.",
+    );
+    return ExitCode.analysisFailure;
+  }
+  let operationLock: LocalOperationLock;
+  try {
+    operationLock = await acquireLocalOperationLock(context.cwd);
+  } catch {
+    writeLine(
+      context.stderr,
+      [
+        "GrantTrace record blocked",
+        "",
+        "Another GrantTrace operation is active or left a stale lock.",
+        "",
+        "Next",
+        "  Run granttrace doctor and inspect local session state before retrying.",
+        "",
+      ].join("\n"),
+    );
+    return ExitCode.analysisFailure;
+  }
   let sessionDirectory: string | null = null;
+  let resultCode: ExitCodeValue = ExitCode.analysisFailure;
+  let pendingObservations: Observation[] | null = null;
+  let output: { destination: "stderr" | "stdout"; message: string } | null =
+    null;
 
   try {
-    await mkdir(sessionsDirectory, { recursive: true, mode: 0o700 });
-    await chmod(stateDirectory, 0o700);
-    await chmod(sessionsDirectory, 0o700);
     sessionDirectory = await mkdtemp(join(sessionsDirectory, "session-"));
-    await chmod(sessionDirectory, 0o700);
 
     const childEnvironment = createChildEnvironment(
       context.environment,
       scenario,
       sessionDirectory,
     );
-    const result = await spawnChild(
-      parsed.command,
-      parsed.commandArgs,
-      context.cwd,
-      childEnvironment,
-      parsed.timeoutMs,
+    writeLine(
+      context.stdout,
+      [
+        "Recording started",
+        `  Scenario  ${scenario}`,
+        `  Timeout   ${formatDuration(parsed.timeoutMs)}`,
+        "",
+      ].join("\n"),
     );
+    const result = await runManagedChild({
+      command: parsed.command,
+      args: parsed.commandArgs,
+      cwd: context.cwd,
+      environment: childEnvironment,
+      timeoutMs: parsed.timeoutMs,
+    });
 
-    if (result.spawnFailed) {
-      writeLine(
-        context.stderr,
-        [
+    if (result.processTreeCleanupFailed) {
+      resultCode = ExitCode.analysisFailure;
+      output = {
+        destination: "stderr",
+        message: [
+          "GrantTrace record cleanup failed",
+          "",
+          "The managed child process tree could not be verified as terminated.",
+          "Partial observations were discarded.",
+          "",
+        ].join("\n"),
+      };
+    } else if (result.spawnFailed) {
+      resultCode = ExitCode.testFailure;
+      output = {
+        destination: "stderr",
+        message: [
           "GrantTrace record failed",
           "",
           "The test process could not be started.",
@@ -104,13 +248,25 @@ export async function runRecord(
           "No contract decision was made.",
           "",
         ].join("\n"),
-      );
-      return ExitCode.testFailure;
-    }
-    if (result.timedOut) {
-      writeLine(
-        context.stderr,
-        [
+      };
+    } else if (result.interruptedBy !== null) {
+      resultCode = ExitCode.interrupted;
+      output = {
+        destination: "stderr",
+        message: [
+          "GrantTrace record interrupted",
+          "",
+          "The terminal interrupted the child. Partial observations were discarded.",
+          "",
+          "No contract decision was made.",
+          "",
+        ].join("\n"),
+      };
+    } else if (result.timedOut) {
+      resultCode = ExitCode.testFailure;
+      output = {
+        destination: "stderr",
+        message: [
           "GrantTrace record timed out",
           "",
           "The test process exceeded the configured limit and was terminated.",
@@ -121,20 +277,21 @@ export async function runRecord(
           "  Fix the hung scenario or retry with --timeout <duration>.",
           "",
         ].join("\n"),
-      );
-      return ExitCode.testFailure;
-    }
-
-    const markerPath = join(sessionDirectory, "plugin-loaded");
-    if (!(await pathExists(markerPath))) {
-      writeLine(context.stderr, renderInstrumentationError());
-      return ExitCode.instrumentation;
-    }
-
-    if (result.code !== 0) {
-      writeLine(
-        context.stderr,
-        [
+      };
+    } else {
+      const markerPath = join(sessionDirectory, "plugin-loaded");
+      if (!(await pathExists(markerPath))) {
+        resultCode = ExitCode.instrumentation;
+        output = {
+          destination: "stderr",
+          message: renderInstrumentationError(),
+        };
+      } else if (result.exitCode !== 0) {
+        resultCode =
+          result.signal === null ? ExitCode.testFailure : ExitCode.interrupted;
+        output = {
+          destination: "stderr",
+          message: [
           "GrantTrace record failed",
           "",
           result.signal === null
@@ -144,121 +301,145 @@ export async function runRecord(
           "No contract decision was made.",
           "",
         ].join("\n"),
-      );
-      return result.signal === null
-        ? ExitCode.testFailure
-        : ExitCode.interrupted;
+        };
+      } else {
+        const observationsPath = join(sessionDirectory, "observations.ndjson");
+        if (!(await pathExists(observationsPath))) {
+          resultCode = ExitCode.instrumentation;
+          output = {
+            destination: "stderr",
+            message: renderInstrumentationError(),
+          };
+        } else {
+          const observations = await loadObservations(observationsPath);
+          if (
+            observations.length === 0 ||
+            observations.some(
+              (observation) => observation.scenario !== scenario,
+            )
+          ) {
+            resultCode = ExitCode.instrumentation;
+            output = {
+              destination: "stderr",
+              message: renderInstrumentationError(),
+            };
+          } else {
+            pendingObservations = observations;
+            resultCode = ExitCode.success;
+            output = {
+              destination: "stdout",
+              message: [
+                "GrantTrace record complete",
+                "",
+                `Scenario  ${scenario}`,
+                `Observed  ${observations.length} GitHub REST operation${
+                  observations.length === 1 ? "" : "s"
+                }`,
+                "",
+                ...(reviewOptions.review
+                  ? ["Reviewing the permission contract now.", ""]
+                  : ["Next", "  granttrace check", ""]),
+                "Coverage",
+                "  This recording covers only REST operations exercised by this scenario.",
+                "  Recording the same scenario name again replaces its prior recording.",
+                "",
+              ].join("\n"),
+            };
+          }
+        }
+      }
     }
+  } catch {
+    resultCode = ExitCode.analysisFailure;
+    output = {
+      destination: "stderr",
+      message:
+        "GrantTrace record failed: the child process failed or produced an invalid observation file.",
+    };
+  }
 
-    const observationsPath = join(sessionDirectory, "observations.ndjson");
-    if (!(await pathExists(observationsPath))) {
-      writeLine(context.stderr, renderInstrumentationError());
-      return ExitCode.instrumentation;
-    }
-    const observations = await loadObservations(observationsPath);
-    if (
-      observations.length === 0 ||
-      observations.some(
-        (observation) => observation.scenario !== scenario,
-      )
-    ) {
-      writeLine(context.stderr, renderInstrumentationError());
-      return ExitCode.instrumentation;
-    }
-
-    const outputDirectory = join(stateDirectory, "observations");
-    await mkdir(outputDirectory, { recursive: true, mode: 0o700 });
-    await chmod(outputDirectory, 0o700);
-    await writeObservations(
-      join(outputDirectory, `${scenario}.ndjson`),
-      observations,
-    );
-
+  const cleaned =
+    sessionDirectory === null ||
+    (await (context.recordDependencies?.removeSession === undefined
+      ? rm(sessionDirectory, { recursive: true, force: true })
+      : context.recordDependencies.removeSession(sessionDirectory))
+      .then(() => true)
+      .catch(() => false));
+  if (!cleaned) {
+    await operationLock.release().catch(() => undefined);
     writeLine(
-      context.stdout,
+      context.stderr,
       [
-        "GrantTrace record complete",
+        "GrantTrace record cleanup failed",
         "",
-        `Scenario  ${scenario}`,
-        `Observed  ${observations.length} GitHub REST operation${
-          observations.length === 1 ? "" : "s"
-        }`,
-        "",
-        "Next",
-        "  granttrace check",
-        "",
-        "Coverage",
-        "  This recording covers only REST operations exercised by this scenario.",
-        "  Recording the same scenario name again replaces its prior recording.",
+        "No recording was saved because session cleanup failed.",
+        "Inspect .granttrace/sessions/ before retrying.",
         "",
       ].join("\n"),
     );
-    return ExitCode.success;
+    return ExitCode.analysisFailure;
+  }
+  if (pendingObservations !== null) {
+    try {
+      await writeObservations(
+        join(stateDirectory, "observations", `${scenario}.ndjson`),
+        pendingObservations,
+      );
+    } catch {
+      await operationLock.release().catch(() => undefined);
+      writeLine(
+        context.stderr,
+        "GrantTrace record failed: the observation file could not be saved.",
+      );
+      return ExitCode.analysisFailure;
+    }
+  }
+  try {
+    await operationLock.release();
   } catch {
     writeLine(
       context.stderr,
-      "GrantTrace record failed: the child process or safe observation artifact could not be handled.",
+      [
+        "GrantTrace record cleanup failed",
+        "",
+        "The operation lock could not be removed. Inspect .granttrace/active-operation before retrying.",
+        "",
+      ].join("\n"),
     );
     return ExitCode.analysisFailure;
-  } finally {
-    if (sessionDirectory !== null) {
-      await rm(sessionDirectory, { recursive: true, force: true }).catch(
-        () => undefined,
-      );
-    }
   }
-}
-
-function parseRecordArguments(args: string[]):
-  | {
-      scenario: string;
-      command: string;
-      commandArgs: string[];
-      timeoutMs: number;
-    }
-  | null {
-  const separator = args.indexOf("--");
-  if (separator < 0 || separator === args.length - 1) {
-    return null;
+  if (output !== null) {
+    writeLine(context[output.destination], output.message);
+  }
+  if (resultCode !== ExitCode.success || !reviewOptions.review) {
+    return resultCode;
   }
 
-  const options = args.slice(0, separator);
-  let scenario: string | null = null;
-  let timeoutMs = 15 * 60 * 1_000;
-  for (let index = 0; index < options.length; index += 1) {
-    const option = options[index];
-    const value = options[index + 1];
-    if (option === "--scenario" && scenario === null && value !== undefined) {
-      scenario = value;
-      index += 1;
-      continue;
-    }
-    if (option === "--timeout" && value !== undefined) {
-      const parsed = parseBoundedDuration(value, {
-        minimumMs: 1_000,
-        maximumMs: 60 * 60 * 1_000,
-      });
-      if (parsed === null) {
-        return null;
-      }
-      timeoutMs = parsed;
-      index += 1;
-      continue;
-    }
-    return null;
+  const reviewCode = await runCheck([], context, "record");
+  if (reviewCode !== ExitCode.contractChanged) {
+    return reviewCode;
+  }
+  if (context.confirm === undefined) {
+    return ExitCode.contractChanged;
   }
 
-  const command = args[separator + 1];
-  if (scenario === null || command === undefined || command.length === 0) {
-    return null;
+  let accepted: boolean;
+  try {
+    accepted = await context.confirm(
+      "Accept this permission contract? [y/N] ",
+    );
+  } catch {
+    writeLine(context.stderr, "GrantTrace review interrupted.");
+    return ExitCode.interrupted;
   }
-
-  return {
-    scenario,
-    command,
-    commandArgs: args.slice(separator + 2),
-    timeoutMs,
-  };
+  if (!accepted) {
+    writeLine(
+      context.stdout,
+      "Contract not accepted. The recording was saved for later review.",
+    );
+    return ExitCode.contractChanged;
+  }
+  return runCheck(["--accept"], context);
 }
 
 function createChildEnvironment(
@@ -274,73 +455,7 @@ function createChildEnvironment(
   childEnvironment["GRANTTRACE_RECORDING"] = "1";
   childEnvironment["GRANTTRACE_SCENARIO"] = scenario;
   childEnvironment["GRANTTRACE_SESSION_DIR"] = resolve(sessionDirectory);
-  return childEnvironment;
-}
-
-function spawnChild(
-  command: string,
-  args: string[],
-  cwd: string,
-  environment: NodeJS.ProcessEnv,
-  timeoutMs: number,
-): Promise<ChildResult> {
-  return new Promise((resolveResult) => {
-    const child = spawn(command, args, {
-      cwd,
-      detached: process.platform !== "win32",
-      env: environment,
-      shell: false,
-      stdio: "inherit",
-    });
-    let spawnFailed = false;
-    let timedOut = false;
-    let forceKillTimer: NodeJS.Timeout | null = null;
-    const terminate = (signal: NodeJS.Signals) => {
-      killProcessTree(child.pid, signal, child);
-    };
-    const interrupt = () => terminate("SIGINT");
-    const terminateSignal = () => terminate("SIGTERM");
-    process.once("SIGINT", interrupt);
-    process.once("SIGTERM", terminateSignal);
-    const timeout = setTimeout(() => {
-      timedOut = true;
-      terminate("SIGTERM");
-      forceKillTimer = setTimeout(() => {
-        terminate("SIGKILL");
-      }, 5_000);
-      forceKillTimer.unref();
-    }, timeoutMs);
-    timeout.unref();
-
-    child.once("error", () => {
-      spawnFailed = true;
-    });
-    child.once("close", (code, signal) => {
-      process.off("SIGINT", interrupt);
-      process.off("SIGTERM", terminateSignal);
-      clearTimeout(timeout);
-      if (forceKillTimer !== null) {
-        clearTimeout(forceKillTimer);
-      }
-      resolveResult({ code, signal, spawnFailed, timedOut });
-    });
-  });
-}
-
-function killProcessTree(
-  pid: number | undefined,
-  signal: NodeJS.Signals,
-  child: ReturnType<typeof spawn>,
-): void {
-  if (process.platform !== "win32" && pid !== undefined) {
-    try {
-      process.kill(-pid, signal);
-      return;
-    } catch {
-      // Fall through to direct-child termination.
-    }
-  }
-  child.kill(signal);
+  return injectRuntimePreload(childEnvironment);
 }
 
 async function pathExists(path: string): Promise<boolean> {
@@ -350,4 +465,25 @@ async function pathExists(path: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+function parseReviewOptions(
+  args: string[],
+): { args: string[]; review: boolean } | null {
+  const separator = args.indexOf("--");
+  if (separator < 0) {
+    return { args, review: true };
+  }
+  const options = args.slice(0, separator);
+  const reviewFlags = options.filter((argument) => argument === "--no-review");
+  if (reviewFlags.length > 1) {
+    return null;
+  }
+  return {
+    args: [
+      ...options.filter((argument) => argument !== "--no-review"),
+      ...args.slice(separator),
+    ],
+    review: reviewFlags.length === 0,
+  };
 }

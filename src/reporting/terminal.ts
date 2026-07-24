@@ -22,7 +22,7 @@ export function renderAnalysisReport(
     lines.push("Analysis blocked", "");
     for (const unknown of contract.unknowns) {
       lines.push(
-        `  ${unknown.finding}  ${unknown.method}${
+        `  ${unknown.scenario}  ${findingLabel(unknown.finding)}  ${unknown.method}${
           unknown.template === null ? "" : ` ${unknown.template}`
         }`,
       );
@@ -47,12 +47,19 @@ export function renderCheckSuccess(contract: GrantTraceContract): string {
   const lines = [
     "GrantTrace check passed",
     "",
-    `Scenarios  ${contract.scenarios.map((scenario) => scenario.name).join(", ")}`,
+    `Scenarios  ${
+      contract.scenarios.length === 0
+        ? "(none)"
+        : contract.scenarios.map((scenario) => scenario.name).join(", ")
+    }`,
     `Routes     ${contract.routes.length}`,
+    `Observed permissions  ${Object.keys(contract.selectedPermissions).length}`,
     "",
   ];
+  appendSelectedPermissions(lines, contract);
   appendManualKeeps(lines, contract);
-  lines.push("Coverage", `  ${COVERAGE}`, "");
+  appendMandatoryBaseline(lines);
+  appendCoverage(lines, contract);
   return lines.join("\n");
 }
 
@@ -64,9 +71,11 @@ export function renderAccepted(
     "GrantTrace contract accepted",
     "",
     "Selected permission contract",
-    ...Object.entries(contract.selectedPermissions).map(
-      ([permission, level]) => `  ${permission}: ${level}`,
-    ),
+    ...(Object.entries(contract.selectedPermissions).length === 0
+      ? ["  (none)"]
+      : Object.entries(contract.selectedPermissions).map(
+          ([permission, level]) => `  ${permission}: ${level}`,
+        )),
     "",
   ];
   if ((options.removedKeeps?.length ?? 0) > 0) {
@@ -77,21 +86,38 @@ export function renderAccepted(
     lines.push("");
   }
   appendManualKeeps(lines, contract);
-  lines.push("Coverage", `  ${COVERAGE}`, "");
+  appendMandatoryBaseline(lines);
+  lines.push(
+    "Next",
+    "  Review and commit granttrace.lock.json.",
+    "",
+  );
+  appendCoverage(lines, contract);
   return lines.join("\n");
 }
 
 export function renderContractDiff(
   diff: ContractDiff,
   next: GrantTraceContract,
-  options: { migratedFromV1?: boolean } = {},
+  options: {
+    migratedFromLegacyV2?: boolean;
+    migratedFromV1?: boolean;
+    nextAction?: "prompt" | "noninteractive" | "standalone";
+  } = {},
 ): string {
-  const lines = ["GrantTrace check failed", ""];
+  const lines = ["GrantTrace contract review required", ""];
 
   if (options.migratedFromV1 === true) {
     lines.push(
       "Schema migration required",
       "  v1 -> v2 adds exact route-to-scenario attribution.",
+      "",
+    );
+  }
+  if (options.migratedFromLegacyV2 === true) {
+    lines.push(
+      "Schema v2 provenance upgrade required",
+      "  Route evidence is now attributed to each scenario, not only merged globally.",
       "",
     );
   }
@@ -155,6 +181,15 @@ export function renderContractDiff(
       "",
     );
   }
+  for (const change of diff.scenarioEvidenceChanges) {
+    lines.push(
+      "Scenario evidence provenance changed",
+      `  ${change.scenario}`,
+      `  ${change.method} ${change.template}`,
+      `  ${evidenceList(change.from)} -> ${evidenceList(change.to)}`,
+      "",
+    );
+  }
   for (const change of diff.routeRequirementChanges) {
     const changed = [
       change.alternativesChanged ? "permission alternatives" : null,
@@ -201,6 +236,7 @@ export function renderContractDiff(
     diff.routeRemovals.length === 0 &&
     diff.attributionAdditions.length === 0 &&
     diff.attributionRemovals.length === 0 &&
+    diff.scenarioEvidenceChanges.length === 0 &&
     diff.routeRequirementChanges.length === 0 &&
     diff.manualKeepAdditions.length === 0 &&
     diff.manualKeepRemovals.length === 0 &&
@@ -212,14 +248,31 @@ export function renderContractDiff(
     lines.push("Contract evidence changed", "");
   }
 
-  lines.push(
-    "Next",
-    "  Review the evidence, then run:",
-    "  granttrace check --accept",
-    "",
-  );
+  if (options.nextAction === "prompt") {
+    lines.push(
+      "Decision",
+      "  Review the exact change above.",
+      "  Accept only if the permission and coverage change is intentional.",
+      "",
+    );
+  } else if (options.nextAction === "noninteractive") {
+    lines.push(
+      "Not accepted",
+      "  This terminal is noninteractive.",
+      "  Review locally, then run granttrace check --accept.",
+      "",
+    );
+  } else {
+    lines.push(
+      "Next",
+      "  Review the evidence, then run:",
+      "  granttrace check --accept",
+      "",
+    );
+  }
   appendManualKeeps(lines, next);
-  lines.push("Coverage", `  ${COVERAGE}`, "");
+  appendMandatoryBaseline(lines);
+  appendCoverage(lines, next);
   return lines.join("\n");
 }
 
@@ -227,10 +280,11 @@ export function renderInstrumentationError(): string {
   return [
     "GrantTrace record failed",
     "",
-    "No instrumented GitHub REST operation was observed.",
+    "No supported GitHub REST operation was observed.",
     "",
     "Next",
-    "  Load granttrace/octokit in the child process and make the scenario use that Octokit instance.",
+    "  Confirm the scenario makes a GitHub REST request through standard Node fetch.",
+    "  For a custom fetch or transport, use granttrace/octokit explicitly.",
     "",
   ].join("\n");
 }
@@ -252,7 +306,24 @@ function appendRoutes(
   lines.push("Observed in");
   for (const route of routes) {
     lines.push(`  Route     ${route.method} ${route.template}`);
-    lines.push(`  Evidence  ${route.evidence.join(", ")}`);
+    lines.push(`  Scenarios ${route.scenarios.join(", ")}`);
+    lines.push(`  Evidence  ${evidenceList(route.evidence)}`);
+  }
+  lines.push("");
+}
+
+function appendSelectedPermissions(
+  lines: string[],
+  contract: GrantTraceContract,
+): void {
+  lines.push("Observed permission contract");
+  const permissions = Object.entries(contract.selectedPermissions);
+  if (permissions.length === 0) {
+    lines.push("  (none)");
+  } else {
+    for (const [permission, level] of permissions) {
+      lines.push(`  ${permission}: ${level}`);
+    }
   }
   lines.push("");
 }
@@ -291,4 +362,61 @@ function appendManualKeeps(
     lines.push(`  ${permission}: ${keep.level} — ${keep.reason}`);
   }
   lines.push("");
+}
+
+function appendMandatoryBaseline(lines: string[]): void {
+  lines.push(
+    "Mandatory GitHub baseline (not selected or manually kept)",
+    "  metadata: read",
+    "",
+  );
+}
+
+function appendCoverage(
+  lines: string[],
+  contract: GrantTraceContract,
+): void {
+  lines.push("Coverage");
+  if (contract.scenarios.length === 0) {
+    lines.push(
+      "  No recorded scenario coverage remains. This contract makes no operation-specific claim.",
+    );
+  } else {
+    lines.push(`  ${COVERAGE}`);
+  }
+  lines.push("");
+}
+
+function evidenceList(evidence: string[]): string {
+  return evidence.length === 0
+    ? "(none)"
+    : evidence.map(evidenceLabel).join(", ");
+}
+
+function evidenceLabel(evidence: string): string {
+  switch (evidence) {
+    case "runtime_header":
+      return "Runtime response header";
+    case "pinned_catalog":
+      return "Pinned permission catalog";
+    default:
+      return evidence;
+  }
+}
+
+function findingLabel(finding: string): string {
+  switch (finding) {
+    case "unresolved_route":
+      return "Unrecognized REST route";
+    case "missing_evidence":
+      return "Missing permission evidence";
+    case "malformed_header":
+      return "Malformed permission header";
+    case "evidence_contradiction":
+      return "Evidence conflict";
+    case "unsupported_api":
+      return "Unsupported API";
+    default:
+      return finding;
+  }
 }

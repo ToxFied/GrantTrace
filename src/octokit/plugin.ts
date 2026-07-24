@@ -1,5 +1,3 @@
-import { writeFileSync } from "node:fs";
-
 import type { Octokit } from "@octokit/core";
 
 import {
@@ -16,27 +14,19 @@ import {
   type RecorderConfig,
 } from "./config.js";
 import { GITHUB_API_VERSION } from "../version.js";
+import {
+  ApiVersionMismatchError,
+  RecorderPersistenceError,
+} from "../recorder/errors.js";
+import { withoutAutomaticCapture } from "../recorder/suppression.js";
+import { markRecorderLoaded } from "../recorder/state.js";
 
 type RequestResponse = {
   status: number;
   headers: Record<string, unknown>;
 };
 
-export class RecorderPersistenceError extends Error {
-  public constructor() {
-    super("GrantTrace could not persist a safe observation.");
-    this.name = "RecorderPersistenceError";
-  }
-}
-
-export class ApiVersionMismatchError extends Error {
-  public constructor() {
-    super(
-      `GrantTrace recording requires GitHub REST API version ${GITHUB_API_VERSION}.`,
-    );
-    this.name = "ApiVersionMismatchError";
-  }
-}
+export { ApiVersionMismatchError, RecorderPersistenceError };
 
 export function grantTrace(octokit: Octokit): void {
   const config = loadRecorderConfig(process.env);
@@ -51,12 +41,12 @@ export function createGrantTracePlugin(config: RecorderConfig) {
   let writeQueue: Promise<void> = Promise.resolve();
 
   return function configuredGrantTrace(octokit: Octokit): void {
-    markPluginLoaded(config);
+    markRecorderLoaded(config);
 
     octokit.hook.wrap("request", async (request, options) => {
       pinApiVersion(options.headers);
       try {
-        const response = await request(options);
+        const response = await withoutAutomaticCapture(() => request(options));
         const observation = createObservation(
           config,
           options.method,
@@ -98,24 +88,6 @@ function pinApiVersion(headers: Record<string, string | number | undefined>): vo
 
 function installRecorder(octokit: Octokit, config: RecorderConfig): void {
   createGrantTracePlugin(config)(octokit);
-}
-
-function markPluginLoaded(config: RecorderConfig): void {
-  try {
-    writeFileSync(config.markerFile, "loaded\n", {
-      encoding: "utf8",
-      flag: "wx",
-      mode: 0o600,
-    });
-  } catch (error) {
-    if (
-      !(error instanceof Error) ||
-      !("code" in error) ||
-      (error as NodeJS.ErrnoException).code !== "EEXIST"
-    ) {
-      throw new RecorderPersistenceError();
-    }
-  }
 }
 
 function createObservation(

@@ -27,15 +27,14 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version: 22
-          cache: pnpm
 
       - run: corepack enable
       - run: pnpm install --frozen-lockfile
       - run: >-
-          pnpm exec granttrace record --scenario issue-triage --
+          pnpm exec granttrace record --no-review issue-triage --
           pnpm test -- issue-triage
       - run: >-
-          pnpm exec granttrace record --scenario release-read --
+          pnpm exec granttrace record --no-review release-read --
           pnpm test -- release-read
       - run: pnpm exec granttrace check
 ```
@@ -45,8 +44,15 @@ those revisions deliberately when upgrading them.
 
 ## Never accept in CI
 
-Do not run `check --accept` in automation. Exit `6` is the intended signal that
-a human must review permission or coverage drift and commit the resulting
+`--no-review` is important when CI records multiple scenarios: it prevents the
+first recording from comparing an intentionally incomplete aggregate against
+the committed contract. Use it only when a final `granttrace check` is
+guaranteed.
+
+Without `--no-review`, `record` detects the noninteractive environment, prints
+the diff, never prompts, and never accepts it. Do not run `check --accept` in
+automation. Exit `6` from the final check is the intended signal that a human
+must review permission or coverage drift locally and commit the resulting
 lockfile deliberately.
 
 Exit `7` means the evidence is unknown, unsupported, malformed, or
@@ -60,4 +66,4 @@ credentials when your scenarios use controlled responses. Optional live proof
 belongs in a trusted, explicitly triggered workflow against a disposable
 fixture. Never expose fixture credentials to untrusted pull requests.
 
-See [CLI reference](cli-reference.mdx) for all exit codes.
+See [CLI reference](/docs/cli-reference) for all exit codes.

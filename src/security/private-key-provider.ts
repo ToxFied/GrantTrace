@@ -47,11 +47,15 @@ export function resolvePrivateKey(environment: NodeJS.ProcessEnv): {
     environment["GRANTTRACE_APP_PRIVATE_KEY_KEYCHAIN_SERVICE"];
   const keychainAccount =
     environment["GRANTTRACE_APP_PRIVATE_KEY_KEYCHAIN_ACCOUNT"];
+  const hasInline = hasNonBlankValue(inline);
+  const hasFile = hasNonBlankValue(file);
+  const hasKeychainService = hasNonBlankValue(keychainService);
+  const hasKeychainAccount = hasNonBlankValue(keychainAccount);
   const hasKeychain =
-    keychainService !== undefined || keychainAccount !== undefined;
+    hasKeychainService || hasKeychainAccount;
   const providers = [
-    inline === undefined ? null : "environment",
-    file === undefined ? null : "file",
+    hasInline ? "environment" : null,
+    hasFile ? "file" : null,
     hasKeychain ? "keychain" : null,
   ].filter((provider) => provider !== null);
 
@@ -62,13 +66,18 @@ export function resolvePrivateKey(environment: NodeJS.ProcessEnv): {
     throw new PrivateKeyProviderError("multiple_providers");
   }
 
-  if (inline !== undefined) {
+  if (hasInline && inline !== undefined) {
     return { kind: "environment", value: inline };
   }
-  if (file !== undefined) {
+  if (hasFile && file !== undefined) {
     return { kind: "file", value: readSafePrivateKeyFile(file) };
   }
-  if (keychainService === undefined || keychainAccount === undefined) {
+  if (
+    !hasKeychainService ||
+    !hasKeychainAccount ||
+    keychainService === undefined ||
+    keychainAccount === undefined
+  ) {
     throw new PrivateKeyProviderError("invalid_keychain_configuration");
   }
   return {
@@ -81,20 +90,28 @@ export function configuredPrivateKeyProvider(
   environment: NodeJS.ProcessEnv,
 ): PrivateKeyProviderKind | null {
   const configured = [
-    environment["GRANTTRACE_APP_PRIVATE_KEY"] === undefined
-      ? null
-      : "environment",
-    environment["GRANTTRACE_APP_PRIVATE_KEY_FILE"] === undefined
-      ? null
-      : "file",
-    environment["GRANTTRACE_APP_PRIVATE_KEY_KEYCHAIN_SERVICE"] === undefined &&
-    environment["GRANTTRACE_APP_PRIVATE_KEY_KEYCHAIN_ACCOUNT"] === undefined
+    hasNonBlankValue(environment["GRANTTRACE_APP_PRIVATE_KEY"])
+      ? "environment"
+      : null,
+    hasNonBlankValue(environment["GRANTTRACE_APP_PRIVATE_KEY_FILE"])
+      ? "file"
+      : null,
+    !hasNonBlankValue(
+      environment["GRANTTRACE_APP_PRIVATE_KEY_KEYCHAIN_SERVICE"],
+    ) &&
+    !hasNonBlankValue(
+      environment["GRANTTRACE_APP_PRIVATE_KEY_KEYCHAIN_ACCOUNT"],
+    )
       ? null
       : "keychain",
   ].filter((provider) => provider !== null);
   return configured.length === 1
     ? (configured[0] as PrivateKeyProviderKind)
     : null;
+}
+
+function hasNonBlankValue(value: string | undefined): boolean {
+  return value !== undefined && value.trim().length > 0;
 }
 
 function readSafePrivateKeyFile(path: string): string {

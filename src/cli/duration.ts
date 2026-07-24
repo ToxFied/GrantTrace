@@ -18,3 +18,9 @@ export function parseBoundedDuration(
     ? duration
     : null;
 }
+
+export function formatDuration(milliseconds: number): string {
+  return milliseconds % 60_000 === 0
+    ? `${milliseconds / 60_000}m`
+    : `${milliseconds / 1_000}s`;
+}

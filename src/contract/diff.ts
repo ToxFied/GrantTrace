@@ -19,6 +19,7 @@ export type ContractDiff = {
   routeRemovals: RouteChange[];
   attributionAdditions: AttributionChange[];
   attributionRemovals: AttributionChange[];
+  scenarioEvidenceChanges: ScenarioEvidenceChange[];
   routeRequirementChanges: RouteRequirementChange[];
   manualKeepAdditions: ManualKeepChange[];
   manualKeepRemovals: ManualKeepChange[];
@@ -43,6 +44,12 @@ export type AttributionChange = RouteChange & {
 export type RouteRequirementChange = RouteChange & {
   alternativesChanged: boolean;
   evidenceChanged: boolean;
+};
+
+export type ScenarioEvidenceChange = RouteChange & {
+  scenario: string;
+  from: string[];
+  to: string[];
 };
 
 export type ManualKeepChange = {
@@ -101,6 +108,7 @@ export function diffContracts(
   const routeRemovals: RouteChange[] = [];
   const attributionAdditions: AttributionChange[] = [];
   const attributionRemovals: AttributionChange[] = [];
+  const scenarioEvidenceChanges: ScenarioEvidenceChange[] = [];
   const routeRequirementChanges: RouteRequirementChange[] = [];
   for (const key of [...new Set([...previousRoutes.keys(), ...nextRoutes.keys()])]
     .sort(compareAscii)) {
@@ -132,6 +140,24 @@ export function diffContracts(
         scenario,
       });
     });
+    for (const scenario of [
+      ...new Set([
+        ...Object.keys(before.scenarioEvidence),
+        ...Object.keys(after.scenarioEvidence),
+      ]),
+    ].sort(compareAscii)) {
+      const from = before.scenarioEvidence[scenario] ?? [];
+      const to = after.scenarioEvidence[scenario] ?? [];
+      if (JSON.stringify(from) !== JSON.stringify(to)) {
+        scenarioEvidenceChanges.push({
+          method: after.method,
+          template: after.template,
+          scenario,
+          from,
+          to,
+        });
+      }
+    }
     const alternativesChanged =
       JSON.stringify(before.alternatives) !== JSON.stringify(after.alternatives);
     const evidenceChanged =
@@ -181,6 +207,7 @@ export function diffContracts(
     routeRemovals,
     attributionAdditions,
     attributionRemovals,
+    scenarioEvidenceChanges,
     routeRequirementChanges,
     manualKeepAdditions,
     manualKeepRemovals,

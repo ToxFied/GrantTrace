@@ -23,6 +23,7 @@ import {
   serializeContract,
 } from "../../src/contract/serialize.js";
 import { githubPermissionCatalog } from "../../src/evidence/catalog.js";
+import { verifyProofObservations } from "../../src/proof/contract-verification.js";
 
 const issueRoute = "/repos/{owner}/{repo}/issues";
 const contentsRoute = "/repos/{owner}/{repo}/contents/{path}";
@@ -88,6 +89,91 @@ describe("schema-v2 multi-scenario contracts", () => {
     expect(projected.unknowns).toEqual([]);
   });
 
+  it("preserves per-scenario provenance for a shared route", () => {
+    const runtime = observed(
+      "runtime-backed",
+      "GET",
+      issueRoute,
+      "issues",
+      "read",
+    );
+    const catalogFallback: Observation = {
+      ...observed(
+        "catalog-backed",
+        "GET",
+        issueRoute,
+        "issues",
+        "read",
+      ),
+      requirements: null,
+      evidenceSource: "none",
+      finding: "missing_evidence",
+    };
+    const contract = buildContract(
+      [runtime, catalogFallback],
+      githubPermissionCatalog,
+    );
+    const route = contract.routes[0];
+
+    expect(route?.evidence).toEqual([
+      "runtime_header",
+      "pinned_catalog",
+    ]);
+    expect(route?.scenarioEvidence).toEqual({
+      "catalog-backed": ["pinned_catalog"],
+      "runtime-backed": ["runtime_header", "pinned_catalog"],
+    });
+    expect(
+      serializeContract(contractForScenario(contract, "runtime-backed")),
+    ).toBe(
+      serializeContract(
+        buildContract([runtime], githubPermissionCatalog),
+      ),
+    );
+    expect(
+      serializeContract(contractForScenario(contract, "catalog-backed")),
+    ).toBe(
+      serializeContract(
+        buildContract([catalogFallback], githubPermissionCatalog),
+      ),
+    );
+    expect(() =>
+      verifyProofObservations(contract, "runtime-backed", [runtime]),
+    ).not.toThrow();
+    expect(() =>
+      verifyProofObservations(contract, "catalog-backed", [catalogFallback]),
+    ).not.toThrow();
+    expect(
+      serializeContract(
+        buildContract(
+          [catalogFallback, runtime],
+          githubPermissionCatalog,
+        ),
+      ),
+    ).toBe(serializeContract(contract));
+  });
+
+  it("requires review when upgrading an early schema-v2 provenance union", async () => {
+    const observations = [
+      observed("issues-read", "GET", issueRoute, "issues", "read"),
+    ];
+    const contract = buildContract(observations, githubPermissionCatalog);
+    const legacyV2 = {
+      ...contract,
+      routes: contract.routes.map(
+        ({ scenarioEvidence: _scenarioEvidence, ...route }) => route,
+      ),
+    };
+    const path = join(directory, "legacy-v2.json");
+    await writeFile(path, `${JSON.stringify(legacyV2, null, 2)}\n`, "utf8");
+
+    const migrated = await readContractWithMetadata(path);
+    expect(migrated.migratedFromLegacyV2).toBe(true);
+    expect(migrated.contract.routes[0]?.scenarioEvidence).toEqual({
+      "issues-read": ["runtime_header", "pinned_catalog"],
+    });
+  });
+
   it("migrates v1 deterministically and reports the migration metadata", async () => {
     const contract = buildContract(
       [
@@ -105,7 +191,13 @@ describe("schema-v2 multi-scenario contracts", () => {
     const legacy = {
       ...contract,
       schemaVersion: 1,
-      routes: contract.routes.map(({ scenarios: _scenarios, ...route }) => route),
+      routes: contract.routes.map(
+        ({
+          scenarioEvidence: _scenarioEvidence,
+          scenarios: _scenarios,
+          ...route
+        }) => route,
+      ),
     };
     const path = join(directory, "legacy.json");
     await writeFile(path, `${JSON.stringify(legacy, null, 2)}\n`, "utf8");
@@ -132,7 +224,13 @@ describe("schema-v2 multi-scenario contracts", () => {
     const legacy = {
       ...contract,
       schemaVersion: 1,
-      routes: contract.routes.map(({ scenarios: _scenarios, ...route }) => route),
+      routes: contract.routes.map(
+        ({
+          scenarioEvidence: _scenarioEvidence,
+          scenarios: _scenarios,
+          ...route
+        }) => route,
+      ),
     };
     const observationDirectory = join(
       directory,
@@ -180,6 +278,28 @@ describe("schema-v2 multi-scenario contracts", () => {
       serializeContract({
         ...contract,
         scenarios: [...contract.scenarios, { name: "unattributed" }],
+      }),
+    ).toThrow(ContractFileError);
+
+    expect(() =>
+      serializeContract({
+        ...contract,
+        routes: contract.routes.map((route) => ({
+          ...route,
+          scenarioEvidence: {},
+        })),
+      }),
+    ).toThrow(ContractFileError);
+
+    expect(() =>
+      serializeContract({
+        ...contract,
+        routes: contract.routes.map((route) => ({
+          ...route,
+          scenarioEvidence: {
+            "issues-read": ["runtime_header"],
+          },
+        })),
       }),
     ).toThrow(ContractFileError);
   });

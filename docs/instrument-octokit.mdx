@@ -1,13 +1,26 @@
 ---
-title: Octokit setup
-description: Instrument @octokit/core so GrantTrace can record canonical REST routes.
+title: Custom transports
+description: Use explicit instrumentation when GrantTrace's automatic Node preload cannot observe your GitHub client.
 ---
 
-GrantTrace observes its supported `@octokit/core` integration through a plugin.
-It does not intercept network traffic globally, so every request in a recorded
-scenario must use an instrumented Octokit class.
+You normally do not need to change your code. `granttrace record` and
+`granttrace prove` inject a Node preload that observes supported GitHub REST
+requests made through global `fetch`. Standard Octokit clients use that
+transport and are covered automatically.
 
-## Basic setup
+Automatic recording is deliberately bounded. It does not observe a client that:
+
+- replaces global `fetch` with a custom implementation;
+- uses a custom Octokit transport or wrapper that bypasses global `fetch`;
+- runs the request in a subprocess or worker that discards the injected Node
+  options;
+- runs outside Node.js; or
+- targets an unsupported GitHub Enterprise endpoint.
+
+These requests are outside the contract unless you route them through the
+explicit integration below.
+
+## Explicit fallback
 
 ```ts title="github-client.ts"
 import { GrantTraceOctokit } from "granttrace/octokit";
@@ -17,11 +30,12 @@ export function createGitHubClient(token: string) {
 }
 ```
 
-Use that factory everywhere the scenario creates a GitHub client. Avoid
-constructing a second plain `Octokit` instance on a branch you expect
-GrantTrace to cover.
+Use that factory everywhere the scenario creates a GitHub client. Any second
+client that bypasses both global `fetch` and this adapter remains unobserved.
+The pre-composed constructor uses GrantTrace's exact compatible Octokit
+dependency.
 
-## Existing Octokit composition
+## Advanced Octokit composition
 
 If the project must combine GrantTrace with other Octokit plugins, manual
 composition remains supported with the exact compatible core version:
@@ -34,13 +48,13 @@ const TracedOctokit = Octokit.plugin(grantTrace);
 ```
 
 Use exactly `@octokit/core@7.0.6`. Other core versions and third-party wrappers
-are outside the public-beta compatibility claim. Prefer `GrantTraceOctokit`
-unless composition is necessary.
+are outside the explicit beta compatibility claim. Prefer
+`GrantTraceOctokit` unless composition is necessary.
 
 ## Runtime behavior
 
-The plugin is inert during normal application execution. When the process is
-launched by `granttrace record` or `granttrace prove`, it:
+The explicit plugin is inert during normal application execution. When the
+process is launched by `granttrace record` or `granttrace prove`, it:
 
 - pins the GitHub REST API to `2026-03-10`;
 - reads the pre-expansion Octokit route template;
@@ -52,7 +66,7 @@ against the wrong catalog.
 
 ## Keep route templates intact
 
-Call Octokit with canonical route templates:
+When using the explicit adapter, call Octokit with canonical route templates:
 
 ```ts title="scenario.ts"
 await octokit.request(
@@ -73,9 +87,9 @@ findings.
 ## Authentication boundary
 
 Recording observes route behavior; it does not authenticate or prove that the
-configured credential is a GitHub App installation token. Use the intended
+configured credential is a GitHub App installation token. Use a dedicated
 GitHub App test setup, and treat the accepted contract as scenario-bound route
 evidence rather than an authentication audit.
 
-For a copyable local example, see
+For a repository example, see
 [`examples/triage-bot/scenario.ts`](https://github.com/ToxFied/GrantTrace/blob/main/examples/triage-bot/scenario.ts).

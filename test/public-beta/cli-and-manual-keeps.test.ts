@@ -25,8 +25,8 @@ describe("public-beta CLI surface", () => {
     expect(help.stdout()).toContain(`GrantTrace ${TOOL_VERSION}`);
     expect(help.stdout()).toContain("granttrace init");
     expect(help.stdout()).toContain("granttrace doctor");
-    expect(help.stdout()).toContain("granttrace keep add");
-    expect(help.stdout()).toContain("granttrace scenario list|remove");
+    expect(help.stdout()).toContain("granttrace keep add|remove|list");
+    expect(help.stdout()).toContain("granttrace scenario");
     expect(help.stdout()).toContain("Untested behavior is outside the claim");
     expect(help.stdout()).not.toMatch(/\u001b\[[0-9;]*m/u);
 
@@ -40,9 +40,10 @@ describe("public-beta CLI surface", () => {
     const output = captureContext("/", { NO_COLOR: "1" });
 
     expect(await runCli(["unknown-command"], output.context)).toBe(2);
-    expect(output.stderr()).toContain("Unknown command: unknown-command");
+    expect(output.stderr()).toContain("Unknown command.");
+    expect(output.stderr()).not.toContain("unknown-command");
     expect(output.stderr()).toContain(
-      "Run granttrace <command> --help for command details",
+      "Run granttrace <command> --help for command-specific usage",
     );
     expect(output.stderr()).not.toMatch(/\u001b\[[0-9;]*m/u);
   });
@@ -54,6 +55,9 @@ describe("manual keeps", () => {
   beforeEach(async () => {
     directory = await mkdtemp(join(tmpdir(), "granttrace-manual-keep-"));
     await chmod(directory, 0o700);
+    expect(
+      await runCli(["init"], captureContext(directory, {}).context),
+    ).toBe(0);
     await writeContractAtomic(
       join(directory, "granttrace.lock.json"),
       buildContract([issueObservation()], githubPermissionCatalog),
@@ -72,7 +76,7 @@ describe("manual keeps", () => {
         invalid.context,
       ),
     ).toBe(2);
-    expect(invalid.stderr()).toContain("Every keep requires a human reason");
+    expect(invalid.stderr()).toContain("requires a committed");
 
     const output = captureContext(directory, {});
     expect(
@@ -214,6 +218,13 @@ function proofReport(): Record<string, unknown> {
       {
         id: "issue-comments-read",
         mode: "read_only",
+        removedPermission: "issues",
+        status: "not_applicable",
+        cleanup: "not_required",
+      },
+      {
+        id: "issue-comment-create",
+        mode: "mutating",
         removedPermission: "issues",
         status: "not_applicable",
         cleanup: "not_required",

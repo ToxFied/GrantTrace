@@ -9,21 +9,24 @@ part of the result, not footnotes.
 ## Coverage
 
 - A contract describes only GitHub REST operations exercised by the named,
-  instrumented scenarios.
+  recorded scenarios.
 - A passing check or proof does not certify untested code paths, missing test
   cases, webhook handling, background jobs, or production-only behavior.
 - A permission absent from the contract is not automatically safe to remove
   from an existing App installation.
-- Instrumentation is explicit. Only requests made through the supported
-  pre-composed `GrantTraceOctokit` constructor, or manual plugin composition
-  with exact `@octokit/core@7.0.6`, are observable. Other versions and wrappers
-  are outside the beta compatibility claim. GrantTrace does not intercept
-  arbitrary network traffic.
+- Automatic recording and proof observe supported requests through Node's
+  global `fetch`, including standard Octokit clients. Custom fetch
+  implementations, custom transports, workers or subprocesses that discard the
+  injected Node options, non-Node runtimes, and unsupported GitHub Enterprise
+  endpoints are outside automatic coverage. The explicit
+  `GrantTraceOctokit` constructor or exact-version plugin composition is the
+  fallback for compatible advanced Octokit setups. GrantTrace does not
+  intercept arbitrary network traffic.
 - Re-recording a scenario replaces its prior local evidence. It does not
   combine multiple historical executions or measure test coverage.
 - The pinned catalog covers 49 route templates, not the whole GitHub REST API.
   Unknown templates fail closed. Exact coverage is in
-  [catalog.md](catalog.md).
+  [REST catalog](/docs/catalog).
 
 ## APIs and permission modeling
 
@@ -50,9 +53,9 @@ part of the result, not footnotes.
 - A schema-v1 contract is read conservatively by attributing every route to
   every declared scenario. `prove` blocks until current recordings are
   reviewed and accepted as v2.
-- Contract acceptance is a human decision. `check --accept` can accept a
-  coverage contraction just as it can accept an addition; review removals
-  carefully.
+- Contract acceptance is a human decision. An interactive `record` prompt or
+  `check --accept` can accept a coverage contraction just as it can accept an
+  addition; review removals carefully. Noninteractive recording never accepts.
 - The deterministic selected solution is one risk-policy choice among the
   nondominated frontier, not proof that every alternative is worse.
 - Manual keeps are global to the accepted contract and therefore requested in
@@ -96,15 +99,17 @@ part of the result, not footnotes.
   cannot stop user test code from printing secrets.
 - `record` inherits the ordinary test environment. Treat the scenario as
   trusted code.
-- Local `.granttrace/` data is ignored by `init`, not encrypted.
+- Local `.granttrace/` data is automatically ignored by the first recording,
+  not encrypted. `init` remains an optional explicit setup command.
 - macOS Keychain support shells out to `/usr/bin/security`; other platforms
   must use an environment secret or an absolute private-key file.
 - Private-key file validation requires an owned, nonsymlink parent directory
   with exact mode `0700` and an owned regular file with exact mode `0600`.
 - On Unix-like systems, managed children run in their own process group so
-  timeout and interrupt escalation reaches descendants. On Windows, GrantTrace
-  terminates the direct child but cannot promise equivalent process-tree
-  termination for arbitrary descendants.
+  timeout and interrupt escalation reaches descendants. Live proof is blocked
+  on Windows because equivalent arbitrary descendant cleanup cannot be
+  verified. Recording, checking, analysis, and contract review remain
+  supported there.
 - The package and CI checks reduce accidental leakage and supply-chain risk;
   they cannot eliminate compromise of Node, pnpm, GitHub Actions, dependencies,
   or the operator's machine.

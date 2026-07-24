@@ -56,6 +56,9 @@ jobs:
       - name: Export the documentation site
         run: pnpm docs:build
 
+      - name: Validate exported links and LLM documentation
+        run: pnpm docs:validate
+
       - name: Preserve Next.js assets
         run: touch website/out/.nojekyll
 

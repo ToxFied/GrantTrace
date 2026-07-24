@@ -23,7 +23,7 @@ and executes applicable negative controls.
 4. Effective permissions equal the request plus mandatory `metadata:read`.
 5. The token covers exactly one expected repository and has a fresh,
    approximately one-hour expiry.
-6. The instrumented child reproduces the accepted scenario slice exactly.
+6. The recorded child reproduces the accepted scenario slice exactly.
 7. Applicable safe negative controls reject access as expected.
 8. Cleanup completes.
 
@@ -33,7 +33,7 @@ tokens after contract/catalog validation succeeds.
 
 ## Setup
 
-Follow the [live-proof setup](live-setup.md) to create the disposable
+Follow the [live-proof setup](/docs/live-setup) to create the disposable
 installation and configure nonsecret selectors plus exactly one private-key
 provider.
 
@@ -42,9 +42,14 @@ variables through your shell, secret manager, or CI runner.
 
 ## Run one scenario
 
+GrantTrace injects its recorder into the restricted Node child, so standard
+global-`fetch` and Octokit traffic needs no source edit. A custom fetch
+implementation, transport, or runtime needs the
+[explicit fallback](/docs/instrument-octokit).
+
 ```bash title="Terminal"
 pnpm exec granttrace doctor
-pnpm exec granttrace prove --scenario issue-triage -- \
+pnpm exec granttrace prove issue-triage -- \
   pnpm test -- issue-triage
 ```
 
@@ -65,5 +70,5 @@ GitHub outages, child-test failure, timeout, negative-control failure, and
 cleanup failure remain separate classifications. A generic nonzero child exit
 is never interpreted as evidence that a permission is missing.
 
-See [security and privacy](security.mdx) for the trust boundary and
-[limitations](limitations.md) for current negative-control coverage.
+See [security and privacy](/docs/security) for the trust boundary and
+[limitations](/docs/limitations) for current negative-control coverage.

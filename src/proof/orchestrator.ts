@@ -204,7 +204,11 @@ function initialReport(
   scenario: string,
   sourceCommit: string | null,
 ): ProofRunReport {
-  const scenarioContract = contractForScenario(contract, scenario);
+  const selectedPermissions = contract.scenarios.some(
+    (candidate) => candidate.name === scenario,
+  )
+    ? contractForScenario(contract, scenario).selectedPermissions
+    : {};
   return {
     schemaVersion: 2,
     toolVersion: TOOL_VERSION,
@@ -213,10 +217,10 @@ function initialReport(
     scenario,
     catalog: contract.catalog,
     contractHash: contractHash(contract),
-    selectedPermissions: scenarioContract.selectedPermissions,
+    selectedPermissions,
     manualKeeps: contract.manualKeeps,
     requestedPermissions: requestedProofPermissions(
-      scenarioContract.selectedPermissions,
+      selectedPermissions,
       manualKeepPermissions(contract),
     ),
     mandatoryPermissions: MANDATORY_INSTALLATION_PERMISSIONS,
@@ -278,6 +282,7 @@ function mapChildFailure(outcome: ProofChildOutcome): ProofFailure {
     case "instrumentation_failure":
       return "instrumentation_failure";
     case "test_failure":
+    case "interrupted":
     case "spawn_failure":
       return "test_failure";
     case "timeout":

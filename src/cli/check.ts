@@ -3,13 +3,17 @@ import { join, resolve } from "node:path";
 
 import { buildContract } from "../contract/build.js";
 import { diffContracts } from "../contract/diff.js";
-import { loadObservations } from "../contract/observation-file.js";
+import {
+  loadObservations,
+  ObservationFileError,
+} from "../contract/observation-file.js";
 import {
   readContractWithMetadata,
+  ContractFileError,
   serializeContract,
   writeContractAtomic,
 } from "../contract/serialize.js";
-import { fixtureCatalog } from "../evidence/catalog.js";
+import { githubPermissionCatalog } from "../evidence/catalog.js";
 import { compareAscii } from "../deterministic.js";
 import {
   renderAccepted,
@@ -22,6 +26,10 @@ import { retainUnobservedManualKeeps } from "../contract/manual-keeps.js";
 import type { CliContext } from "./context.js";
 import { writeLine } from "./context.js";
 import { ExitCode, type ExitCodeValue } from "./exit-codes.js";
+import {
+  acquireLocalOperationLock,
+  type LocalOperationLock,
+} from "../security/local-state.js";
 
 type CheckOptions = {
   accept: boolean;
@@ -36,6 +44,7 @@ const MAX_AGGREGATE_BYTES = 10 * 1024 * 1024;
 export async function runCheck(
   args: string[],
   context: CliContext,
+  presentation: "record" | "standalone" = "standalone",
 ): Promise<ExitCodeValue> {
   if (args.length === 1 && (args[0] === "--help" || args[0] === "-h")) {
     writeLine(
@@ -49,7 +58,7 @@ export async function runCheck(
         "  granttrace check [--observations <path>] [--lock <path>]",
         "",
         "Without --accept, every semantic change exits 6 for CI review.",
-        "--accept writes the exact reviewed schema-v2 contract atomically.",
+        "--accept writes the reviewed contract to granttrace.lock.json.",
         "",
       ].join("\n"),
     );
@@ -64,18 +73,54 @@ export async function runCheck(
     return ExitCode.usage;
   }
 
+  let operationLock: LocalOperationLock | null = null;
+  if (options.accept) {
+    try {
+      operationLock = await acquireLocalOperationLock(context.cwd);
+    } catch {
+      writeLine(context.stderr, renderOperationLocked("check --accept"));
+      return ExitCode.analysisFailure;
+    }
+  }
+
+  const result = await executeCheck(options, context, presentation);
+  if (operationLock !== null) {
+    try {
+      await operationLock.release();
+    } catch {
+      writeLine(
+        context.stderr,
+        [
+          "GrantTrace check cleanup failed",
+          "",
+          "The operation lock could not be removed. Inspect .granttrace/active-operation before retrying.",
+          "",
+        ].join("\n"),
+      );
+      return ExitCode.analysisFailure;
+    }
+  }
+  return result;
+}
+
+async function executeCheck(
+  options: CheckOptions,
+  context: CliContext,
+  presentation: "record" | "standalone",
+): Promise<ExitCodeValue> {
   try {
     if (!(await pathExists(options.observationsPath))) {
       writeLine(context.stderr, renderNoObservations());
       return ExitCode.instrumentation;
     }
     const observations = await loadObservationSource(options.observationsPath);
-    if (observations.length === 0) {
+    const lockExists = await pathExists(options.lockPath);
+    if (observations.length === 0 && !lockExists) {
       writeLine(context.stderr, renderNoObservations());
       return ExitCode.instrumentation;
     }
 
-    const next = buildContract(observations, fixtureCatalog);
+    const next = buildContract(observations, githubPermissionCatalog);
     if (next.unknowns.length > 0) {
       writeLine(
         context.stderr,
@@ -84,7 +129,7 @@ export async function runCheck(
       return ExitCode.evidenceBlocked;
     }
 
-    if (!(await pathExists(options.lockPath))) {
+    if (!lockExists) {
       if (options.accept) {
         await writeContractAtomic(options.lockPath, next);
         writeLine(context.stdout, renderAccepted(next));
@@ -93,13 +138,16 @@ export async function runCheck(
 
       const emptyPrevious = {
         ...next,
+        scenarios: [],
         routes: [],
         selectedPermissions: {},
         permissionFrontier: [{}],
       };
       writeLine(
         context.stderr,
-        renderContractDiff(diffContracts(emptyPrevious, next), next),
+        renderContractDiff(diffContracts(emptyPrevious, next), next, {
+          nextAction: reviewNextAction(presentation, context),
+        }),
       );
       return ExitCode.contractChanged;
     }
@@ -115,6 +163,7 @@ export async function runCheck(
     };
     if (
       !loadedPrevious.migratedFromV1 &&
+      !loadedPrevious.migratedFromLegacyV2 &&
       serializeContract(previous) === serializeContract(nextWithManualKeeps)
     ) {
       writeLine(context.stdout, renderCheckSuccess(nextWithManualKeeps));
@@ -140,16 +189,58 @@ export async function runCheck(
       context.stderr,
       renderContractDiff(diff, nextWithManualKeeps, {
         migratedFromV1: loadedPrevious.migratedFromV1,
+        migratedFromLegacyV2: loadedPrevious.migratedFromLegacyV2,
+        nextAction: reviewNextAction(presentation, context),
       }),
     );
     return ExitCode.contractChanged;
-  } catch {
+  } catch (error) {
+    if (
+      error instanceof ObservationFileError ||
+      error instanceof ContractFileError
+    ) {
+      writeLine(
+        context.stderr,
+        [
+          "GrantTrace check blocked",
+          "",
+          error.message,
+          "",
+          "Next",
+          "  Repair or regenerate the affected file, then retry.",
+          "",
+        ].join("\n"),
+      );
+      return ExitCode.analysisFailure;
+    }
     writeLine(
       context.stderr,
-      "GrantTrace check failed: observations or the existing contract could not be validated safely.",
+      "GrantTrace check failed: the observations or accepted contract are invalid.",
     );
     return ExitCode.analysisFailure;
   }
+}
+
+function reviewNextAction(
+  presentation: "record" | "standalone",
+  context: CliContext,
+): "noninteractive" | "prompt" | "standalone" {
+  if (presentation === "standalone") {
+    return "standalone";
+  }
+  return context.confirm === undefined ? "noninteractive" : "prompt";
+}
+
+function renderOperationLocked(operation: string): string {
+  return [
+    "GrantTrace check blocked",
+    "",
+    `Another GrantTrace operation is active, so ${operation} cannot write safely.`,
+    "",
+    "Next",
+    "  Run granttrace doctor and inspect local session state before retrying.",
+    "",
+  ].join("\n");
 }
 
 function parseCheckArguments(

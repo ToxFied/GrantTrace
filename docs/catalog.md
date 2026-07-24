@@ -115,8 +115,8 @@ Other exclusions include:
 - endpoints requiring unsupported `admin` access;
 - GraphQL and non-REST protocols;
 - account, organization, enterprise, and installation-management operations;
-- routes whose current Octokit template has not been independently reviewed;
-- dangerous mutations added only to increase coverage count; and
+- routes whose canonical template has not been independently reviewed;
+- mutating routes without a validated reversible test strategy; and
 - aliases or concrete URL forms that cannot be matched without retaining
   identity-bearing data.
 
@@ -131,11 +131,11 @@ Catalog changes should:
 1. use the official endpoint page for API version `2026-03-10`;
 2. preserve every documented AND/OR alternative exactly;
 3. exclude conditional ambiguity rather than guess;
-4. add the canonical Octokit method/template and documentation URL;
+4. add the canonical method/template and documentation URL;
 5. run `pnpm catalog:review`;
 6. add focused evidence, solver, checksum, and contract tests;
 7. reproduce the accepted contract twice and compare hashes; and
 8. review the resulting catalog identity change like a permission change.
 
 The source entry list is
-[`src/evidence/catalog.ts`](../src/evidence/catalog.ts).
+[`src/evidence/catalog.ts`](https://github.com/ToxFied/GrantTrace/blob/main/src/evidence/catalog.ts).

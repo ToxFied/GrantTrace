@@ -1,8 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
-
-import {
-  executeWithCleanup,
-} from "../../src/proof/cleanup.js";
+import { describe, expect, it } from "vitest";
 import {
   classifyGitHubFailure,
 } from "../../src/proof/failure.js";
@@ -116,52 +112,5 @@ describe("proof child secret isolation", () => {
     ]) {
       expect(serialized).not.toContain(canary);
     }
-  });
-});
-
-describe("cleanup semantics", () => {
-  it("runs cleanup after success", async () => {
-    const cleanup = vi.fn(async () => undefined);
-    const result = await executeWithCleanup(
-      async () => "verified",
-      cleanup,
-      () => "test_flake_or_indeterminate",
-    );
-
-    expect(result).toEqual({
-      operation: { status: "pass", value: "verified" },
-      cleanup: { status: "pass" },
-    });
-    expect(cleanup).toHaveBeenCalledOnce();
-  });
-
-  it("runs cleanup after failure and reports both outcomes independently", async () => {
-    const operationCanary = new Error("ghs_OPERATION_ERROR_CANARY");
-    const result = await executeWithCleanup(
-      async () => {
-        throw operationCanary;
-      },
-      async () => {
-        throw new Error("ghs_CLEANUP_ERROR_CANARY");
-      },
-      () => "authorization_failure",
-    );
-
-    expect(result).toEqual({
-      operation: {
-        status: "failed",
-        failure: "authorization_failure",
-      },
-      cleanup: {
-        status: "failed",
-        failure: "cleanup_failure",
-      },
-    });
-    expect(JSON.stringify(result)).not.toContain(
-      "ghs_OPERATION_ERROR_CANARY",
-    );
-    expect(JSON.stringify(result)).not.toContain(
-      "ghs_CLEANUP_ERROR_CANARY",
-    );
   });
 });

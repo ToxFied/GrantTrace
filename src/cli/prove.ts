@@ -7,6 +7,7 @@ import { ScenarioNameSchema } from "../permissions/schema.js";
 import type { ProofFailure } from "../proof/failure.js";
 import { LiveFixtureConfig } from "../proof/live-config.js";
 import { executeProof } from "../proof/orchestrator.js";
+import { validateAcceptedProofContract } from "../proof/contract-verification.js";
 import {
   writeProofReport,
   type ProofRunReport,
@@ -14,7 +15,17 @@ import {
 import type { CliContext } from "./context.js";
 import { writeLine } from "./context.js";
 import { ExitCode, type ExitCodeValue } from "./exit-codes.js";
-import { parseBoundedDuration } from "./duration.js";
+import { parseScenarioCommand } from "./scenario-command.js";
+import { formatDuration } from "./duration.js";
+import {
+  acquireLocalOperationLock,
+  ensurePrivateStateSubdirectory,
+  inspectLocalState,
+  type LocalOperationLock,
+  stateIgnorePresent,
+} from "../security/local-state.js";
+
+const MAX_PROOF_TIMEOUT_MS = 30 * 60 * 1_000;
 
 const execFileAsync = promisify(execFile);
 
@@ -29,7 +40,8 @@ export async function runProve(
         "Prove one accepted scenario with a restricted installation token",
         "",
         "Usage",
-        "  granttrace prove --scenario <safe-name> [--timeout 15m] -- <command> [args...]",
+        "  granttrace prove <name> [--timeout 15m] -- <command> [args...]",
+        "  granttrace prove --scenario <name> ...  (legacy)",
         "",
         "The child receives the restricted token, not App broker credentials.",
         "The proof is scoped to the named scenario and disposable fixture.",
@@ -41,14 +53,21 @@ export async function runProve(
     );
     return ExitCode.success;
   }
-  const parsed = parseProveArguments(args);
-  if (parsed === null) {
+  const parsedResult = parseScenarioCommand(args, MAX_PROOF_TIMEOUT_MS);
+  if (!parsedResult.success) {
     writeLine(
       context.stderr,
-      "Usage: granttrace prove --scenario <safe-name> [--timeout 15m] -- <command> [args...]",
+      [
+        `GrantTrace prove usage error: ${parsedResult.message}`,
+        "",
+        "Usage",
+        "  granttrace prove <name> [--timeout 15m] -- <command> [args...]",
+        "",
+      ].join("\n"),
     );
     return ExitCode.usage;
   }
+  const parsed = parsedResult.value;
 
   const scenarioResult = ScenarioNameSchema.safeParse(parsed.scenario);
   if (!scenarioResult.success) {
@@ -58,132 +77,173 @@ export async function runProve(
     );
     return ExitCode.usage;
   }
+  if (process.platform === "win32") {
+    writeLine(
+      context.stderr,
+      [
+        "GrantTrace prove blocked",
+        "",
+        "Live proof is not supported on Windows because GrantTrace cannot verify termination of an arbitrary descendant process tree.",
+        "",
+        "Next",
+        "  Run live proof from a disposable Unix-like environment.",
+        "",
+      ].join("\n"),
+    );
+    return ExitCode.analysisFailure;
+  }
 
   try {
-    const loaded = await readContractWithMetadata(
-      join(context.cwd, "granttrace.lock.json"),
-    );
-    if (loaded.migratedFromV1) {
+    const state = await inspectLocalState(context.cwd);
+    if (
+      !state.ready ||
+      state.staleSessions > 0 ||
+      !(await stateIgnorePresent(context.cwd))
+    ) {
       writeLine(
         context.stderr,
         [
           "GrantTrace prove blocked",
           "",
-          "Schema v1 contracts do not contain exact route-to-scenario attribution.",
+          "Private ignored local state is required before live proof.",
           "",
           "Next",
-          "  Re-record the scenario if needed, review granttrace check, then run:",
-          "  granttrace check --accept",
+          "  granttrace init",
+          "  granttrace doctor",
           "",
         ].join("\n"),
       );
-      return ExitCode.contractChanged;
+      return ExitCode.analysisFailure;
     }
-    const contract = loaded.contract;
-    let config: LiveFixtureConfig | null = null;
+    await ensurePrivateStateSubdirectory(context.cwd, "reports");
+    let operationLock: LocalOperationLock;
     try {
-      config = LiveFixtureConfig.load(context.environment);
+      operationLock = await acquireLocalOperationLock(context.cwd);
     } catch {
-      config = null;
+      writeLine(
+        context.stderr,
+        [
+          "GrantTrace prove blocked",
+          "",
+          "Another GrantTrace operation is active or left a stale lock.",
+          "",
+          "Next",
+          "  Run granttrace doctor and inspect local session state before retrying.",
+          "",
+        ].join("\n"),
+      );
+      return ExitCode.analysisFailure;
     }
-    const sourceCommit =
-      context.proofDependencies !== undefined &&
-      "sourceCommit" in context.proofDependencies
-        ? (context.proofDependencies.sourceCommit ?? null)
-        : await readSourceCommit(context.cwd);
-    const result = await executeProof({
-      config,
-      contract,
-      scenario: scenarioResult.data,
-      cwd: context.cwd,
-      command: parsed.command,
-      args: parsed.commandArgs,
-      baseEnvironment: context.environment,
-      timeoutMs: parsed.timeoutMs,
-      dependencies: {
-        ...context.proofDependencies,
-        sourceCommit,
-      },
-    });
-    const reportPath = join(
-      context.cwd,
-      ".granttrace",
-      "reports",
-      `${scenarioResult.data}.json`,
-    );
-    await writeProofReport(
-      reportPath,
-      result.report,
-    );
-
-    if (result.success) {
+    try {
+      const loaded = await readContractWithMetadata(
+        join(context.cwd, "granttrace.lock.json"),
+      );
+      if (loaded.migratedFromV1 || loaded.migratedFromLegacyV2) {
+        writeLine(
+          context.stderr,
+          [
+            "GrantTrace prove blocked",
+            "",
+            loaded.migratedFromV1
+              ? "Schema v1 contracts do not contain exact route-to-scenario attribution."
+              : "This schema-v2 contract lacks scenario-specific evidence provenance.",
+            "",
+            "Next",
+            "  Re-record the scenario if needed, review granttrace check, then run:",
+            "  granttrace check --accept",
+            "",
+          ].join("\n"),
+        );
+        return ExitCode.contractChanged;
+      }
+      const contract = loaded.contract;
+      try {
+        validateAcceptedProofContract(contract, scenarioResult.data);
+      } catch {
+        writeLine(
+          context.stderr,
+          [
+            "GrantTrace prove blocked",
+            "",
+            "The accepted contract does not exactly match the named scenario and current pinned catalog.",
+            "",
+            "Next",
+            "  Record the scenario, review granttrace check, then run:",
+            "  granttrace check --accept",
+            "",
+          ].join("\n"),
+        );
+        return ExitCode.contractChanged;
+      }
+      let config: LiveFixtureConfig | null = null;
+      try {
+        config = (
+          context.loadLiveFixtureConfig ?? LiveFixtureConfig.load
+        )(context.environment);
+      } catch {
+        config = null;
+      }
+      const sourceCommit =
+        context.proofDependencies !== undefined &&
+        "sourceCommit" in context.proofDependencies
+          ? (context.proofDependencies.sourceCommit ?? null)
+          : await readSourceCommit(context.cwd);
       writeLine(
         context.stdout,
-        renderProofSuccess(result.report, scenarioResult.data),
+        [
+        "Proof started",
+          `  Scenario  ${scenarioResult.data}`,
+          `  Timeout   ${formatDuration(parsed.timeoutMs)}`,
+          "",
+        ].join("\n"),
       );
-      return ExitCode.success;
+      const result = await executeProof({
+        config,
+        contract,
+        scenario: scenarioResult.data,
+        cwd: context.cwd,
+        command: parsed.command,
+        args: parsed.commandArgs,
+        baseEnvironment: context.environment,
+        timeoutMs: parsed.timeoutMs,
+        dependencies: {
+          ...context.proofDependencies,
+          sourceCommit,
+        },
+      });
+      const reportPath = join(
+        context.cwd,
+        ".granttrace",
+        "reports",
+        `${scenarioResult.data}.json`,
+      );
+      await writeProofReport(
+        reportPath,
+        result.report,
+      );
+
+      if (result.success) {
+        writeLine(
+          context.stdout,
+          renderProofSuccess(result.report, scenarioResult.data),
+        );
+        return ExitCode.success;
+      }
+      writeLine(
+        context.stderr,
+        renderProofFailure(result.report, scenarioResult.data),
+      );
+      return exitCodeForReport(result.report);
+    } finally {
+      await operationLock.release();
     }
-    writeLine(
-      context.stderr,
-      renderProofFailure(result.report, scenarioResult.data),
-    );
-    return exitCodeForReport(result.report);
   } catch {
     writeLine(
       context.stderr,
-      "GrantTrace prove failed: the accepted contract or proof report could not be validated safely.",
+      "GrantTrace prove failed: the accepted contract or proof report is invalid.",
     );
     return ExitCode.analysisFailure;
   }
-}
-
-function parseProveArguments(args: string[]):
-  | {
-      scenario: string;
-      command: string;
-      commandArgs: string[];
-      timeoutMs: number;
-    }
-  | null {
-  const separator = args.indexOf("--");
-  if (separator < 0 || separator === args.length - 1) {
-    return null;
-  }
-  const options = args.slice(0, separator);
-  let scenario: string | null = null;
-  let timeoutMs = 15 * 60 * 1_000;
-  for (let index = 0; index < options.length; index += 1) {
-    const option = options[index];
-    const value = options[index + 1];
-    if (option === "--scenario" && scenario === null && value !== undefined) {
-      scenario = value;
-      index += 1;
-      continue;
-    }
-    if (option === "--timeout" && value !== undefined) {
-      const parsed = parseBoundedDuration(value, {
-        minimumMs: 1_000,
-        maximumMs: 60 * 60 * 1_000,
-      });
-      if (parsed === null) {
-        return null;
-      }
-      timeoutMs = parsed;
-      index += 1;
-      continue;
-    }
-    return null;
-  }
-  const command = args[separator + 1];
-  if (scenario === null || command === undefined || command.length === 0) {
-    return null;
-  }
-  return {
-    scenario,
-    command,
-    commandArgs: args.slice(separator + 2),
-    timeoutMs,
-  };
 }
 
 async function readSourceCommit(cwd: string): Promise<string | null> {
@@ -250,7 +310,7 @@ function renderProofFailure(
     "GrantTrace prove failed",
     "",
     `Positive    ${renderPositiveStatus(report)}`,
-    `Cleanup     ${report.cleanup.status}`,
+    `Cleanup     ${statusLabel(report.cleanup.status)}`,
     `Report      .granttrace/reports/${scenario}.json`,
     "",
     "Negative controls",
@@ -275,15 +335,47 @@ function renderPermissions(
 
 function renderPositiveStatus(report: ProofRunReport): string {
   return report.positiveProof.status === "failed"
-    ? `failed (${report.positiveProof.failure})`
-    : report.positiveProof.status;
+    ? `Failed (${statusLabel(report.positiveProof.failure)})`
+    : statusLabel(report.positiveProof.status);
 }
 
 function renderNegativeStatuses(report: ProofRunReport): string[] {
   return report.negativeControls.map((control) =>
     control.status === "indeterminate"
-      ? `  ${control.id}: ${control.status} (${control.failure})`
-      : `  ${control.id}: ${control.status}`,
+      ? `  ${controlLabel(control.id)}: ${statusLabel(control.status)} (${statusLabel(control.failure)})`
+      : `  ${controlLabel(control.id)}: ${statusLabel(control.status)}`,
+  );
+}
+
+function controlLabel(id: string): string {
+  switch (id) {
+    case "issue-comment-create":
+      return "Issue comment creation";
+    case "issue-comments-read":
+      return "Issue comment reading";
+    default:
+      return statusLabel(id);
+  }
+}
+
+function statusLabel(value: string | undefined): string {
+  if (value === undefined) {
+    return "Unknown";
+  }
+  const overrides: Record<string, string> = {
+    github_unavailable: "GitHub unavailable",
+    not_applicable: "Not applicable",
+    not_required: "Not required",
+    not_run: "Not run",
+    expected_rejection: "Rejected as expected",
+    unexpected_pass: "Unexpectedly succeeded",
+  };
+  return (
+    overrides[value] ??
+    value
+      .split("_")
+      .map((word) => word[0]?.toUpperCase() + word.slice(1))
+      .join(" ")
   );
 }
 

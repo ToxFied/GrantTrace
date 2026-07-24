@@ -6,6 +6,11 @@ import {
 import type { PermissionAssignment } from "../permissions/types.js";
 import type { GrantTraceContract } from "./schema.js";
 
+export type ManualKeepConflict = {
+  permission: string;
+  kind: "mandatory_baseline" | "selected_access";
+};
+
 export function manualKeepPermissions(
   contract: Pick<GrantTraceContract, "manualKeeps">,
 ): PermissionAssignment {
@@ -30,6 +35,28 @@ export function requestedProofPermissions(
       previous === undefined ? level : maxPermissionLevel(previous, level);
   }
   return canonicalizeAssignment(requested);
+}
+
+export function findManualKeepConflicts(
+  contract: Pick<GrantTraceContract, "manualKeeps">,
+  selected: PermissionAssignment,
+  mandatory: PermissionAssignment,
+): ManualKeepConflict[] {
+  const conflicts: ManualKeepConflict[] = [];
+  for (const [permission, keep] of Object.entries(contract.manualKeeps)) {
+    if (mandatory[permission] !== undefined) {
+      conflicts.push({ permission, kind: "mandatory_baseline" });
+      continue;
+    }
+    const observed = selected[permission];
+    if (
+      observed !== undefined &&
+      comparePermissionLevels(observed, keep.level) >= 0
+    ) {
+      conflicts.push({ permission, kind: "selected_access" });
+    }
+  }
+  return conflicts;
 }
 
 export function retainUnobservedManualKeeps(

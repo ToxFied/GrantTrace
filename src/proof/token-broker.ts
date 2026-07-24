@@ -15,13 +15,12 @@ import {
   validateInstallationTokenResponse,
   type ValidatedInstallationToken,
 } from "./token-response.js";
-
-const API_VERSION = "2026-03-10";
+import { GITHUB_API_VERSION } from "../version.js";
 
 export type InstallationTokenRequest = {
   authorization: SensitiveValue;
   installationId: string;
-  permissions: PermissionAssignment | null;
+  permissions: PermissionAssignment;
   repository: string;
 };
 
@@ -93,60 +92,6 @@ export async function mintRestrictedInstallationToken(
   );
 }
 
-export async function mintBroadInstallationToken(
-  config: LiveFixtureConfig,
-  expectedRequestedPermissionsInput: PermissionAssignment,
-  options: {
-    transport?: InstallationTokenTransport;
-    now?: Date;
-  } = {},
-): Promise<ValidatedInstallationToken> {
-  const now = options.now ?? new Date();
-  const permissionsResult = PermissionAssignmentSchema.safeParse(
-    expectedRequestedPermissionsInput,
-  );
-  if (!permissionsResult.success) {
-    throw new TokenBrokerError("invalid_token_response");
-  }
-  const expectedRequestedPermissions = canonicalizeAssignment(
-    permissionsResult.data,
-  );
-  const credentials = config.brokerCredentials();
-  const fixture = config.fixtureCoordinates();
-  const authorization = createAppJwt(
-    credentials.appId,
-    credentials.privateKey,
-    now,
-  );
-  const transport = options.transport ?? new OctokitTokenTransport();
-
-  let raw: unknown;
-  try {
-    raw = await transport.createInstallationToken({
-      authorization,
-      installationId: credentials.installationId,
-      permissions: null,
-      repository: fixture.repository,
-    });
-  } catch (error) {
-    if (error instanceof TokenBrokerError) {
-      throw error;
-    }
-    throw new TokenBrokerError(classifyGitHubFailure(error));
-  }
-
-  return validateInstallationTokenResponse(
-    raw,
-    {
-      requestedPermissions: expectedRequestedPermissions,
-      mandatoryPermissions: MANDATORY_INSTALLATION_PERMISSIONS,
-      owner: fixture.owner,
-      repository: fixture.repository,
-    },
-    now,
-  );
-}
-
 export function createAppJwt(
   appId: string,
   privateKey: SensitiveValue,
@@ -175,20 +120,16 @@ export class OctokitTokenTransport implements InstallationTokenTransport {
   ): Promise<unknown> {
     const octokit = new Octokit();
     try {
-      const permissionParameters =
-        request.permissions === null
-          ? {}
-          : { permissions: request.permissions };
       const response = await octokit.request(
         "POST /app/installations/{installation_id}/access_tokens",
         {
           installation_id: Number(request.installationId),
-          ...permissionParameters,
+          permissions: request.permissions,
           repositories: [request.repository],
           headers: {
             accept: "application/vnd.github+json",
             authorization: `Bearer ${request.authorization.reveal()}`,
-            "x-github-api-version": API_VERSION,
+            "x-github-api-version": GITHUB_API_VERSION,
           },
         },
       );

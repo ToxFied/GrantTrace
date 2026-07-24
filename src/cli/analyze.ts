@@ -2,7 +2,7 @@ import { resolve } from "node:path";
 
 import { buildContract } from "../contract/build.js";
 import { loadObservations } from "../contract/observation-file.js";
-import { fixtureCatalog } from "../evidence/catalog.js";
+import { githubPermissionCatalog } from "../evidence/catalog.js";
 import { renderAnalysisReport } from "../reporting/terminal.js";
 import type { CliContext } from "./context.js";
 import { writeLine } from "./context.js";
@@ -51,7 +51,7 @@ export async function runAnalyze(
       return ExitCode.instrumentation;
     }
 
-    const contract = buildContract(observations, fixtureCatalog);
+    const contract = buildContract(observations, githubPermissionCatalog);
     const report = renderAnalysisReport(contract, observations.length);
     writeLine(
       contract.unknowns.length > 0 ? context.stderr : context.stdout,
@@ -73,5 +73,5 @@ function safeAnalysisMessage(error: unknown): string {
   if (error instanceof Error && error.message.startsWith("Observation ")) {
     return `GrantTrace analysis failed: ${error.message}`;
   }
-  return "GrantTrace analysis failed: observations could not be analyzed safely.";
+  return "GrantTrace analysis failed: the observation file is invalid.";
 }

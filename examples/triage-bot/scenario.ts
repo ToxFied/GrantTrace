@@ -2,8 +2,6 @@ import { createServer } from "node:http";
 
 import { Octokit } from "@octokit/core";
 
-import { grantTrace } from "../../src/octokit/index.js";
-
 const stub = createServer((request, response) => {
   request.resume();
   request.once("end", () => {
@@ -27,8 +25,7 @@ try {
     throw new Error("Local GitHub stub did not start.");
   }
 
-  const TracedOctokit = Octokit.plugin(grantTrace);
-  const octokit = new TracedOctokit({
+  const octokit = new Octokit({
     auth: "local-stub-token",
     baseUrl: `http://127.0.0.1:${address.port}`,
   });

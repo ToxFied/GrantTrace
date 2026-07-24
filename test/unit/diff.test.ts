@@ -54,6 +54,42 @@ describe("contract diff classification", () => {
     expect(diff.warningOnly).toBe(false);
     expect(diff.hasBlockingChange).toBe(true);
   });
+
+  it("shows scenario provenance changes even when the route union is unchanged", () => {
+    const previous = contract({ issues: "read" });
+    const next = structuredClone(previous);
+    previous.scenarios = [{ name: "alpha" }, { name: "beta" }];
+    next.scenarios = structuredClone(previous.scenarios);
+    previous.routes[0]!.scenarios = ["alpha", "beta"];
+    next.routes[0]!.scenarios = ["alpha", "beta"];
+    previous.routes[0]!.evidence = ["runtime_header", "pinned_catalog"];
+    next.routes[0]!.evidence = ["runtime_header", "pinned_catalog"];
+    previous.routes[0]!.scenarioEvidence = {
+      alpha: ["runtime_header", "pinned_catalog"],
+      beta: ["pinned_catalog"],
+    };
+    next.routes[0]!.scenarioEvidence = {
+      alpha: ["pinned_catalog"],
+      beta: ["runtime_header", "pinned_catalog"],
+    };
+
+    expect(diffContracts(previous, next).scenarioEvidenceChanges).toEqual([
+      {
+        method: "GET",
+        template: "/test/{issues}",
+        scenario: "alpha",
+        from: ["runtime_header", "pinned_catalog"],
+        to: ["pinned_catalog"],
+      },
+      {
+        method: "GET",
+        template: "/test/{issues}",
+        scenario: "beta",
+        from: ["pinned_catalog"],
+        to: ["runtime_header", "pinned_catalog"],
+      },
+    ]);
+  });
 });
 
 function contract(
@@ -91,6 +127,9 @@ function route(
     template,
     alternatives: [[{ permission, level }]],
     evidence: ["runtime_header"],
+    scenarioEvidence: {
+      "triage-integration": ["runtime_header"],
+    },
     scenarios: ["triage-integration"],
   };
 }

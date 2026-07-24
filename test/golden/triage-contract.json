@@ -34,6 +34,12 @@
         "runtime_header",
         "pinned_catalog"
       ],
+      "scenarioEvidence": {
+        "triage-integration": [
+          "runtime_header",
+          "pinned_catalog"
+        ]
+      },
       "scenarios": [
         "triage-integration"
       ]

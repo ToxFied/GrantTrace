@@ -43,6 +43,14 @@ describe("prove CLI workflow", () => {
   beforeEach(async () => {
     workingDirectory = await mkdtemp(join(tmpdir(), "granttrace-prove-cli-"));
     await chmod(workingDirectory, 0o700);
+    expect(
+      await runCli(["init"], {
+        cwd: workingDirectory,
+        environment: {},
+        stdout: { write: () => true },
+        stderr: { write: () => true },
+      }),
+    ).toBe(0);
     privateKey = generateKeyPairSync("rsa", {
       modulusLength: 2_048,
       privateKeyEncoding: {
@@ -105,7 +113,7 @@ describe("prove CLI workflow", () => {
       "sentinel-canary",
     ]);
     expect(result.stdout).toContain("GrantTrace prove passed");
-    expect(result.stdout).toContain("expected_rejection");
+    expect(result.stdout).toContain("Rejected as expected");
     const reportPath = join(
       workingDirectory,
       ".granttrace",
@@ -150,7 +158,7 @@ describe("prove CLI workflow", () => {
     );
 
     expect(result.code).toBe(5);
-    expect(result.stderr).toContain("configuration_failure");
+    expect(result.stderr).toContain("Configuration Failure");
     const report = await readFile(
       join(
         workingDirectory,
@@ -164,10 +172,104 @@ describe("prove CLI workflow", () => {
     expect(report).not.toContain("unused-command");
   });
 
+  it("blocks an overlapping proof before it can overwrite the report", async () => {
+    let signalStarted!: () => void;
+    let releaseChild!: () => void;
+    const started = new Promise<void>((resolveStarted) => {
+      signalStarted = resolveStarted;
+    });
+    const release = new Promise<void>((resolveRelease) => {
+      releaseChild = resolveRelease;
+    });
+    const dependencies = {
+      runChild: async () => {
+        signalStarted();
+        await release;
+        return {
+          outcome: "pass" as const,
+          exitCode: 0,
+          signal: null,
+          observations: [observation],
+          sessionCleanup: "pass" as const,
+        };
+      },
+      tokenTransport: tokenTransport(),
+      commentTransport: rejectionTransport(),
+      now,
+      sourceCommit: null,
+    };
+    const first = invoke(
+      [
+        "prove",
+        "--scenario",
+        "disposable-comment",
+        "--",
+        "first-command",
+      ],
+      fixtureEnvironment(),
+      dependencies,
+    );
+    await started;
+
+    const overlapping = await invoke(
+      [
+        "prove",
+        "--scenario",
+        "disposable-comment",
+        "--",
+        "second-command",
+      ],
+      fixtureEnvironment(),
+      dependencies,
+    );
+    expect(overlapping.code).toBe(5);
+    expect(overlapping.stderr).toContain("Private ignored local state");
+
+    releaseChild();
+    expect((await first).code).toBe(0);
+  });
+
+  it("rejects an unknown scenario before resolving private-key providers", async () => {
+    let providerCalled = false;
+    const result = await invoke(
+      [
+        "prove",
+        "--scenario",
+        "unknown-scenario",
+        "--",
+        "unused-command",
+      ],
+      fixtureEnvironment(),
+      { sourceCommit: null },
+      () => {
+        providerCalled = true;
+        throw new Error("Private-key providers must not be touched.");
+      },
+    );
+
+    expect(result.code).toBe(6);
+    expect(result.stderr).toContain("current pinned catalog");
+    expect(providerCalled).toBe(false);
+    await expect(
+      readFile(
+        join(
+          workingDirectory,
+          ".granttrace",
+          "reports",
+          "unknown-scenario.json",
+        ),
+        "utf8",
+      ),
+    ).rejects.toBeDefined();
+  });
+
   async function invoke(
     args: string[],
     environment: NodeJS.ProcessEnv,
     proofDependencies: NonNullable<CliContext["proofDependencies"]>,
+    loadLiveFixtureConfig?: NonNullable<
+      CliContext["loadLiveFixtureConfig"]
+    >,
   ) {
     let stdout = "";
     let stderr = "";
@@ -187,6 +289,9 @@ describe("prove CLI workflow", () => {
         },
       },
       proofDependencies,
+      ...(loadLiveFixtureConfig === undefined
+        ? {}
+        : { loadLiveFixtureConfig }),
     };
     const code = await runCli(args, context);
     return { code, stdout, stderr };

@@ -11,6 +11,10 @@ export function contractForScenario(
     .filter((route) => route.scenarios.includes(scenario))
     .map((route) => ({
       ...route,
+      evidence: route.scenarioEvidence[scenario] ?? route.evidence,
+      scenarioEvidence: {
+        [scenario]: route.scenarioEvidence[scenario] ?? route.evidence,
+      },
       scenarios: [scenario],
     }));
   const solution = solvePermissionContract(
@@ -18,6 +22,7 @@ export function contractForScenario(
       route: { method: route.method, template: route.template },
       alternatives: route.alternatives,
       evidence: route.evidence,
+      scenarioEvidence: route.scenarioEvidence,
       scenarios: route.scenarios,
     })),
     { baseline: MANDATORY_INSTALLATION_PERMISSIONS },

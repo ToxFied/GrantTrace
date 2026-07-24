@@ -25,11 +25,14 @@ and unrecognized fields fail validation.
 
 The protocol supports one claim:
 
-> For the GitHub REST operations exercised by these named, instrumented
+> For the GitHub REST operations exercised by these named, recorded
 > scenarios, these are the permissions the scenarios demonstrably require.
 
-The claim is bounded by dynamic scenario coverage and explicit Octokit
-instrumentation. It does not extend to unexecuted code or unobserved traffic.
+The claim is bounded by dynamic scenario coverage and the supported recorder
+paths. The injected Node preload observes global-`fetch` traffic, including
+standard Octokit requests. The explicit Octokit adapter covers compatible
+custom transports. The claim does not extend to unexecuted code, unsupported
+runtimes or endpoints, or traffic that bypasses both paths.
 
 ## Accepted-permissions grammar
 
@@ -114,37 +117,48 @@ type Observation = {
 };
 ```
 
-The recorder accepts route identity only when the pre-expansion Octokit
-template is a relative canonical template that exactly matches the pinned
-catalog. Absolute URLs, concrete paths, queries, GraphQL, and unmatched values
-never undergo heuristic redaction: the candidate is discarded and the safe
-finding blocks.
+The recorder accepts route identity only when it can resolve method and path to
+exactly one canonical template in the pinned catalog. The injected fetch path
+matches the supported GitHub REST origin and path against that catalog without
+persisting the concrete URL. The explicit Octokit adapter can supply its
+pre-expansion relative canonical template. Unrelated origins are ignored.
+GraphQL, unsupported API versions, ambiguous or unmatched GitHub paths, and
+unsafe candidates never undergo generic redaction: the candidate is discarded
+and a safe finding blocks.
 
 No raw header, URL, query, body, response, error, authentication value, owner,
 repository, or resource identifier is stored.
 
 ## Recorder session
 
-`record --scenario NAME -- COMMAND ARGS`:
+`record [--no-review] NAME -- COMMAND ARGS` (with legacy `--scenario NAME`
+compatibility):
 
-1. requires initialized, ignored, nonsymlink local state with private modes and
-   ownership checks where the platform exposes them;
+1. creates ignored, nonsymlink local state with private modes and ownership
+   checks where the platform exposes them when state is absent;
 2. validates a lowercase safe scenario name;
 3. creates a `0700` temporary session;
-4. launches argv with `shell: false` and the user's ordinary test environment
-   plus recorder variables;
+4. injects the Node preload and launches argv with `shell: false` and the
+   user's ordinary test environment plus recorder variables;
 5. streams child stdout/stderr without retaining it;
 6. enforces a default 15-minute timeout, bounded to one hour;
 7. remembers a terminal interrupt independently of the child's eventual exit;
-8. requires an instrumentation marker and at least one safe observation;
+8. requires a recorder marker and at least one safe observation;
 9. requires every observation to carry the requested scenario;
 10. validates all observations in memory;
-11. removes the session successfully; and
-12. only then atomically replaces the `0600` per-scenario NDJSON file.
+11. removes the session successfully;
+12. only then atomically replaces the `0600` per-scenario NDJSON file;
+13. unless review was explicitly deferred, builds and displays the aggregate
+    contract diff; and
+14. only in an interactive terminal, asks for explicit acceptance with a
+    default of no.
 
-A failed, interrupted, timed-out, uninstrumented, or empty child never replaces
-the prior successful recording. An unresponsive child receives a bounded
+A failed, interrupted, timed-out, unobserved, or empty child never replaces the
+prior successful recording. An unresponsive child receives a bounded
 force-kill escalation. A cleanup failure also prevents persistence.
+Noninteractive recording never accepts a contract; a semantic diff exits `6`.
+`--no-review` omits steps 13–14 so multi-scenario automation can finish every
+recording before one required aggregate `check`.
 
 ## Evidence resolution
 
@@ -198,9 +212,10 @@ nondominated choice remains in `permissionFrontier`.
 - sorted canonical route templates;
 - canonical DNF requirements and evidence provenance;
 - sorted unique scenario attribution for every route;
+- exact evidence provenance used by each scenario on a shared route;
 - observed selected permissions;
 - the nondominated permission frontier;
-- separately reasoned manual keeps; and
+- separately documented manual keeps; and
 - safe unknown findings.
 
 Unless the contract intentionally contains zero scenarios, every declared
@@ -243,10 +258,19 @@ record current named scenarios
   -> granttrace check --accept
 ```
 
+Legacy schema-v2 contracts without per-scenario provenance remain readable.
+They are conservatively expanded in memory, exposed as a migration review, and
+blocked from `keep` and `prove` until current recordings are explicitly
+accepted with per-scenario provenance.
+
 ## Multi-scenario operations
 
 Local observation files are bounded to 128 files, 10,000 observations, and
 10 MiB aggregate input. Files are loaded in ASCII filename order.
+
+An atomic `.granttrace/active-operation` lock prevents overlapping write
+operations from racing contract, observation, report, or session updates. A
+stale lock is a doctor failure that must be inspected before it is removed.
 
 `scenario list` reads and validates every recording. `scenario remove NAME`
 removes only `.granttrace/observations/NAME.ndjson`; it does not edit the
@@ -273,7 +297,7 @@ A manual keep is:
 ```ts
 type ManualKeep = {
   level: "read" | "write";
-  reason: string; // trimmed, 1–240 visible characters
+  reason: string; // trimmed, 1–240 plain-text characters
 };
 ```
 
@@ -281,11 +305,10 @@ Keeps are canonicalized by permission name. A keep cannot duplicate access
 already satisfied by selected permissions and cannot duplicate the mandatory
 baseline. `metadata` is rejected by the CLI for that reason.
 
-Reasons are committed review text: 1–240 characters, identity-free and
-secret-free. Control, format, or invisible characters, URLs, and obvious token
-or private-key shapes are rejected before a reason can be displayed or stored.
-Operators remain responsible for excluding identities or sensitive context
-that cannot be recognized mechanically.
+Reasons are committed review text: 1–240 plain-text characters without
+secrets, URLs, or personal identifiers. Control, format, or invisible
+characters and obvious token or private-key shapes are rejected before a
+reason can be displayed or stored.
 
 Manual keeps are global to the contract and participate in every scenario's
 live token:
@@ -317,12 +340,14 @@ includes:
 - schema-v1 migration.
 
 Unknown, malformed, unsupported, or contradictory evidence exits `7` before
-acceptance. `check --accept` writes the exact reviewed v2 contract atomically.
-There is no interactive CI prompt.
+acceptance. `check --accept`, or an explicit yes to the interactive `record`
+prompt, writes the exact reviewed v2 contract atomically. There is no
+interactive CI prompt and no noninteractive auto-acceptance.
 
 ## Live proof state machine
 
-`prove --scenario NAME -- COMMAND ARGS` implements:
+`prove NAME -- COMMAND ARGS` (with legacy `--scenario NAME` compatibility)
+implements:
 
 ```text
 strict accepted v2 contract validated
@@ -332,6 +357,7 @@ strict accepted v2 contract validated
   -> requested = selected + manual keeps
   -> one-repository token minted
   -> effective = requested + mandatory baseline verified
+  -> automatic recorder preload injected into restricted child
   -> restricted child run
   -> scenario observations reproduced exactly
   -> applicable negative controls run
@@ -340,11 +366,12 @@ strict accepted v2 contract validated
 ```
 
 Catalog rebinding completes before GrantTrace loads credentials or mints a
-token. The proof child uses argv plus `shell: false`, streams output, requires
-instrumentation and safe observations, and has a default 15-minute timeout
-bounded to 30 minutes. A timeout is indeterminate evidence, never a permission
-result. A terminal interrupt is remembered independently of the child's exit
-code and cannot become a pass if the child handles the signal and exits zero.
+token. The proof child runs directly without a shell, streams output, receives
+the automatic Node recorder preload, requires valid observations, and has a
+default 15-minute timeout bounded to 30 minutes. A timeout is indeterminate
+evidence, never a permission result. A terminal interrupt is remembered
+independently of the child's exit code and cannot become a pass if the child
+handles the signal and exits zero.
 
 Its environment starts from an operating-system allowlist. Broker credentials,
 existing GitHub tokens, `HOME`, `NODE_OPTIONS`, and arbitrary environment
@@ -389,8 +416,7 @@ Only an authorization failure counts as expected rejection. `401`, `404`,
 errors retain distinct classes. Unexpected success always fails. For the
 mutating control, an unexpected created comment is deleted with the positive
 token; cleanup failure is reported separately and blocks success. Read-only
-controls never require cleanup. Unsupported controls report
-`not_applicable`.
+controls never require cleanup. Unsupported controls are marked not applicable.
 
 ## Ephemeral proof report
 
@@ -399,7 +425,7 @@ controls never require cleanup. Unsupported controls report
 - schema/tool/API/catalog identity and source commit or `null`;
 - scenario and deterministic aggregate contract hash;
 - scenario-selected permissions;
-- reasoned manual keeps;
+- documented manual keeps;
 - requested, mandatory, and effective assignments;
 - repository-scope and exact-contract booleans;
 - safe child exit/signal/observation counts;
@@ -411,10 +437,10 @@ It cannot contain credentials, commands, raw URLs, identities, responses, or
 rich errors. Unknown fields fail validation. The report directory is `0700`;
 the file is `0600`.
 
-Contract, observation, and report inputs are size-bounded regular files.
-GrantTrace rejects symlinks and other nonregular types, uses a no-follow open
-where the platform supports it, and verifies that the file opened is the file
-that was inspected.
+Contract and observation inputs are size-bounded regular files. GrantTrace
+rejects symlinks and other nonregular types, uses a no-follow open where the
+platform supports it, and verifies that the file opened is the file that was
+inspected. Proof reports are validated, atomically written outputs.
 
 ## Failure classes
 
@@ -452,7 +478,7 @@ rejection.
 | `0` | Success |
 | `2` | Invalid usage |
 | `3` | Missing instrumentation or observations |
-| `4` | Child test failure, timeout, or spawn failure |
+| `4` | Record-child test failure, timeout, or spawn failure |
 | `5` | Invalid artifact, analysis, or live configuration |
 | `6` | Contract review or migration required |
 | `7` | Unknown, unsupported, malformed, or contradictory evidence |

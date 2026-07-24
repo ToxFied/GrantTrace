@@ -201,6 +201,7 @@ function requirement(
     route: { method: "GET", template },
     alternatives,
     evidence: ["runtime_header"],
+    scenarioEvidence: { "property-test": ["runtime_header"] },
     scenarios: ["property-test"],
   };
 }

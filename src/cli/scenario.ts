@@ -7,6 +7,11 @@ import { compareAscii } from "../deterministic.js";
 import type { CliContext } from "./context.js";
 import { writeLine } from "./context.js";
 import { ExitCode, type ExitCodeValue } from "./exit-codes.js";
+import {
+  acquireLocalOperationLock,
+  inspectLocalState,
+  LocalOperationLockError,
+} from "../security/local-state.js";
 
 export async function runScenario(
   args: string[],
@@ -23,6 +28,25 @@ export async function runScenario(
 
   if (args[0] === "list" && args.length === 1) {
     try {
+      const state = await inspectLocalState(context.cwd);
+      if (state.issue === "missing") {
+        writeLine(
+          context.stdout,
+          [
+            "Recorded scenarios",
+            "",
+            "  (none)",
+            "",
+            "Next",
+            "  granttrace init",
+            "",
+          ].join("\n"),
+        );
+        return ExitCode.success;
+      }
+      if (!state.ready) {
+        throw new Error("Unsafe local state.");
+      }
       const entries = (await readdir(directory, { withFileTypes: true }))
         .filter((entry) => entry.isFile() && entry.name.endsWith(".ndjson"))
         .sort((left, right) => compareAscii(left.name, right.name));
@@ -52,7 +76,7 @@ export async function runScenario(
     } catch {
       writeLine(
         context.stderr,
-        "GrantTrace scenario failed: recordings could not be listed safely.",
+        "GrantTrace scenario failed: the local recordings are invalid or unreadable.",
       );
       return ExitCode.analysisFailure;
     }
@@ -65,7 +89,16 @@ export async function runScenario(
       return ExitCode.usage;
     }
     try {
-      await rm(join(directory, `${scenario.data}.ndjson`));
+      const operationLock = await acquireLocalOperationLock(context.cwd);
+      try {
+        const state = await inspectLocalState(context.cwd);
+        if (!state.ready || state.staleSessions !== 1) {
+          throw new Error("Unsafe local state.");
+        }
+        await rm(join(directory, `${scenario.data}.ndjson`));
+      } finally {
+        await operationLock.release();
+      }
       writeLine(
         context.stdout,
         [
@@ -79,7 +112,22 @@ export async function runScenario(
         ].join("\n"),
       );
       return ExitCode.success;
-    } catch {
+    } catch (error) {
+      if (error instanceof LocalOperationLockError) {
+        writeLine(
+          context.stderr,
+          [
+            "GrantTrace scenario blocked",
+            "",
+            "Another GrantTrace operation is active or left a stale lock.",
+            "",
+            "Next",
+            "  Run granttrace doctor and inspect local session state before retrying.",
+            "",
+          ].join("\n"),
+        );
+        return ExitCode.analysisFailure;
+      }
       writeLine(
         context.stderr,
         "GrantTrace scenario failed: that recording does not exist or could not be removed.",
