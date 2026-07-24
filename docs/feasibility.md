@@ -1,7 +1,4 @@
----
-title: Research record
-description: Historical platform evidence and design decisions behind GrantTrace.
----
+# GrantTrace feasibility record
 
 Access date for every source below: **2026-07-23**.
 
@@ -119,11 +116,6 @@ The following offline layer added:
   identity or secrets.
 
 ## Disposable live spike result
-
-This section records a historical, one-off experiment against the disposable
-fixture. The production broker contains no broad-token discovery or feasibility
-path. It validates exact contract/catalog identity first, then mints only the
-restricted positive and applicable negative-control tokens.
 
 On 2026-07-23, after the fixture repository was renamed to satisfy the
 unchanged `-granttrace-fixture` guard, GrantTrace made its first authenticated

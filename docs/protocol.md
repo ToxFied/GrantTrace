@@ -1,7 +1,4 @@
----
-title: Protocol
-description: The normative evidence, solving, contract, and proof protocol.
----
+# GrantTrace protocol
 
 This document defines the deterministic local contract and guarded live-proof
 protocol implemented by GrantTrace.
@@ -127,24 +124,18 @@ repository, or resource identifier is stored.
 
 `record --scenario NAME -- COMMAND ARGS`:
 
-1. requires initialized, ignored, nonsymlink local state with private modes and
-   ownership checks where the platform exposes them;
-2. validates a lowercase safe scenario name;
-3. creates a `0700` temporary session;
-4. launches argv with `shell: false` and the user's ordinary test environment
+1. validates a lowercase safe scenario name;
+2. creates a `0700` temporary session;
+3. launches argv with `shell: false` and the user's ordinary test environment
    plus recorder variables;
-5. streams child stdout/stderr without retaining it;
-6. enforces a default 15-minute timeout, bounded to one hour;
-7. remembers a terminal interrupt independently of the child's eventual exit;
-8. requires an instrumentation marker and at least one safe observation;
-9. requires every observation to carry the requested scenario;
-10. validates all observations in memory;
-11. removes the session successfully; and
-12. only then atomically replaces the `0600` per-scenario NDJSON file.
+4. streams child stdout/stderr without retaining it;
+5. enforces a default 15-minute bounded timeout;
+6. requires an instrumentation marker and at least one safe observation;
+7. requires every observation to carry the requested scenario; and
+8. writes a `0600` per-scenario NDJSON file before removing the session.
 
 A failed, interrupted, timed-out, uninstrumented, or empty child never replaces
-the prior successful recording. An unresponsive child receives a bounded
-force-kill escalation. A cleanup failure also prevents persistence.
+the prior successful recording.
 
 ## Evidence resolution
 
@@ -203,14 +194,9 @@ nondominated choice remains in `permissionFrontier`.
 - separately reasoned manual keeps; and
 - safe unknown findings.
 
-Unless the contract intentionally contains zero scenarios, every declared
-scenario must appear in route or unknown attribution. A zero-scenario v2
-contract must also contain zero routes, selected permissions, and unknowns,
-with the single empty assignment in its frontier. It is the explicit reviewed
-representation of retiring all observed coverage. Validated manual keeps remain
-until explicitly removed and remain unproven retained access. Routes must be
-unique. Selected/frontier assignments are recomputed from the stored routes
-during validation and must match exactly.
+Every declared scenario must appear in route or unknown attribution. Routes
+must be unique. Selected/frontier assignments are recomputed from the stored
+routes during validation and must match exactly.
 
 Serialization uses stable object construction, two-space JSON indentation, and
 one trailing newline. It contains no timestamp, command, test path, working
@@ -251,9 +237,7 @@ Local observation files are bounded to 128 files, 10,000 observations, and
 `scenario list` reads and validates every recording. `scenario remove NAME`
 removes only `.granttrace/observations/NAME.ndjson`; it does not edit the
 accepted contract. The next check exposes the scenario, route, attribution,
-and permission contraction for review. Removing the final recording is also a
-reviewable change: acceptance writes the deterministic zero-scenario form while
-preserving validated manual keeps.
+and permission contraction for review.
 
 For live proof, the accepted aggregate contract is sliced to the named
 scenario:
@@ -280,12 +264,6 @@ type ManualKeep = {
 Keeps are canonicalized by permission name. A keep cannot duplicate access
 already satisfied by selected permissions and cannot duplicate the mandatory
 baseline. `metadata` is rejected by the CLI for that reason.
-
-Reasons are committed review text: 1–240 characters, identity-free and
-secret-free. Control, format, or invisible characters, URLs, and obvious token
-or private-key shapes are rejected before a reason can be displayed or stored.
-Operators remain responsible for excluding identities or sensitive context
-that cannot be recognized mechanically.
 
 Manual keeps are global to the contract and participate in every scenario's
 live token:
@@ -327,7 +305,6 @@ There is no interactive CI prompt.
 ```text
 strict accepted v2 contract validated
   -> named scenario slice solved
-  -> every route and DNF rebound to the exact pinned catalog
   -> guarded fixture configuration validated
   -> requested = selected + manual keeps
   -> one-repository token minted
@@ -339,12 +316,9 @@ strict accepted v2 contract validated
   -> strict ephemeral report written
 ```
 
-Catalog rebinding completes before GrantTrace loads credentials or mints a
-token. The proof child uses argv plus `shell: false`, streams output, requires
-instrumentation and safe observations, and has a default 15-minute timeout
-bounded to 30 minutes. A timeout is indeterminate evidence, never a permission
-result. A terminal interrupt is remembered independently of the child's exit
-code and cannot become a pass if the child handles the signal and exits zero.
+The proof child uses argv plus `shell: false`, streams output, requires
+instrumentation and safe observations, and has a bounded timeout. A timeout is
+indeterminate evidence, never a permission result.
 
 Its environment starts from an operating-system allowlist. Broker credentials,
 existing GitHub tokens, `HOME`, `NODE_OPTIONS`, and arbitrary environment
@@ -411,11 +385,6 @@ It cannot contain credentials, commands, raw URLs, identities, responses, or
 rich errors. Unknown fields fail validation. The report directory is `0700`;
 the file is `0600`.
 
-Contract, observation, and report inputs are size-bounded regular files.
-GrantTrace rejects symlinks and other nonregular types, uses a no-follow open
-where the platform supports it, and verifies that the file opened is the file
-that was inspected.
-
 ## Failure classes
 
 ```text
@@ -452,7 +421,7 @@ rejection.
 | `0` | Success |
 | `2` | Invalid usage |
 | `3` | Missing instrumentation or observations |
-| `4` | Child test failure, timeout, or spawn failure |
+| `4` | Child test failure, interruption, or spawn failure |
 | `5` | Invalid artifact, analysis, or live configuration |
 | `6` | Contract review or migration required |
 | `7` | Unknown, unsupported, malformed, or contradictory evidence |

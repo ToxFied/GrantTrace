@@ -1,7 +1,4 @@
----
-title: Limitations
-description: Exact boundaries and unsupported cases in GrantTrace's guarantee.
----
+# Limitations
 
 GrantTrace is dynamic, scenario-bound, and REST-only. These boundaries are
 part of the result, not footnotes.
@@ -15,9 +12,7 @@ part of the result, not footnotes.
 - A permission absent from the contract is not automatically safe to remove
   from an existing App installation.
 - Instrumentation is explicit. Only requests made through the supported
-  pre-composed `GrantTraceOctokit` constructor, or manual plugin composition
-  with exact `@octokit/core@7.0.6`, are observable. Other versions and wrappers
-  are outside the beta compatibility claim. GrantTrace does not intercept
+  `@octokit/core` plugin are observable; GrantTrace does not intercept
   arbitrary network traffic.
 - Re-recording a scenario replaces its prior local evidence. It does not
   combine multiple historical executions or measure test coverage.
@@ -57,8 +52,7 @@ part of the result, not footnotes.
   nondominated frontier, not proof that every alternative is worse.
 - Manual keeps are global to the accepted contract and therefore requested in
   every scenario proof. They are explicitly retained access, never observed
-  or proven necessity. Retiring the final scenario preserves validated keeps
-  until they are explicitly removed.
+  or proven necessity.
 
 ## Live proof
 
@@ -66,10 +60,6 @@ part of the result, not footnotes.
   GitHub's availability, and a correctly configured disposable fixture.
 - Proof is scenario-scoped. It reproduces the accepted route/evidence slice
   for one scenario and does not execute every scenario automatically.
-- Before loading credentials, proof requires exact tool/API/catalog identity
-  and rebinds every accepted route DNF to the current pinned catalog.
-- Production proof has no broad-token discovery path. It mints only restricted
-  positive and applicable negative-control tokens after validation succeeds.
 - GitHub adds mandatory `metadata:read` to repository installation tokens.
   GrantTrace reports it separately and requires effective permissions to
   equal scenario-selected permissions plus all manual keeps plus that
@@ -101,10 +91,6 @@ part of the result, not footnotes.
   must use an environment secret or an absolute private-key file.
 - Private-key file validation requires an owned, nonsymlink parent directory
   with exact mode `0700` and an owned regular file with exact mode `0600`.
-- On Unix-like systems, managed children run in their own process group so
-  timeout and interrupt escalation reaches descendants. On Windows, GrantTrace
-  terminates the direct child but cannot promise equivalent process-tree
-  termination for arbitrary descendants.
 - The package and CI checks reduce accidental leakage and supply-chain risk;
   they cannot eliminate compromise of Node, pnpm, GitHub Actions, dependencies,
   or the operator's machine.

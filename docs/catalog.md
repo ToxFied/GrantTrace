@@ -1,7 +1,4 @@
----
-title: REST coverage
-description: See the 49 pinned GitHub REST routes GrantTrace can resolve.
----
+# REST catalog coverage
 
 GrantTrace ships a curated offline catalog of **49** GitHub REST route
 templates for API version `2026-03-10`, reviewed against official GitHub
