@@ -1,4 +1,11 @@
-# GrantTrace
+<p align="center">
+  <img src="./granttrace-mark.svg" width="88" height="88" alt="GrantTrace">
+</p>
+
+<h1 align="center">GrantTrace</h1>
+
+[Documentation](https://toxfied.github.io/GrantTrace/docs/) ·
+[Repository](https://github.com/ToxFied/GrantTrace)
 
 GrantTrace makes GitHub App REST permission changes reproducible and
 reviewable. It is for teams that exercise their GitHub App through repeatable

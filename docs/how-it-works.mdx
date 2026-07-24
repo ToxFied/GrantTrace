@@ -1,0 +1,92 @@
+---
+title: How GrantTrace works
+description: Understand scenario coverage, evidence sources, and deterministic solving.
+---
+
+## The claim
+
+GrantTrace answers a narrow question:
+
+> Which GitHub App REST permissions do these named, instrumented scenarios
+> demonstrably require?
+
+That boundary matters. GrantTrace does not infer unexecuted paths, intercept
+arbitrary HTTP traffic, inspect GraphQL, or prove that production behavior is
+fully covered.
+
+## Scenarios make coverage explicit
+
+Each recording has a stable, lowercase scenario name such as `issue-triage`.
+Routes in the contract retain the names of the scenarios that exercised them.
+This lets a reviewer tell the difference between a permission change and a
+coverage change.
+
+Local recordings are kept under `.granttrace/observations/`. They are input to
+`check`, not an append-only history. Recording the same name replaces its
+previous successful observation set.
+
+## Two evidence sources
+
+For every recognized canonical route, GrantTrace can use:
+
+1. GitHub's runtime `X-Accepted-GitHub-Permissions` response header.
+2. A pinned offline catalog reviewed against official GitHub documentation for
+   API version `2026-03-10`.
+
+When both sources exist, they must agree after canonicalization. Agreement
+keeps both provenance labels. Disagreement, malformed runtime evidence, an
+unknown route, or an unsupported API blocks the contract.
+
+A missing runtime header may fall back only to a known catalog entry. Missing
+evidence never means “no permission required.”
+
+## Permission alternatives stay exact
+
+GitHub expresses requirements as disjunctive normal form:
+
+```text
+issues=write; pull_requests=write
+```
+
+The semicolon means OR. A comma means AND:
+
+```text
+contents=read, pull_requests=read
+```
+
+Within a permission, `write` satisfies `read`. Different permission names are
+not interchangeable.
+
+GrantTrace retains every nondominated sufficient assignment in
+`permissionFrontier`. It selects one deterministic assignment by preferring:
+
+1. fewer write permissions;
+2. lower total access weight;
+3. fewer distinct permissions; and
+4. lexical order.
+
+This is a stable review policy, not a universal definition of optimal access.
+
+## What gets committed
+
+`granttrace.lock.json` contains:
+
+- tool, API, schema, and catalog identity;
+- scenario names and canonical route templates;
+- canonical permission requirements and evidence provenance;
+- route-to-scenario attribution;
+- selected permissions and the full nondominated frontier;
+- separately reasoned manual keeps; and
+- safe blocking findings.
+
+The mandatory `metadata:read` baseline participates in solving and live-token
+validation but is not presented as observed selected access.
+
+## What stays local
+
+GrantTrace does not intentionally store raw URLs, query strings, request or
+response bodies, commands, tokens, private keys, owners, repositories, or
+resource identifiers in observations, contracts, or proof reports.
+
+See the [protocol](protocol.md) for the normative model and
+[security and privacy](security.mdx) for the trust boundary.

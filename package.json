@@ -15,7 +15,7 @@
   "bugs": {
     "url": "https://github.com/ToxFied/GrantTrace/issues"
   },
-  "homepage": "https://github.com/ToxFied/GrantTrace#readme",
+  "homepage": "https://toxfied.github.io/GrantTrace/",
   "keywords": [
     "github-app",
     "permissions",
@@ -45,12 +45,16 @@
   },
   "files": [
     "dist",
+    "granttrace-mark.svg",
     "LICENSE",
     "README.md"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json && node scripts/prepare-dist.mjs",
     "clean:dist": "node scripts/clean-dist.mjs",
+    "docs:build": "pnpm --dir website build",
+    "docs:dev": "pnpm --dir website dev",
+    "docs:typecheck": "pnpm --dir website typecheck",
     "granttrace": "tsx src/cli/bin.ts",
     "catalog:review": "node scripts/review-catalog.mjs",
     "ci:validate": "node scripts/validate-ci.mjs",
