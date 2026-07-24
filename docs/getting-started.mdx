@@ -1,0 +1,122 @@
+---
+title: Quickstart
+description: Create, review, and commit your first permission contract.
+---
+
+## Requirements
+
+- Node.js 22 or newer
+- A repeatable integration scenario
+
+<Steps>
+
+<Step>
+
+### Install and initialize
+
+After the public beta is published:
+
+```bash title="Terminal"
+pnpm add --save-dev granttrace@beta
+pnpm exec granttrace init
+pnpm exec granttrace doctor
+```
+
+`init` creates private `.granttrace/` state and adds it to `.gitignore`.
+`doctor` checks the local state and accepted contract without printing
+credentials or fixture identities. `FAIL` blocks local execution, `WARN`
+describes an attempted but incomplete optional live setup, and `INFO` means
+optional live proof is absent. Stale sessions are a `FAIL`; inspect them and any
+possible mutation residue before removing them.
+
+<Callout title="Working from this repository">
+  Before publication, use a checkout and substitute `pnpm granttrace` for
+  `pnpm exec granttrace`. You can also run `npm pack` and install the resulting
+  tarball in a consuming project.
+</Callout>
+
+</Step>
+
+<Step>
+
+### Instrument Octokit
+
+```ts title="octokit.ts"
+import { GrantTraceOctokit } from "granttrace/octokit";
+
+export const octokit = new GrantTraceOctokit({
+  auth: process.env.GITHUB_TOKEN,
+});
+```
+
+The pre-composed constructor is the supported default and needs no separate
+Octokit dependency in the consuming project. The plugin is inert outside
+`record` and `prove`. Every REST request you want covered must use the
+instrumented instance. See [Octokit setup](instrument-octokit.mdx) for
+integration guidance and the exact-version manual composition option.
+
+</Step>
+
+<Step>
+
+### Record a scenario
+
+```bash title="Terminal"
+pnpm exec granttrace record --scenario issue-triage -- \
+  pnpm test -- issue-triage
+```
+
+The command after `--` is passed as an argument array without a shell. Output
+streams to your terminal. Recording the same scenario name again atomically
+replaces its previous local observation file.
+
+</Step>
+
+<Step>
+
+### Review and accept
+
+```bash title="Terminal"
+pnpm exec granttrace check
+```
+
+A new or changed contract prints the permission, route, evidence, and
+attribution diff, then exits `6`. Nothing is accepted automatically.
+
+After reviewing the change:
+
+```bash
+pnpm exec granttrace check --accept
+pnpm exec granttrace check
+```
+
+Commit `granttrace.lock.json`. Keep `.granttrace/` local and ignored.
+
+</Step>
+
+</Steps>
+
+## Add more scenarios
+
+```bash
+pnpm exec granttrace record --scenario release-read -- \
+  pnpm test -- release-read
+pnpm exec granttrace scenario list
+pnpm exec granttrace check
+```
+
+`check` solves one aggregate contract while preserving which scenario
+exercised each route.
+
+Removing the final recording is also a reviewable contraction. After
+`check --accept`, the v2 contract has zero observed scenarios, routes, selected
+permissions, and unknowns. Validated manual keeps are retained until you remove
+them explicitly; zero observed coverage never turns a keep into proven
+necessity.
+
+## Next steps
+
+- [Share one instrumented Octokit path](instrument-octokit.mdx)
+- [Add the contract check to CI](ci.mdx)
+- [Retain intentional unobserved access](manual-keeps.mdx)
+- [Configure an optional live proof](live-proof.mdx)

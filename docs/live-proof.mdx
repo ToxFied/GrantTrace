@@ -1,0 +1,69 @@
+---
+title: Live proof
+description: Reproduce one accepted scenario with an exactly scoped installation token.
+---
+
+Live proof is optional. It mints a short-lived token for one disposable
+repository, verifies the token's effective scope, reruns one accepted scenario,
+and executes applicable negative controls.
+
+<Callout type="error" title="Never target production">
+  Use a dedicated disposable GitHub App, installation, repository, and issue.
+  GrantTrace's guards reduce accidents; they do not make production mutation
+  safe.
+</Callout>
+
+## What it verifies
+
+1. The exact tool, API, and catalog identity match, and every accepted route DNF
+   rebinds to the current pinned catalog before credentials are loaded.
+2. The accepted schema-v2 contract contains the named scenario.
+3. Requested permissions equal that scenario's selected permissions plus all
+   manual keeps.
+4. Effective permissions equal the request plus mandatory `metadata:read`.
+5. The token covers exactly one expected repository and has a fresh,
+   approximately one-hour expiry.
+6. The instrumented child reproduces the accepted scenario slice exactly.
+7. Applicable safe negative controls reject access as expected.
+8. Cleanup completes.
+
+Production proof has no broad-token discovery or feasibility path. It mints only
+the restricted positive token and applicable restricted negative-control
+tokens after contract/catalog validation succeeds.
+
+## Setup
+
+Follow the [live-proof setup](live-setup.md) to create the disposable
+installation and configure nonsecret selectors plus exactly one private-key
+provider.
+
+GrantTrace does not load `.env` files itself. Export or inject the documented
+variables through your shell, secret manager, or CI runner.
+
+## Run one scenario
+
+```bash title="Terminal"
+pnpm exec granttrace doctor
+pnpm exec granttrace prove --scenario issue-triage -- \
+  pnpm test -- issue-triage
+```
+
+Proof defaults to 15 minutes and accepts `--timeout` values from one second
+through 30 minutes using `ms`, `s`, or `m`. A terminal interrupt remains an
+interrupt even if the child handles the signal and exits zero; descendants are
+terminated after a bounded grace period where the platform supports process
+groups.
+
+After the accepted-contract preflight succeeds, proof execution writes an
+identity-free local report to `.granttrace/reports/<scenario>.json`. Do not
+commit or upload `.granttrace/`.
+
+## Understand failures
+
+Authentication, authorization, rate limiting, token expiry, hidden resources,
+GitHub outages, child-test failure, timeout, negative-control failure, and
+cleanup failure remain separate classifications. A generic nonzero child exit
+is never interpreted as evidence that a permission is missing.
+
+See [security and privacy](security.mdx) for the trust boundary and
+[limitations](limitations.md) for current negative-control coverage.

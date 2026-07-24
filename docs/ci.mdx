@@ -1,0 +1,63 @@
+---
+title: CI checks
+description: Block unreviewed permission and coverage drift in GitHub Actions.
+---
+
+CI should reproduce the same named scenarios and compare them with the
+committed `granttrace.lock.json`.
+
+## GitHub Actions example
+
+```yaml title=".github/workflows/granttrace.yml"
+name: GrantTrace
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  permission-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      - run: >-
+          pnpm exec granttrace record --scenario issue-triage --
+          pnpm test -- issue-triage
+      - run: >-
+          pnpm exec granttrace record --scenario release-read --
+          pnpm test -- release-read
+      - run: pnpm exec granttrace check
+```
+
+The example pins reviewed third-party actions to full commit SHAs. Re-review
+those revisions deliberately when upgrading them.
+
+## Never accept in CI
+
+Do not run `check --accept` in automation. Exit `6` is the intended signal that
+a human must review permission or coverage drift and commit the resulting
+lockfile deliberately.
+
+Exit `7` means the evidence is unknown, unsupported, malformed, or
+contradictory. Fix the scenario or contribute an official-docs-backed catalog
+change; do not guess a permission and force the pipeline green.
+
+## Keep live proof separate
+
+The deterministic record-and-check workflow can run without GitHub App broker
+credentials when your scenarios use controlled responses. Optional live proof
+belongs in a trusted, explicitly triggered workflow against a disposable
+fixture. Never expose fixture credentials to untrusted pull requests.
+
+See [CLI reference](cli-reference.mdx) for all exit codes.
