@@ -1,7 +1,4 @@
----
-title: Live proof setup
-description: Configure a disposable GitHub App and one-repository installation.
----
+# Safe disposable live setup
 
 Live proof is optional. Do not target a production App, a production
 repository, or an installation spanning real repositories.
@@ -140,17 +137,14 @@ granttrace doctor
 `doctor` checks:
 
 - Node 22 or newer;
-- private ignored local state and stale sessions;
+- private ignored local state;
 - whether `granttrace.lock.json` is valid schema v2 or needs migration; and
-- whether optional live configuration is complete and whether key providers
-  conflict.
+- whether exactly one private-key provider and all live fields form a valid
+  configuration.
 
 It does not mint a JWT or token, contact GitHub, or print provider values or
 fixture identities. “Optional live proof is not configured” is informational;
-local record/check workflows remain available. Incomplete or conflicting live
-providers are warnings because they do not block offline work; `prove` repeats
-strict validation and refuses to continue until every required live field is
-safe.
+local record/check workflows remain available.
 
 ## 6. Prove one accepted scenario
 
@@ -160,11 +154,6 @@ First make sure current recordings have an accepted schema-v2 contract:
 granttrace check
 granttrace prove --scenario <safe-name> -- <command> [args...]
 ```
-
-Before it loads credentials or mints a token, proof requires exact tool, API,
-and catalog identity and rebinds every accepted route DNF to the current pinned
-catalog. Production proof has no broad-token discovery path; it mints only the
-restricted positive and applicable negative-control tokens.
 
 The command must use the GrantTrace Octokit plugin and clean up every resource
 it intentionally creates. `examples/live-issue-comment/scenario.ts` shows the
@@ -200,8 +189,7 @@ effective-permission difference blocks.
 
 ## Results and cleanup
 
-Each proof execution after accepted-contract validation writes an
-identity-free report to:
+Each run writes an identity-free report to:
 
 ```text
 .granttrace/reports/<scenario>.json
