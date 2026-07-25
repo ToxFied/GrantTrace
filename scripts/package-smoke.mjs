@@ -272,7 +272,7 @@ function validateManifest(value) {
     value.private === true ||
     value.type !== "module" ||
     value.engines?.node !== ">=22" ||
-    value.bin?.granttrace !== "./dist/cli/bin.js" ||
+    value.bin?.granttrace !== "dist/cli/bin.js" ||
     value.exports?.["."]?.types !== "./dist/index.d.ts" ||
     value.exports?.["."]?.import !== "./dist/index.js" ||
     value.exports?.["./octokit"]?.types !== "./dist/octokit/index.d.ts" ||
