@@ -14,23 +14,6 @@ description: Create, review, and commit your first permission contract.
 
 ### Install
 
-Install GrantTrace `0.1.0-beta.1` from a package archive built from source.
-Run these commands from the project where you want to use GrantTrace:
-
-```bash title="Terminal"
-granttrace_checkout="$(mktemp -d)/GrantTrace"
-git clone https://github.com/ToxFied/GrantTrace.git "$granttrace_checkout"
-corepack enable
-pnpm --dir "$granttrace_checkout" install --frozen-lockfile
-npm --prefix "$granttrace_checkout" pack \
-  --pack-destination "$granttrace_checkout"
-pnpm add --save-dev \
-  "$granttrace_checkout/granttrace-0.1.0-beta.1.tgz"
-```
-
-This source-packaging step is temporary. Once the beta is published, installation
-becomes:
-
 ```bash title="Terminal"
 pnpm add --save-dev granttrace@beta
 ```

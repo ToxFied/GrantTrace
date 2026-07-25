@@ -14,15 +14,15 @@
 </p>
 
 <p align="center">
-  <code>Node.js 22+</code> <code>Beta candidate</code> <code>MIT</code>
+  <code>Node.js 22+</code> <code>Beta</code> <code>MIT</code>
 </p>
 
-GitHub Apps often accumulate broad permissions because the team cannot answer
-a simple review question: **which permissions does this behavior actually
-exercise?**
+**GitHub shows what your app can access. GrantTrace shows which tested
+behaviors justify that access—and flags permission drift in code review.**
 
-GrantTrace runs a named test scenario, observes its supported GitHub REST
-operations, and turns them into a deterministic permission contract:
+Run a named test scenario. GrantTrace observes its supported GitHub REST
+operations, maps them to their required permissions, and writes a deterministic
+contract:
 
 ```text
 scenario behavior → canonical REST routes → permission requirements
@@ -88,20 +88,7 @@ application code, test, scenario, expected output, and committed contract.
 - pnpm
 - a repeatable Node.js scenario that exercises GitHub REST behavior
 
-### Install the beta candidate from source
-
-GrantTrace is not published to npm yet. Build its package archive from source:
-
-```bash
-checkout="$(mktemp -d)/GrantTrace"
-git clone https://github.com/ToxFied/GrantTrace.git "$checkout"
-corepack enable
-pnpm --dir "$checkout" install --frozen-lockfile
-npm --prefix "$checkout" pack --pack-destination "$checkout"
-pnpm add --save-dev "$checkout/granttrace-0.1.0-beta.1.tgz"
-```
-
-After the first public package is published, the intended install will be:
+### Install
 
 ```bash
 pnpm add --save-dev granttrace@beta
