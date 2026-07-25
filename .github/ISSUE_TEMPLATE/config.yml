@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Private security report
+    url: https://github.com/ToxFied/GrantTrace/security/advisories/new
+    about: Report suspected vulnerabilities without exposing details publicly.
+  - name: Documentation
+    url: https://toxfied.github.io/GrantTrace/docs/
+    about: Check setup, concepts, limitations, and troubleshooting first.

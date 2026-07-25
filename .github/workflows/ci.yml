@@ -32,8 +32,20 @@ jobs:
       - name: Install exact dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Install exact documentation dependencies
+        run: pnpm --dir website install --frozen-lockfile
+
       - name: Verify types, tests, build, reproducibility, and CI policy
         run: pnpm verify
+
+      - name: Verify documentation types
+        run: pnpm docs:typecheck
+
+      - name: Export documentation
+        run: pnpm docs:build
+
+      - name: Validate exported documentation
+        run: pnpm docs:validate
 
       - name: Audit production dependencies
         run: pnpm audit --prod
@@ -46,6 +58,36 @@ jobs:
 
       - name: Check patch whitespace
         run: git diff --check
+
+  current-node:
+    name: Node 24 compatibility
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CI: "1"
+      NO_COLOR: "1"
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+
+      - name: Enable the pinned package manager
+        run: corepack enable
+
+      - name: Install exact dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify current-LTS compatibility
+        run: pnpm verify
+
+      - name: Test the installable package
+        run: pnpm package:smoke
 
   package-portability:
     name: Node 22 package portability

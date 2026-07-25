@@ -33,25 +33,6 @@ export function resolveRuntimeRoute(
   return resolveParsedRoute(methodInput, url, entries);
 }
 
-export function resolvePermissionBearingRoute(
-  methodInput: unknown,
-  urlInput: unknown,
-  entries: readonly Pick<CatalogEntry, "method" | "template">[] =
-    GITHUB_REST_CATALOG_ENTRIES,
-): RouteResolution | null {
-  const url = parseRequestUrl(urlInput);
-  if (
-    url === null ||
-    (url.protocol !== "https:" && url.protocol !== "http:")
-  ) {
-    return null;
-  }
-  if (url.pathname.startsWith("/api/v3/")) {
-    url.pathname = url.pathname.slice("/api/v3".length);
-  }
-  return resolveParsedRoute(methodInput, url, entries);
-}
-
 function resolveParsedRoute(
   methodInput: unknown,
   url: URL,

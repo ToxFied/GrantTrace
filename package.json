@@ -12,7 +12,10 @@
     ]
   },
   "license": "MIT",
-  "author": "Anestis",
+  "author": {
+    "name": "Anestis",
+    "url": "https://github.com/ToxFied"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/ToxFied/GrantTrace.git"
@@ -65,19 +68,23 @@
     "ci:validate": "node scripts/validate-ci.mjs",
     "contract:reproduce": "node scripts/reproduce-contract.mjs",
     "leakage:scan": "node scripts/leakage-scan.mjs",
+    "lint": "biome lint src test examples scripts vitest.config.ts",
     "package:smoke": "node scripts/package-smoke.mjs",
     "prepack": "pnpm clean:dist && pnpm build",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
     "typecheck": "tsc -p tsconfig.json",
-    "verify": "pnpm typecheck && pnpm test && pnpm build && pnpm contract:reproduce && pnpm ci:validate"
+    "verify": "pnpm typecheck && pnpm lint && pnpm test:coverage && pnpm build && pnpm contract:reproduce && pnpm ci:validate"
   },
   "dependencies": {
     "@octokit/core": "7.0.6",
     "zod": "4.4.3"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.5.5",
     "@types/node": "22.20.1",
+    "@vitest/coverage-v8": "4.1.10",
     "fast-check": "4.9.0",
     "tsx": "4.23.1",
     "typescript": "7.0.2",

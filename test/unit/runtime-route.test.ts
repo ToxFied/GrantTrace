@@ -1,10 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { CatalogEntry } from "../../src/evidence/catalog.js";
-import {
-  resolvePermissionBearingRoute,
-  resolveRuntimeRoute,
-} from "../../src/runtime/route.js";
+import { resolveRuntimeRoute } from "../../src/runtime/route.js";
 
 describe("runtime GitHub REST route resolution", () => {
   it("maps a concrete GitHub URL to its canonical pinned template", () => {
@@ -90,33 +87,6 @@ describe("runtime GitHub REST route resolution", () => {
       kind: "unresolved",
       method: "GET",
       reason: "unresolved_route",
-    });
-  });
-
-  it("can classify a permission-bearing custom GitHub API base", () => {
-    expect(
-      resolvePermissionBearingRoute(
-        "GET",
-        "https://github.enterprise.test/repos/owner/repo/issues",
-      ),
-    ).toEqual({
-      kind: "resolved",
-      route: {
-        method: "GET",
-        template: "/repos/{owner}/{repo}/issues",
-      },
-    });
-    expect(
-      resolvePermissionBearingRoute(
-        "GET",
-        "https://github.enterprise.test/api/v3/repos/owner/repo/issues",
-      ),
-    ).toEqual({
-      kind: "resolved",
-      route: {
-        method: "GET",
-        template: "/repos/{owner}/{repo}/issues",
-      },
     });
   });
 

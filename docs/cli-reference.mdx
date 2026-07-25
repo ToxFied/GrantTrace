@@ -5,18 +5,19 @@ description: Commands, options, scenario naming, timeouts, and exit codes.
 
 ## Commands
 
-| Command | Purpose |
-| --- | --- |
-| `granttrace init` | Explicitly create private ignored local state |
-| `granttrace doctor` | Diagnose local and optional live prerequisites safely |
+| Command                             | Purpose                                                   |
+| ----------------------------------- | --------------------------------------------------------- |
+| `granttrace init`                   | Explicitly create private ignored local state             |
+| `granttrace doctor`                 | Diagnose local and optional live prerequisites safely     |
+| `granttrace doctor --repair`        | Remove only a lock that is proven stale and safe          |
 | `granttrace record NAME -- COMMAND` | Auto-initialize, record one scenario, and review its diff |
-| `granttrace scenario list` | List local scenario recordings |
-| `granttrace scenario remove NAME` | Remove one local recording |
-| `granttrace check` | Compare all recordings with the accepted contract |
-| `granttrace check --accept` | Atomically accept the reviewed contract |
-| `granttrace keep add/remove/list` | Manage reasoned, unproven access |
-| `granttrace prove NAME -- COMMAND` | Prove one accepted scenario live |
-| `granttrace analyze OBSERVATIONS` | Inspect one lower-level NDJSON file |
+| `granttrace scenario list`          | List local scenario recordings                            |
+| `granttrace scenario remove NAME`   | Remove one local recording                                |
+| `granttrace check`                  | Compare all recordings with the accepted contract         |
+| `granttrace check --accept`         | Atomically accept the reviewed contract                   |
+| `granttrace keep add/remove/list`   | Manage reasoned, unproven access                          |
+| `granttrace prove NAME -- COMMAND`  | Prove one accepted scenario live                          |
+| `granttrace analyze OBSERVATIONS`   | Inspect one lower-level NDJSON file                       |
 
 Run `granttrace <command> --help` for its complete usage.
 
@@ -41,9 +42,11 @@ instead of being silently repaired.
 
 For the standard Node.js path, GrantTrace injects a preload that observes
 supported GitHub REST requests through global `fetch`, including requests from
-standard Octokit clients. Custom fetch implementations, transports, unusual
-runtimes, and subprocesses that discard the injected Node options need the
-[explicit fallback](/docs/instrument-octokit).
+standard Octokit clients. Automatic capture observes only the exact
+`https://api.github.com` origin and ignores off-origin responses even when they
+include a permission-like header. Custom fetch implementations, transports,
+unusual runtimes, and subprocesses that discard the injected Node options need
+the [explicit fallback](/docs/instrument-octokit).
 
 After a successful recording, `record` calculates and prints the aggregate
 contract diff. If the diff is safe and stdin and stdout are interactive TTYs,
@@ -97,18 +100,25 @@ incomplete or unsafe but does not block offline record/check work. `INFO` means
 optional live proof is not configured. Stale sessions are a `FAIL`: inspect the
 artifact and any possible mutation residue before removing it and retrying.
 
+`doctor --repair` is intentionally narrow. It removes an owned, private
+operation lock only when its recorded process no longer exists. It can also
+remove an otherwise empty lock after it has remained unchanged for at least one
+hour, covering a crash between directory creation and owner-record creation.
+Live processes, unverifiable process states, malformed owner records, young
+empty locks, symlinks, unsafe modes, and unexpected files are never removed.
+
 ## Exit codes
 
-| Exit | Meaning |
-| ---: | --- |
-| `0` | Success |
-| `2` | Invalid command usage |
-| `3` | No supported operation was observed |
-| `4` | Child test failed, timed out, or could not start |
-| `5` | Invalid or unsafe artifact, configuration failure, or analysis failure |
-| `6` | Contract review or schema migration required |
-| `7` | Unknown, unsupported, malformed, or contradictory evidence |
-| `8` | Live proof, negative-control, or cleanup failure |
-| `130` | Child interrupted by a terminal signal |
+|  Exit | Meaning                                                                |
+| ----: | ---------------------------------------------------------------------- |
+|   `0` | Success                                                                |
+|   `2` | Invalid command usage                                                  |
+|   `3` | No supported operation was observed                                    |
+|   `4` | Child test failed, timed out, or could not start                       |
+|   `5` | Invalid or unsafe artifact, configuration failure, or analysis failure |
+|   `6` | Contract review or schema migration required                           |
+|   `7` | Unknown, unsupported, malformed, or contradictory evidence             |
+|   `8` | Live proof, negative-control, or cleanup failure                       |
+| `130` | Child interrupted by a terminal signal                                 |
 
 The CLI emits stable plain text without ANSI color.

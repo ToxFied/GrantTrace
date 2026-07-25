@@ -57,11 +57,17 @@ export async function run(command, args, options = {}) {
         code === null ||
         !expectedExitCodes.includes(code)
       ) {
+        const capturedOutput = [
+          renderCapturedOutput("stdout", stdout),
+          renderCapturedOutput("stderr", stderr),
+        ]
+          .filter((value) => value.length > 0)
+          .join("\n");
         reject(
           new Error(
             `${command} failed with ${
               signal === null ? `exit code ${String(code)}` : "a signal"
-            }.`,
+            }.${capturedOutput.length === 0 ? "" : `\n${capturedOutput}`}`,
           ),
         );
         return;
@@ -73,6 +79,11 @@ export async function run(command, args, options = {}) {
       });
     });
   });
+}
+
+function renderCapturedOutput(label, chunks) {
+  const output = Buffer.concat(chunks).toString("utf8").trim();
+  return output.length === 0 ? "" : `${label}:\n${output}`;
 }
 
 export function portableEnvironment(overrides = {}) {

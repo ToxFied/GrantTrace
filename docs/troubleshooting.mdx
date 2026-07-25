@@ -8,6 +8,9 @@ description: Fix common GrantTrace failures from the message or exit code you ca
 - Confirm the command starts a Node.js process and actually makes at least one
   GitHub REST request before exiting.
 - Confirm the request uses Node's global `fetch` or a standard Octokit client.
+- Confirm the request targets exactly `https://api.github.com`. Automatic
+  capture deliberately ignores local stubs, proxy origins, and GitHub
+  Enterprise endpoints even when they return permission-like headers.
 - Check whether the client supplies custom `fetch`, replaces the transport,
   starts a worker or subprocess that discards the injected Node options, or
   runs outside Node.js.
@@ -34,9 +37,9 @@ contraction (`6`), not this error.
 ## `record` or `check` exits `6`
 
 This is the expected review state, not corrupted evidence. Inspect permission,
-route, evidence-provenance, and scenario-attribution changes. Run
-Accept at the interactive `record` prompt, or run `check --accept`, only after
-deciding the new contract is intentional.
+route, evidence-provenance, and scenario-attribution changes. Accept at the
+interactive `record` prompt, or run `check --accept`, only after deciding the
+new contract is intentional.
 
 Never put `--accept` in CI.
 
@@ -68,6 +71,20 @@ Doctor severity is intentional:
 
 Stale sessions are a `FAIL`. Inspect them and verify any possible live mutation
 residue before removing them and retrying.
+
+## `doctor` reports a stale operation lock
+
+First confirm that no GrantTrace command is still running. Then use the guarded
+repair:
+
+```bash
+pnpm exec granttrace doctor --repair
+```
+
+Repair succeeds only when the private owner record names a process that is
+proven gone. An otherwise empty lock must be at least one hour old. GrantTrace
+refuses to remove live, unverifiable, malformed, young, symlinked, or otherwise
+unsafe locks; inspect those cases manually instead of deleting state blindly.
 
 ## Live-proof configuration fails
 

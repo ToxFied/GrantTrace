@@ -13,8 +13,10 @@ GrantTrace answers a narrow question:
 That boundary matters. GrantTrace does not infer unexecuted paths, intercept
 arbitrary HTTP traffic, inspect GraphQL, or prove that production behavior is
 fully covered. Automatic recording observes supported Node.js global `fetch`
-calls, including standard Octokit traffic. Requests that bypass that path are
-outside the result unless they use GrantTrace's explicit adapter.
+calls to exactly `https://api.github.com`, including standard Octokit traffic.
+Off-origin requests are ignored even when a response imitates GitHub's
+permission header. Requests that bypass the global-fetch path are outside the
+result unless they use GrantTrace's explicit adapter.
 
 ## Scenarios make coverage explicit
 
@@ -35,7 +37,8 @@ noninteractive run never accepts and exits `6` when review is required.
 
 For every recognized canonical route, GrantTrace can use:
 
-1. GitHub's runtime `X-Accepted-GitHub-Permissions` response header.
+1. GitHub's runtime `X-Accepted-GitHub-Permissions` response header, accepted
+   by automatic capture only from `https://api.github.com`.
 2. A pinned offline catalog reviewed against official GitHub documentation for
    API version `2026-03-10`.
 
@@ -45,6 +48,10 @@ unknown route, or an unsupported API blocks the contract.
 
 A missing runtime header may fall back only to a known catalog entry. Missing
 evidence never means “no permission required.”
+
+Off-origin traffic does not create an automatic observation and cannot force a
+runtime/catalog contradiction. This origin boundary prevents a local or
+third-party server from manufacturing GitHub runtime evidence.
 
 ## Permission alternatives stay exact
 

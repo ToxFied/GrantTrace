@@ -2,6 +2,8 @@ import { createServer } from "node:http";
 
 import { Octokit } from "@octokit/core";
 
+import { grantTrace } from "../../../src/octokit/plugin.js";
+
 const server = createServer((request, response) => {
   request.resume();
   request.once("end", () => {
@@ -25,7 +27,8 @@ try {
     throw new Error("Stub server did not bind to a TCP port.");
   }
 
-  const octokit = new Octokit({
+  const TracedOctokit = Octokit.plugin(grantTrace);
+  const octokit = new TracedOctokit({
     auth: "ghs_AUTOMATIC_CHILD_CANARY",
     baseUrl: `http://127.0.0.1:${address.port}`,
   });

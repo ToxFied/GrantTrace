@@ -16,16 +16,16 @@ import { runCli } from "../../src/cli/main.js";
 const projectRoot = dirname(
   dirname(dirname(fileURLToPath(new URL(import.meta.url)))),
 );
-const automaticScenario = join(
+const explicitAdapterScenario = join(
   projectRoot,
   "test",
   "fixtures",
   "children",
-  "automatic.ts",
+  "explicit-adapter.ts",
 );
 const tsxImport = import.meta.resolve("tsx");
 
-describe("automatic record and review", () => {
+describe("record and review with the explicit Octokit adapter", () => {
   let workingDirectory: string | null = null;
 
   afterEach(async () => {
@@ -34,7 +34,7 @@ describe("automatic record and review", () => {
     }
   });
 
-  it("captures ordinary Octokit traffic and accepts after one explicit prompt", async () => {
+  it("captures Octokit traffic and accepts after one explicit prompt", async () => {
     workingDirectory = await mkdtemp(
       join(tmpdir(), "granttrace-automatic-review-"),
     );
@@ -71,7 +71,7 @@ describe("automatic record and review", () => {
         process.execPath,
         "--import",
         tsxImport,
-        automaticScenario,
+        explicitAdapterScenario,
       ],
       context,
     );
@@ -127,7 +127,7 @@ describe("automatic record and review", () => {
         process.execPath,
         "--import",
         tsxImport,
-        automaticScenario,
+        explicitAdapterScenario,
       ],
       context,
     );

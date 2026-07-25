@@ -3,6 +3,10 @@
 GrantTrace is a security-sensitive CLI. Prefer small, reviewable changes with
 explicit evidence over broad abstractions.
 
+Use the matching issue template for reproducible bugs, product proposals, or
+catalog routes. Suspected vulnerabilities belong in the private process in
+[SECURITY.md](SECURITY.md), never a public issue.
+
 ## Local setup
 
 Requirements: Node.js 22 and the pnpm version pinned in `package.json`.
@@ -25,6 +29,10 @@ git diff --check
 
 `pnpm verify` covers typechecking, tests, production build, deterministic
 contract reproduction, and CI-policy validation.
+
+Describe the user-visible outcome in the pull request, call out any trust-
+boundary change, and list the focused verification you ran. Update
+[CHANGELOG.md](CHANGELOG.md) when the change affects beta users.
 
 ## Design boundaries
 

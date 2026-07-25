@@ -13,7 +13,6 @@ import { isAutomaticCaptureSuppressed } from "../recorder/suppression.js";
 import { markRecorderLoaded } from "../recorder/state.js";
 import { GITHUB_API_VERSION } from "../version.js";
 import {
-  resolvePermissionBearingRoute,
   resolveRuntimeRoute,
   type RuntimeRouteResolution,
 } from "./route.js";
@@ -43,32 +42,7 @@ export function installFetchRecorder(
     const method = effectiveMethod(input, init);
     const resolution = resolveRuntimeRoute(method, input);
     if (resolution.kind === "ignored") {
-      const response = await originalFetch.call(this, input, init);
-      const permissionHeader = response.headers.get(
-        "x-accepted-github-permissions",
-      );
-      if (permissionHeader === null) {
-        return response;
-      }
-      const permissionBearingRoute = resolvePermissionBearingRoute(
-        method,
-        input,
-      );
-      if (
-        permissionBearingRoute === null ||
-        permissionBearingRoute.kind !== "resolved"
-      ) {
-        return response;
-      }
-      const observation = createRuntimeObservation(
-        config,
-        permissionBearingRoute,
-        response.status,
-        permissionHeader,
-      );
-      writeQueue = queueObservation(writeQueue, config, observation);
-      await writeQueue;
-      return response;
+      return originalFetch.call(this, input, init);
     }
 
     const pinnedInit =

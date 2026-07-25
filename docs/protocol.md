@@ -29,10 +29,11 @@ The protocol supports one claim:
 > scenarios, these are the permissions the scenarios demonstrably require.
 
 The claim is bounded by dynamic scenario coverage and the supported recorder
-paths. The injected Node preload observes global-`fetch` traffic, including
-standard Octokit requests. The explicit Octokit adapter covers compatible
-custom transports. The claim does not extend to unexecuted code, unsupported
-runtimes or endpoints, or traffic that bypasses both paths.
+paths. The injected Node preload observes global-`fetch` traffic targeting
+exactly `https://api.github.com`, including standard Octokit requests. The
+explicit Octokit adapter covers compatible custom transports. The claim does
+not extend to unexecuted code, unsupported runtimes or endpoints, or traffic
+that bypasses both paths.
 
 ## Accepted-permissions grammar
 
@@ -119,9 +120,11 @@ type Observation = {
 
 The recorder accepts route identity only when it can resolve method and path to
 exactly one canonical template in the pinned catalog. The injected fetch path
-matches the supported GitHub REST origin and path against that catalog without
-persisting the concrete URL. The explicit Octokit adapter can supply its
-pre-expansion relative canonical template. Unrelated origins are ignored.
+matches only the exact `https://api.github.com` origin and a supported path
+against that catalog without persisting the concrete URL. Off-origin responses
+are ignored even when they include `X-Accepted-GitHub-Permissions`; they cannot
+contribute automatic runtime evidence. The explicit Octokit adapter can supply
+its pre-expansion relative canonical template.
 GraphQL, unsupported API versions, ambiguous or unmatched GitHub paths, and
 unsafe candidates never undergo generic redaction: the candidate is discarded
 and a safe finding blocks.
@@ -173,6 +176,10 @@ For each canonical route:
 7. unknown routes and unsupported APIs remain blocking unknowns.
 
 No source silently wins a disagreement.
+
+The automatic runtime source is origin-bound: only a response to an exact
+`https://api.github.com` request is eligible. A known GitHub route with no
+runtime header remains eligible for the pinned-catalog fallback.
 
 Observations for the same route are merged deterministically. The route stores
 the sorted unique set of scenario names that exercised it. A contradiction in
@@ -269,8 +276,12 @@ Local observation files are bounded to 128 files, 10,000 observations, and
 10 MiB aggregate input. Files are loaded in ASCII filename order.
 
 An atomic `.granttrace/active-operation` lock prevents overlapping write
-operations from racing contract, observation, report, or session updates. A
-stale lock is a doctor failure that must be inspected before it is removed.
+operations from racing contract, observation, report, or session updates. The
+lock contains an owned `0600` owner record with a schema, process identifier,
+and creation time. `doctor --repair` removes it only when that process is proven
+gone. It may remove an empty lock only after a one-hour threshold, covering a
+crash before the owner record was written. Live or unverifiable processes,
+malformed records, unsafe modes, symlinks, and unknown contents fail closed.
 
 `scenario list` reads and validates every recording. `scenario remove NAME`
 removes only `.granttrace/observations/NAME.ndjson`; it does not edit the
@@ -379,6 +390,11 @@ variables are absent. The child receives only the restricted installation
 token, recorder/session values, focused fixture coordinates, and allowed
 system values. This is credential isolation, not an OS sandbox.
 
+The report records `sourceCommit = HEAD` only when Git reports a clean index
+and worktree. Dirty or unavailable provenance is serialized as
+`sourceCommit = null`; the last commit is never used as a label for modified
+source.
+
 The raw token response is conclusive only if it reports:
 
 ```text
@@ -396,10 +412,10 @@ difference block.
 
 The framework currently defines:
 
-| ID | Mode | Target | Removed permission |
-| --- | --- | --- | --- |
-| `issue-comments-read` | read-only | list issue comments | `issues` |
-| `issue-comment-create` | mutating | create an issue comment | `issues` |
+| ID                     | Mode      | Target                  | Removed permission |
+| ---------------------- | --------- | ----------------------- | ------------------ |
+| `issue-comments-read`  | read-only | list issue comments     | `issues`           |
+| `issue-comment-create` | mutating  | create an issue comment | `issues`           |
 
 A control is applicable only when:
 
@@ -473,14 +489,14 @@ rejection.
 
 ## CLI exit codes
 
-| Code | Meaning |
-| ---: | --- |
-| `0` | Success |
-| `2` | Invalid usage |
-| `3` | Missing instrumentation or observations |
-| `4` | Record-child test failure, timeout, or spawn failure |
-| `5` | Invalid artifact, analysis, or live configuration |
-| `6` | Contract review or migration required |
-| `7` | Unknown, unsupported, malformed, or contradictory evidence |
-| `8` | Proof, negative-control, or cleanup failure |
-| `130` | Child interrupted by a terminal signal |
+|  Code | Meaning                                                    |
+| ----: | ---------------------------------------------------------- |
+|   `0` | Success                                                    |
+|   `2` | Invalid usage                                              |
+|   `3` | Missing instrumentation or observations                    |
+|   `4` | Record-child test failure, timeout, or spawn failure       |
+|   `5` | Invalid artifact, analysis, or live configuration          |
+|   `6` | Contract review or migration required                      |
+|   `7` | Unknown, unsupported, malformed, or contradictory evidence |
+|   `8` | Proof, negative-control, or cleanup failure                |
+| `130` | Child interrupted by a terminal signal                     |

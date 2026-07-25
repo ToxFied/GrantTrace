@@ -1,4 +1,10 @@
-import { statSync } from "node:fs";
+import {
+  closeSync,
+  constants,
+  fstatSync,
+  lstatSync,
+  openSync,
+} from "node:fs";
 import { isAbsolute, join } from "node:path";
 
 import { z } from "zod";
@@ -63,16 +69,51 @@ function validateSessionDirectory(path: string): void {
     throw new Error("GrantTrace session directory must be absolute.");
   }
 
-  let stat;
+  let descriptor: number | null = null;
   try {
-    stat = statSync(path);
+    if (process.platform === "win32") {
+      const stat = lstatSync(path);
+      if (
+        !stat.isDirectory() ||
+        stat.isSymbolicLink() ||
+        !ownedByCurrentUser(stat) ||
+        !hasPrivateMode(stat)
+      ) {
+        throw new Error("Unsafe GrantTrace session directory.");
+      }
+      return;
+    }
+    descriptor = openSync(
+      path,
+      constants.O_RDONLY |
+        constants.O_DIRECTORY |
+        (constants.O_NOFOLLOW ?? 0),
+    );
+    const stat = fstatSync(descriptor);
+    if (
+      !stat.isDirectory() ||
+      !ownedByCurrentUser(stat) ||
+      !hasPrivateMode(stat)
+    ) {
+      throw new Error("Unsafe GrantTrace session directory.");
+    }
   } catch {
     throw new Error("GrantTrace session directory is unavailable.");
+  } finally {
+    if (descriptor !== null) {
+      closeSync(descriptor);
+    }
   }
+}
 
-  if (!stat.isDirectory() || (stat.mode & 0o077) !== 0) {
-    throw new Error(
-      "GrantTrace session directory must exist with mode 0700.",
-    );
-  }
+function ownedByCurrentUser(details: { uid: number }): boolean {
+  const uid = process.getuid?.();
+  return uid === undefined || details.uid === uid;
+}
+
+function hasPrivateMode(details: { mode: number }): boolean {
+  return (
+    process.platform === "win32" ||
+    (details.mode & 0o777) === 0o700
+  );
 }

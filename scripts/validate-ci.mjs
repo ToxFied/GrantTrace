@@ -10,7 +10,12 @@ const workflowEntries = await readdir(workflowDirectory, {
   withFileTypes: true,
 });
 const errors = [];
-const expectedWorkflows = ["ci.yml", "docs-pages.yml"];
+const expectedWorkflows = [
+  "ci.yml",
+  "docs-pages.yml",
+  "release.yml",
+  "security.yml",
+];
 const workflowNames = workflowEntries
   .filter((entry) => entry.isFile())
   .map((entry) => entry.name)
@@ -20,13 +25,23 @@ if (
   workflowNames.length !== expectedWorkflows.length ||
   workflowNames.some((name, index) => name !== expectedWorkflows[index])
 ) {
-  errors.push("GitHub Actions workflows must be exactly ci.yml and docs-pages.yml.");
+  errors.push(
+    "GitHub Actions workflows must be exactly ci.yml, docs-pages.yml, release.yml, and security.yml.",
+  );
 }
 
 const workflowPath = join(workflowDirectory, "ci.yml");
 const workflow = await readFile(workflowPath, "utf8");
 const docsWorkflow = await readFile(
   join(workflowDirectory, "docs-pages.yml"),
+  "utf8",
+);
+const releaseWorkflow = await readFile(
+  join(workflowDirectory, "release.yml"),
+  "utf8",
+);
+const securityWorkflow = await readFile(
+  join(workflowDirectory, "security.yml"),
   "utf8",
 );
 if (Buffer.byteLength(workflow, "utf8") > 256 * 1024) {
@@ -55,6 +70,8 @@ validateActions();
 validateRequiredCommands();
 validateForbiddenCapabilities();
 validateDocumentationWorkflow(docsWorkflow);
+validateReleaseWorkflow(releaseWorkflow);
+validateSecurityWorkflow(securityWorkflow);
 
 if (errors.length > 0) {
   console.error("CI validation failed:");
@@ -64,7 +81,7 @@ if (errors.length > 0) {
   process.exitCode = 1;
 } else {
     console.log(
-      "CI validation passed: package verification is offline; documentation deployment is pinned and least-privileged.",
+      "CI validation passed: verification, documentation, security analysis, and gated release workflows are pinned and least-privileged.",
     );
 }
 
@@ -110,17 +127,20 @@ function validateJobs() {
           .map((line) => /^  ([a-z][a-z0-9-]*):\s*$/u.exec(line)?.[1])
           .filter((value) => value !== undefined);
   if (
-    jobIds.length !== 2 ||
+    jobIds.length !== 3 ||
     jobIds[0] !== "verify" ||
-    jobIds[1] !== "package-portability"
+    jobIds[1] !== "current-node" ||
+    jobIds[2] !== "package-portability"
   ) {
-    errors.push("CI jobs must be exactly verify and package-portability.");
+    errors.push(
+      "CI jobs must be exactly verify, current-node, and package-portability.",
+    );
   }
   if (
     lines.filter((line) => /^\s+runs-on:\s*ubuntu-latest\s*$/u.test(line))
-      .length !== 1
+      .length !== 2
   ) {
-    errors.push("The full verification job must run once on Ubuntu.");
+    errors.push("The Node 22 and Node 24 verification jobs must run on Ubuntu.");
   }
 }
 
@@ -168,14 +188,14 @@ function validateActions() {
       errors.push(`Action ${action.split("@")[0]} is outside the CI allowlist.`);
     }
   }
-  if (uses.length !== 4) {
+  if (uses.length !== 6) {
     errors.push(
       "Each CI job must use only checkout and Node setup Actions.",
     );
   }
   for (const required of ["actions/checkout", "actions/setup-node"]) {
     if (
-      uses.filter((action) => action.startsWith(`${required}@`)).length !== 2
+      uses.filter((action) => action.startsWith(`${required}@`)).length !== 3
     ) {
       errors.push(`CI must use ${required} exactly once per job.`);
     }
@@ -196,8 +216,8 @@ function validateActions() {
     .filter(({ line }) => /^\s+uses:\s*actions\/setup-node@/u.test(line));
   for (const node of nodeLines) {
     const block = stepBlock(node.index).join("\n");
-    if (!/^\s+node-version:\s*["']?22["']?\s*$/mu.test(block)) {
-      errors.push("Every CI job must run on Node 22.");
+    if (!/^\s+node-version:\s*["']?(?:22|24)["']?\s*$/mu.test(block)) {
+      errors.push("Every CI job must run on Node 22 or Node 24.");
     }
     if (/^\s+cache\s*:/mu.test(block)) {
       errors.push("Dependency caching is intentionally disabled.");
@@ -207,11 +227,18 @@ function validateActions() {
 
 function validateRequiredCommands() {
   const required = new Map([
-    ["corepack enable", ["enable the pinned package manager", 2]],
-    ["pnpm install --frozen-lockfile", ["install the frozen lockfile", 2]],
-    ["pnpm verify", "run the full offline verification"],
+    ["corepack enable", ["enable the pinned package manager", 3]],
+    ["pnpm install --frozen-lockfile", ["install the frozen lockfile", 3]],
+    [
+      "pnpm --dir website install --frozen-lockfile",
+      "install the frozen documentation lockfile",
+    ],
+    ["pnpm verify", ["run the full offline verification", 2]],
+    ["pnpm docs:typecheck", "typecheck documentation before merge"],
+    ["pnpm docs:build", "build documentation before merge"],
+    ["pnpm docs:validate", "validate documentation before merge"],
     ["pnpm audit --prod", "audit production dependencies"],
-    ["pnpm package:smoke", ["smoke-test the tarball", 2]],
+    ["pnpm package:smoke", ["smoke-test the tarball", 3]],
     ["pnpm leakage:scan", "scan for leakage"],
     ["git diff --check", "check patch whitespace"],
   ]);
@@ -240,7 +267,7 @@ function validateRequiredCommands() {
   const timeouts = lines.filter((line) =>
     /^\s+timeout-minutes:\s*(?:[1-9]|[12]\d|30)\s*$/u.test(line),
   );
-  if (timeouts.length !== 2) {
+  if (timeouts.length !== 3) {
     errors.push("Every CI job needs a timeout of at most 30 minutes.");
   }
 }
@@ -331,6 +358,104 @@ function validateDocumentationWorkflow(content) {
   }
   if (actions.length !== allowedActions.length) {
     errors.push("Documentation deployment must use the five reviewed Actions.");
+  }
+}
+
+function validateReleaseWorkflow(content) {
+  const releaseActive = content
+    .split(/\r?\n/u)
+    .map((line) => line.replace(/\s+#.*$/u, ""))
+    .join("\n");
+  for (const [pattern, message] of [
+    [
+      /^\s{2}workflow_dispatch:\s*$/mu,
+      "Package publication must require manual workflow dispatch.",
+    ],
+    [
+      /^\s{2}contents:\s*read\s*$/mu,
+      "Package publication needs contents: read.",
+    ],
+    [
+      /^\s{2}id-token:\s*write\s*$/mu,
+      "Package publication needs id-token: write for provenance.",
+    ],
+    [
+      /^\s+environment:\s*\n\s+name:\s*npm\s*$/mu,
+      "Package publication must use the protected npm environment.",
+    ],
+    [
+      /^\s+run:\s*npm publish --provenance --access public --tag beta\s*$/mu,
+      "Package publication must use npm provenance and the beta tag.",
+    ],
+  ]) {
+    if (!pattern.test(releaseActive)) {
+      errors.push(message);
+    }
+  }
+  validatePinnedWorkflowActions(
+    content,
+    ["actions/checkout", "actions/setup-node"],
+    "Package publication",
+  );
+}
+
+function validateSecurityWorkflow(content) {
+  const securityActive = content
+    .split(/\r?\n/u)
+    .map((line) => line.replace(/\s+#.*$/u, ""))
+    .join("\n");
+  for (const [pattern, message] of [
+    [/^\s{2}push:\s*$/mu, "Security analysis must run for pushes."],
+    [
+      /^\s{2}pull_request:\s*$/mu,
+      "Security analysis must run for pull requests.",
+    ],
+    [
+      /^\s{2}schedule:\s*$/mu,
+      "Security analysis must run on a schedule.",
+    ],
+    [
+      /^\s+security-events:\s*write\s*$/mu,
+      "CodeQL needs security-events: write.",
+    ],
+  ]) {
+    if (!pattern.test(securityActive)) {
+      errors.push(message);
+    }
+  }
+  validatePinnedWorkflowActions(
+    content,
+    [
+      "actions/checkout",
+      "github/codeql-action/init",
+      "github/codeql-action/analyze",
+      "actions/checkout",
+      "actions/dependency-review-action",
+    ],
+    "Security analysis",
+  );
+}
+
+function validatePinnedWorkflowActions(content, expected, label) {
+  const actions = [
+    ...content.matchAll(/^\s+uses:\s*([^\s#]+)(?:\s+#.*)?$/gmu),
+  ].map((match) => match[1]);
+  if (actions.length !== expected.length) {
+    errors.push(`${label} must use exactly its reviewed Actions.`);
+    return;
+  }
+  for (const [index, action] of actions.entries()) {
+    const expectedName = expected[index];
+    if (
+      action === undefined ||
+      expectedName === undefined ||
+      !action.startsWith(`${expectedName}@`) ||
+      !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)?@[a-f0-9]{40}$/u.test(
+        action,
+      )
+    ) {
+      errors.push(`${label} contains an unpinned or unexpected Action.`);
+    }
   }
 }
 

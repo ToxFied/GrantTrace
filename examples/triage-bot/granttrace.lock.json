@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 2,
+  "toolVersion": "0.1.0-beta.1",
+  "apiVersion": "2026-03-10",
+  "catalog": {
+    "source": "github-docs",
+    "version": "2026-03-10.20260723.1",
+    "checksum": "sha256:bff9744ff9658e3f2e01d65441ab2415be25a1553855c786af5d6ec68a2f716d"
+  },
+  "scenarios": [
+    {
+      "name": "triage-comment"
+    }
+  ],
+  "routes": [
+    {
+      "method": "POST",
+      "template": "/repos/{owner}/{repo}/issues/{issue_number}/comments",
+      "alternatives": [
+        [
+          {
+            "permission": "issues",
+            "level": "write"
+          }
+        ],
+        [
+          {
+            "permission": "pull_requests",
+            "level": "write"
+          }
+        ]
+      ],
+      "evidence": ["pinned_catalog"],
+      "scenarioEvidence": {
+        "triage-comment": ["pinned_catalog"]
+      },
+      "scenarios": ["triage-comment"]
+    }
+  ],
+  "selectedPermissions": {
+    "issues": "write"
+  },
+  "permissionFrontier": [
+    {
+      "issues": "write"
+    },
+    {
+      "pull_requests": "write"
+    }
+  ],
+  "manualKeeps": {},
+  "unknowns": []
+}

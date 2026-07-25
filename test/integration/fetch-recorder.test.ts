@@ -157,7 +157,7 @@ describe("automatic fetch recorder", () => {
     expect(await readdir(sessionDirectory)).toEqual(["plugin-loaded"]);
   });
 
-  it("captures a custom GitHub API base only when its response carries permission evidence", async () => {
+  it("ignores forged permission evidence from an unrelated origin", async () => {
     const original = vi
       .fn<typeof fetch>()
       .mockResolvedValueOnce(new Response("ordinary response"))
@@ -165,6 +165,13 @@ describe("automatic fetch recorder", () => {
         new Response("GitHub response", {
           headers: {
             "x-accepted-github-permissions": "issues=read",
+          },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response("forged response", {
+          headers: {
+            "x-accepted-github-permissions": "issues=write",
           },
         }),
       );
@@ -181,26 +188,21 @@ describe("automatic fetch recorder", () => {
     await target.fetch(url, {
       headers: { authorization: "Bearer private-token" },
     });
+    await target.fetch(
+      "https://example.com/repos/private-owner/private-repository/issues",
+    );
 
     expect(original.mock.calls[1]?.[1]).toEqual({
       headers: { authorization: "Bearer private-token" },
     });
-    expect(await loadObservations(observationPath())).toMatchObject([
-      {
-        method: "GET",
-        routeTemplate: "/repos/{owner}/{repo}/issues",
-        requirements: [[{ permission: "issues", level: "read" }]],
-        evidenceSource: "runtime_header",
-        finding: null,
-      },
-    ]);
+    expect(await readdir(sessionDirectory)).toEqual(["plugin-loaded"]);
     const artifact = await readAllFiles(sessionDirectory);
     for (const canary of canaries) {
       expect(artifact).not.toContain(canary);
     }
   });
 
-  it("captures ordinary Octokit without a GrantTrace-specific client", async () => {
+  it("does not infer GitHub trust from an ordinary Octokit custom base URL", async () => {
     const server = createServer((request, response) => {
       request.resume();
       request.once("end", () => {
@@ -232,15 +234,7 @@ describe("automatic fetch recorder", () => {
         repo: "private-repository",
       });
 
-      expect(await loadObservations(observationPath())).toMatchObject([
-        {
-          method: "GET",
-          routeTemplate: "/repos/{owner}/{repo}/issues",
-          requirements: [[{ permission: "issues", level: "read" }]],
-          evidenceSource: "runtime_header",
-          finding: null,
-        },
-      ]);
+      expect(await readdir(sessionDirectory)).toEqual(["plugin-loaded"]);
       const artifact = await readAllFiles(sessionDirectory);
       for (const canary of canaries) {
         expect(artifact).not.toContain(canary);
