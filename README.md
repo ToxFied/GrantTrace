@@ -236,4 +236,4 @@ clean package consumers across Linux, macOS, and Windows.
 
 ## License
 
-[MIT](LICENSE) © 2026 Anestis
+[MIT](LICENSE)
