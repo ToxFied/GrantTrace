@@ -5,8 +5,10 @@ description: Use explicit instrumentation when GrantTrace's automatic Node prelo
 
 You normally do not need to change your code. `granttrace record` and
 `granttrace prove` inject a Node preload that observes supported GitHub REST
-requests made through global `fetch`. Standard Octokit clients use that
-transport and are covered automatically.
+requests made through global `fetch` to exactly `https://api.github.com`.
+Standard Octokit clients use that transport and are covered automatically.
+The automatic path ignores off-origin requests even when their response
+supplies a permission-like header.
 
 Automatic recording is deliberately bounded. It does not observe a client that:
 
@@ -92,4 +94,7 @@ GitHub App test setup, and treat the accepted contract as scenario-bound route
 evidence rather than an authentication audit.
 
 For a repository example, see
-[`examples/triage-bot/scenario.ts`](https://github.com/ToxFied/GrantTrace/blob/main/examples/triage-bot/scenario.ts).
+[`examples/triage-bot`](https://github.com/ToxFied/GrantTrace/tree/main/examples/triage-bot).
+It uses a local fixture and the explicit adapter to demonstrate a hermetic
+consumer workflow; the fixture omits runtime permission evidence, so the
+result is catalog-backed.

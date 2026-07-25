@@ -62,9 +62,11 @@ claim to named, recorded scenarios. Routes carry deterministic scenario
 attribution and per-scenario evidence provenance in schema v2. Proving one
 scenario slices and resolves only its attributed routes and exact provenance.
 Unknown and unobserved behavior never becomes an empty requirement. Automatic
-recording is limited to supported Node global-`fetch` traffic. A custom
-transport, different runtime, or child that drops the injected preload is
-outside the result unless it uses the explicit GrantTrace adapter.
+recording is limited to supported Node global-`fetch` traffic targeting exactly
+`https://api.github.com`. Off-origin responses cannot manufacture automatic
+runtime-header evidence. A custom transport, different runtime, or child that
+drops the injected preload is outside the result unless it uses the explicit
+GrantTrace adapter.
 
 ### Forged or malformed local artifacts
 

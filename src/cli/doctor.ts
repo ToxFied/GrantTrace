@@ -13,7 +13,9 @@ import { writeLine } from "./context.js";
 import { ExitCode, type ExitCodeValue } from "./exit-codes.js";
 import {
   inspectLocalState,
+  repairStaleOperationLock,
   stateIgnorePresent,
+  type OperationLockRepairResult,
 } from "../security/local-state.js";
 
 export async function runDoctor(
@@ -28,6 +30,9 @@ export async function runDoctor(
         "",
         "Usage",
         "  granttrace doctor",
+        "  granttrace doctor --repair",
+        "",
+        "--repair removes only a private operation lock whose owner process is proven gone.",
         "",
         "Diagnostics never print credential values or fixture identities.",
         "",
@@ -35,13 +40,37 @@ export async function runDoctor(
     );
     return ExitCode.success;
   }
-  if (args.length > 0) {
-    writeLine(context.stderr, "Usage: granttrace doctor");
+  const repair =
+    args.length === 1 && args[0] === "--repair";
+  if (args.length > 0 && !repair) {
+    writeLine(
+      context.stderr,
+      "Usage: granttrace doctor [--repair]",
+    );
     return ExitCode.usage;
   }
 
   const lines = ["GrantTrace doctor", ""];
   let blocking = false;
+  let repairResult: OperationLockRepairResult = { status: "absent" };
+  if (repair) {
+    repairResult = await repairStaleOperationLock(context.cwd);
+    if (repairResult.status === "removed") {
+      lines.push(
+        diagnostic(
+          "PASS",
+          repairResult.reason === "dead_pid"
+            ? "Removed a private operation lock whose owner process is gone"
+            : "Removed an expired empty operation lock",
+        ),
+      );
+    } else if (repairResult.status === "not_removed") {
+      lines.push(
+        diagnostic("FAIL", operationLockRepairMessage(repairResult.reason)),
+      );
+      blocking = true;
+    }
+  }
 
   const nodeMajor = Number.parseInt(process.versions.node.split(".")[0] ?? "", 10);
   const nodeReady = Number.isInteger(nodeMajor) && nodeMajor >= 22;
@@ -196,6 +225,26 @@ function providerFailureMessage(
       return "No private-key provider is configured";
     case "multiple_providers":
       return "Choose exactly one private-key provider";
+  }
+}
+
+function operationLockRepairMessage(
+  reason: Extract<
+    OperationLockRepairResult,
+    { status: "not_removed" }
+  >["reason"],
+): string {
+  switch (reason) {
+    case "empty_lock_too_young":
+      return "Empty operation lock is too recent to prove stale; it was not removed";
+    case "live_pid":
+      return "Operation lock owner is still running; it was not removed";
+    case "malformed_owner":
+      return "Operation lock owner record is malformed; it was not removed";
+    case "unsafe_lock":
+      return "Operation lock is unsafe or changed during inspection; it was not removed";
+    case "unverifiable_pid":
+      return "Operation lock owner cannot be verified as gone; it was not removed";
   }
 }
 

@@ -1,0 +1,39 @@
+name: Feature request
+description: Propose a focused improvement to GrantTrace's workflow or guarantees.
+title: "feature: "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What is difficult today, and who encounters it?
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired outcome
+      description: Describe the user-visible result rather than a preferred implementation.
+    validations:
+      required: true
+  - type: textarea
+    id: scenario
+    attributes:
+      label: Example workflow
+      description: Show where this fits between recording, review, CI, or live proof.
+    validations:
+      required: true
+  - type: textarea
+    id: boundary
+    attributes:
+      label: Security or claim-boundary impact
+      description: Could this broaden what GrantTrace observes, stores, or claims?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: What workaround exists today, and why is it insufficient?

@@ -10,8 +10,10 @@ compromised machine, or prove whole-application least privilege.
 ## Trust boundary
 
 - `record` runs trusted project code and inherits its ordinary environment.
-  Its injected preload observes supported global-`fetch` traffic; it is not a
-  network sandbox or a claim that every client was observed.
+  Its injected preload observes supported global-`fetch` traffic only to
+  exactly `https://api.github.com`. Off-origin responses cannot contribute
+  automatic runtime-header evidence. The recorder is not a network sandbox or
+  a claim that every client was observed.
 - `prove` gives the child a restricted installation token through an
   allowlisted environment and injects only GrantTrace's recorder preload. This
   is credential isolation, not an OS sandbox.
@@ -20,15 +22,20 @@ compromised machine, or prove whole-application least privilege.
 
 ## Stored data
 
-| Artifact | Commit? | Contents |
-| --- | --- | --- |
-| `granttrace.lock.json` | Yes | Canonical routes, evidence, scenarios, permissions, and manual keeps |
-| `.granttrace/observations/*.ndjson` | No | Safe per-scenario observations |
-| `.granttrace/reports/*.json` | No | Identity-free ephemeral proof results |
+| Artifact                            | Commit? | Contents                                                             |
+| ----------------------------------- | ------- | -------------------------------------------------------------------- |
+| `granttrace.lock.json`              | Yes     | Canonical routes, evidence, scenarios, permissions, and manual keeps |
+| `.granttrace/observations/*.ndjson` | No      | Safe per-scenario observations                                       |
+| `.granttrace/reports/*.json`        | No      | Identity-free ephemeral proof results                                |
 
 GrantTrace never intentionally stores raw URLs, request or response bodies,
 headers, errors, commands, tokens, private keys, owners, repositories, or
 resource identifiers in those artifacts.
+
+Proof reports include a source commit only when Git reports a clean index and
+worktree. Modified, staged, untracked, unavailable, or non-Git source is
+represented by `sourceCommit: null`; a report does not attribute dirty source
+to HEAD.
 
 ## Credential providers
 

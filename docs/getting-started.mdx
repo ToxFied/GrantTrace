@@ -36,8 +36,8 @@ pnpm add --save-dev granttrace@beta
 ```
 
 <Callout title="Developing GrantTrace">
-  When working on GrantTrace itself, substitute `pnpm granttrace` for
-  `pnpm exec granttrace`.
+  When working on GrantTrace itself, substitute `pnpm granttrace` for `pnpm exec
+  granttrace`.
 </Callout>
 
 </Step>
@@ -54,7 +54,9 @@ pnpm exec granttrace record issue-triage -- \
 No source edit or separate initialization is required for the standard Node.js
 path. GrantTrace injects a preload into the child process and observes supported
 GitHub REST calls through Node's global `fetch`. Standard Octokit clients use
-that path automatically.
+that path automatically. Automatic capture is restricted to requests targeting
+exactly `https://api.github.com`; off-origin responses are ignored even if they
+include a permission-like header.
 
 The command after `--` is passed as an argument array without a shell. Output
 streams to your terminal. Recording the same scenario name again atomically
@@ -111,6 +113,7 @@ necessity.
 
 ## Next steps
 
+- [Run the complete triage-bot example](https://github.com/ToxFied/GrantTrace/tree/main/examples/triage-bot)
 - [Handle custom transports and runtimes](/docs/instrument-octokit)
 - [Add the contract check to CI](/docs/ci)
 - [Retain intentional unobserved access](/docs/manual-keeps)

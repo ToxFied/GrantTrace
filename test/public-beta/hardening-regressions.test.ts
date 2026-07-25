@@ -1,6 +1,7 @@
 import {
   access,
   chmod,
+  link,
   mkdir,
   mkdtemp,
   readFile,
@@ -18,6 +19,7 @@ import { runCli } from "../../src/cli/main.js";
 import type { CliContext } from "../../src/cli/context.js";
 import { buildContract } from "../../src/contract/build.js";
 import {
+  appendObservation,
   loadObservations,
   ObservationFileError,
 } from "../../src/contract/observation-file.js";
@@ -36,7 +38,11 @@ import {
   ProofReportError,
   serializeProofReport,
 } from "../../src/proof/report.js";
-import { stateIgnorePresent } from "../../src/security/local-state.js";
+import {
+  inspectLocalState,
+  stateIgnorePresent,
+} from "../../src/security/local-state.js";
+import { createRecorderConfig } from "../../src/octokit/config.js";
 
 const temporaryDirectories: string[] = [];
 const issuesRoute = "/repos/{owner}/{repo}/issues";
@@ -179,6 +185,120 @@ describe("public-beta hardening regressions", () => {
       expect(await stateIgnorePresent(initialized)).toBe(false);
     },
   );
+
+  it.skipIf(process.platform === "win32")(
+    "rejects hard-linked local observations and reports",
+    async () => {
+      const project = await temporaryDirectory();
+      expect(
+        await runCli(["init"], captureContext(project).context),
+      ).toBe(0);
+
+      const outside = await temporaryDirectory();
+      const externalObservation = join(outside, "observation.ndjson");
+      const linkedObservation = join(
+        project,
+        ".granttrace",
+        "observations",
+        "linked.ndjson",
+      );
+      await writeFile(externalObservation, "outside\n", { mode: 0o644 });
+      await link(externalObservation, linkedObservation);
+
+      expect(
+        await runCli(["init"], captureContext(project).context),
+      ).toBe(5);
+      expect((await stat(externalObservation)).mode & 0o777).toBe(0o644);
+
+      await chmod(externalObservation, 0o600);
+      await expect(inspectLocalState(project)).resolves.toMatchObject({
+        ready: false,
+        issue: "unsafe_artifact",
+      });
+      await rm(linkedObservation);
+
+      const reports = join(project, ".granttrace", "reports");
+      await mkdir(reports, { mode: 0o700 });
+      const externalReport = join(outside, "report.json");
+      await writeFile(externalReport, "{}\n", { mode: 0o600 });
+      await link(externalReport, join(reports, "linked.json"));
+
+      await expect(inspectLocalState(project)).resolves.toMatchObject({
+        ready: false,
+        issue: "unsafe_artifact",
+      });
+    },
+  );
+
+  it.skipIf(process.platform === "win32")(
+    "rejects unsafe recorder directories and observation targets",
+    async () => {
+      const directory = await temporaryDirectory();
+      const linkedDirectory = join(await temporaryDirectory(), "session");
+      await symlink(directory, linkedDirectory);
+      expect(() =>
+        createRecorderConfig("safe-scenario", linkedDirectory),
+      ).toThrow();
+      await chmod(directory, 0o755);
+      expect(() =>
+        createRecorderConfig("safe-scenario", directory),
+      ).toThrow();
+      await chmod(directory, 0o700);
+
+      const observationPath = join(directory, "observations.ndjson");
+      const outside = join(await temporaryDirectory(), "outside.ndjson");
+      await writeFile(outside, "outside\n", { mode: 0o600 });
+      await symlink(outside, observationPath);
+      await expect(
+        appendObservation(observationPath, observation("safe-scenario")),
+      ).rejects.toThrow();
+      expect(await readFile(outside, "utf8")).toBe("outside\n");
+
+      await rm(observationPath);
+      await writeFile(observationPath, "", { mode: 0o644 });
+      await expect(
+        appendObservation(observationPath, observation("safe-scenario")),
+      ).rejects.toThrow(ObservationFileError);
+    },
+  );
+
+  it("refuses to append beyond the cumulative observation size limit", async () => {
+    const directory = await temporaryDirectory();
+    const observationPath = join(directory, "observations.ndjson");
+    const limit = 10 * 1024 * 1024;
+    await writeFile(observationPath, Buffer.alloc(limit), { mode: 0o600 });
+
+    await expect(
+      appendObservation(observationPath, observation("safe-scenario")),
+    ).rejects.toThrow(ObservationFileError);
+    expect((await stat(observationPath)).size).toBe(limit);
+  });
+
+  it("serializes concurrent appends before enforcing the cumulative limit", async () => {
+    const directory = await temporaryDirectory();
+    const observationPath = join(directory, "observations.ndjson");
+    const record = observation("safe-scenario");
+    const serializedBytes = Buffer.byteLength(
+      `${JSON.stringify(record)}\n`,
+      "utf8",
+    );
+    const limit = 10 * 1024 * 1024;
+    await writeFile(
+      observationPath,
+      Buffer.alloc(limit - serializedBytes),
+      { mode: 0o600 },
+    );
+
+    const results = await Promise.allSettled([
+      appendObservation(observationPath, record),
+      appendObservation(observationPath, record),
+    ]);
+    expect(results.map((result) => result.status).sort()).toEqual([
+      "fulfilled",
+      "rejected",
+    ]);
+    expect((await stat(observationPath)).size).toBe(limit);
+  });
 
   it("reports conflicting providers without echoing values", async () => {
     const directory = await temporaryDirectory();

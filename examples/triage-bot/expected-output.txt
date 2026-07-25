@@ -1,0 +1,25 @@
+GrantTrace contract review required
+
+New permission
+  issues: write
+
+Observed in
+  Route     POST /repos/{owner}/{repo}/issues/{issue_number}/comments
+  Scenarios triage-comment
+  Evidence  Pinned permission catalog
+
+Scenario added
+  triage-comment
+
+Route added
+  POST /repos/{owner}/{repo}/issues/{issue_number}/comments
+
+Next
+  Review the evidence, then run:
+  granttrace check --accept
+
+Mandatory GitHub baseline (not selected or manually kept)
+  metadata: read
+
+Coverage
+  This contract describes only GitHub REST operations observed in the selected scenarios.

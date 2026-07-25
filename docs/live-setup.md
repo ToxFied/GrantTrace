@@ -174,8 +174,10 @@ Live proof is Unix-like only because GrantTrace must be able to terminate and
 verify the managed child process group. Windows remains supported for package
 installation, recording, checking, analysis, and contract review.
 
-The standard Node global-`fetch` and Octokit path is instrumented automatically.
-Custom fetch implementations, transports, or runtimes need the
+The standard Node global-`fetch` and Octokit path to exactly
+`https://api.github.com` is instrumented automatically. Off-origin responses
+cannot supply automatic permission evidence. Custom fetch implementations,
+transports, or runtimes need the
 [explicit fallback](/docs/instrument-octokit). The command must clean up every
 resource it intentionally creates. `examples/live-issue-comment/scenario.ts`
 shows the reversible comment pattern.

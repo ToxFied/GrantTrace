@@ -15,7 +15,9 @@ part of the result, not footnotes.
 - A permission absent from the contract is not automatically safe to remove
   from an existing App installation.
 - Automatic recording and proof observe supported requests through Node's
-  global `fetch`, including standard Octokit clients. Custom fetch
+  global `fetch` only when they target exactly `https://api.github.com`,
+  including standard Octokit clients. Off-origin responses are ignored even
+  when they include a permission-like header. Custom fetch
   implementations, custom transports, workers or subprocesses that discard the
   injected Node options, non-Node runtimes, and unsupported GitHub Enterprise
   endpoints are outside automatic coverage. The explicit
@@ -92,6 +94,9 @@ part of the result, not footnotes.
 - The restricted proof environment isolates App broker credentials but is not
   an OS sandbox. The proof child receives a short-lived installation token and
   can use or print it.
+- `sourceCommit` in a proof report is HEAD only for a clean Git index and
+  worktree. Dirty, untracked, unavailable, and non-Git states produce `null`;
+  this field is provenance context, not a signed attestation.
 
 ## Privacy and operations
 

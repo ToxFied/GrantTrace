@@ -1,0 +1,70 @@
+name: Bug report
+description: Report reproducible incorrect or unexpected GrantTrace behavior.
+title: "bug: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve GrantTrace. Do not include tokens, private keys, repository identities, or details of an unpatched vulnerability. Report security issues through the private process in SECURITY.md.
+  - type: input
+    id: version
+    attributes:
+      label: GrantTrace version
+      description: Paste the beta version or commit hash you tested.
+      placeholder: 0.1.0-beta.1
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: Environment
+      description: Include OS, Node.js version, and package manager.
+      placeholder: macOS 15, Node.js 22.20.0, pnpm 10.28.2
+    validations:
+      required: true
+  - type: dropdown
+    id: command
+    attributes:
+      label: Affected workflow
+      options:
+        - record
+        - check
+        - keep
+        - prove
+        - doctor
+        - analyze
+        - package or library API
+        - documentation
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: What happened?
+      description: Describe the actual result and the result you expected.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Use synthetic identities and redact all credentials and concrete private URLs.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Safe supporting context
+      description: Add sanitized output, exit codes, or contract fragments. Do not attach .granttrace data from a real project.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Safety check
+      options:
+        - label: I removed credentials, private repository identities, and personal data.
+          required: true
+        - label: This is not an unpatched security vulnerability.
+          required: true

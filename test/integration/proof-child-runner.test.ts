@@ -61,8 +61,8 @@ describe("restricted proof child runner", () => {
     }
   });
 
-  it("automatically captures an ordinary Octokit scenario", async () => {
-    const result = await runFixture("automatic.ts");
+  it("captures a scenario through the explicit Octokit adapter", async () => {
+    const result = await runFixture("explicit-adapter.ts");
 
     expect(result.outcome).toBe("pass");
     expect(result.exitCode).toBe(0);

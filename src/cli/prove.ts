@@ -246,8 +246,26 @@ export async function runProve(
   }
 }
 
-async function readSourceCommit(cwd: string): Promise<string | null> {
+export async function readSourceCommit(cwd: string): Promise<string | null> {
   try {
+    const status = await execFileAsync(
+      "git",
+      [
+        "status",
+        "--porcelain=v1",
+        "--untracked-files=normal",
+        "--ignore-submodules=none",
+      ],
+      {
+        cwd,
+        encoding: "utf8",
+        maxBuffer: 1024 * 1024,
+      },
+    );
+    if (status.stdout.length !== 0) {
+      return null;
+    }
+
     const result = await execFileAsync(
       "git",
       ["rev-parse", "--verify", "HEAD"],

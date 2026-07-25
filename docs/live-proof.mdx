@@ -63,6 +63,11 @@ After the accepted-contract preflight succeeds, proof execution writes an
 identity-free local report to `.granttrace/reports/<scenario>.json`. Do not
 commit or upload `.granttrace/`.
 
+The report's `sourceCommit` is HEAD only when Git reports a clean index and
+worktree. It is `null` when tracked files, staged files, or untracked files are
+present, when the source is not in a Git checkout, or when Git is unavailable.
+This prevents modified code from being attributed to the last commit.
+
 ## Understand failures
 
 Authentication, authorization, rate limiting, token expiry, hidden resources,

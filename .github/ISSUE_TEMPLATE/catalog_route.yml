@@ -1,0 +1,45 @@
+name: REST catalog route
+description: Propose support for a GitHub REST route with authoritative evidence.
+title: "catalog: "
+labels:
+  - enhancement
+body:
+  - type: input
+    id: route
+    attributes:
+      label: Canonical method and route
+      placeholder: POST /repos/{owner}/{repo}/example
+    validations:
+      required: true
+  - type: input
+    id: docs
+    attributes:
+      label: Official GitHub documentation
+      description: Link to the route documentation for the pinned API version.
+      placeholder: https://docs.github.com/en/rest/...?apiVersion=2026-03-10#...
+    validations:
+      required: true
+  - type: textarea
+    id: requirement
+    attributes:
+      label: Exact permission requirement
+      description: Preserve AND/OR alternatives and explain any conditional permissions.
+      placeholder: issues=write OR pull_requests=write
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Reproduction evidence
+      description: Describe a synthetic or disposable scenario without sharing credentials or private identities.
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Evidence check
+      options:
+        - label: The requirement is unambiguous in official GitHub documentation.
+          required: true
+        - label: I did not rely on a flattened third-party permission list as the authority.
+          required: true

@@ -1,0 +1,45 @@
+name: Publish beta package
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    name: Verify and publish npm beta
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: npm
+      url: https://www.npmjs.com/package/granttrace
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+
+      - name: Enable the pinned package manager
+        run: corepack enable
+
+      - name: Install exact dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify the release candidate
+        run: pnpm verify
+
+      - name: Test the installable package
+        run: pnpm package:smoke
+
+      - name: Scan tracked files and package contents
+        run: pnpm leakage:scan
+
+      - name: Publish with registry provenance
+        run: npm publish --provenance --access public --tag beta
