@@ -157,7 +157,7 @@ describe("restricted proof child runner", () => {
         ),
         fixture,
         scenario: "triage-integration",
-        timeoutMs: 1_000,
+        timeoutMs: 5_000,
       });
 
       expect(result.outcome).toBe("timeout");
