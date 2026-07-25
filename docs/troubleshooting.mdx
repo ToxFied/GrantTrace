@@ -57,8 +57,8 @@ GitHub documentation.
 Run:
 
 ```bash
-pnpm exec granttrace init
-pnpm exec granttrace doctor
+npx granttrace init
+npx granttrace doctor
 ```
 
 Doctor severity is intentional:
@@ -78,7 +78,7 @@ First confirm that no GrantTrace command is still running. Then use the guarded
 repair:
 
 ```bash
-pnpm exec granttrace doctor --repair
+npx granttrace doctor --repair
 ```
 
 Repair succeeds only when the private owner record names a process that is
@@ -109,8 +109,8 @@ Stabilize the scenario or choose a timeout from one second through 60 minutes
 using `ms`, `s`, or `m`:
 
 ```bash
-pnpm exec granttrace record issue-triage --timeout 30m -- \
-  pnpm test -- issue-triage
+npx granttrace record issue-triage --timeout 30m -- \
+  npm test -- issue-triage
 ```
 
 An interrupt always discards partial record evidence, even when the child

@@ -1,7 +1,7 @@
 {
   "name": "granttrace",
   "version": "0.1.0-beta.1",
-  "description": "Scenario-bound GitHub App REST permission contracts",
+  "description": "Track which GitHub App permissions each tested behavior actually uses",
   "type": "module",
   "types": "./dist/index.d.ts",
   "sideEffects": false,
@@ -25,7 +25,10 @@
   },
   "homepage": "https://toxfied.github.io/GrantTrace/",
   "keywords": [
+    "github",
     "github-app",
+    "octokit",
+    "permission-audit",
     "permissions",
     "least-privilege",
     "security",

@@ -1,7 +1,7 @@
 <h1 align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset=".github/assets/granttrace-hero-dark.svg">
-    <img src=".github/assets/granttrace-hero-light.svg" width="760" alt="GrantTrace — Scenario-bound GitHub App REST permission contracts">
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/ToxFied/GrantTrace/main/.github/assets/granttrace-hero-dark.svg">
+    <img src="https://raw.githubusercontent.com/ToxFied/GrantTrace/main/.github/assets/granttrace-hero-light.svg" width="760" alt="GrantTrace — Scenario-bound GitHub App REST permission contracts">
   </picture>
 </h1>
 
@@ -14,13 +14,16 @@
 </p>
 
 <p align="center">
+  <a href="https://www.npmjs.com/package/granttrace"><img src="https://img.shields.io/npm/v/granttrace?label=npm" alt="npm version"></a>
   <code>Node.js 22+</code> <code>Beta</code> <code>MIT</code>
 </p>
 
-**GitHub shows what your app can access. GrantTrace shows which tested
-behaviors justify that access—and flags permission drift in code review.**
+**GrantTrace records which GitHub permissions each tested behavior actually
+uses, saves the evidence in your repository, and flags unexpected permission
+changes in code review.**
 
-Run a named test scenario. GrantTrace observes its supported GitHub REST
+GitHub shows what your app can access. Run a named test scenario and GrantTrace
+shows which behavior justifies that access. It observes supported GitHub REST
 operations, maps them to their required permissions, and writes a deterministic
 contract:
 
@@ -85,14 +88,19 @@ application code, test, scenario, expected output, and committed contract.
 ### Requirements
 
 - Node.js 22 or newer
-- pnpm
+- npm or pnpm
 - a repeatable Node.js scenario that exercises GitHub REST behavior
 
 ### Install
 
 ```bash
 pnpm add --save-dev granttrace@beta
+# or: npm install --save-dev granttrace@beta
 ```
+
+GrantTrace is now [available directly from npm](https://www.npmjs.com/package/granttrace).
+The commands below use pnpm; with npm, replace `pnpm exec granttrace` with
+`npx granttrace`.
 
 When working inside this repository, use `pnpm granttrace` instead of
 `pnpm exec granttrace`.

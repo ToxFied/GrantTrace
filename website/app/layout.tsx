@@ -21,7 +21,7 @@ export const metadata: Metadata = {
     template: "%s · GrantTrace",
   },
   description:
-    "Scenario-bound GitHub App REST permission contracts that stay reviewable in Git.",
+    "See which GitHub App permissions each tested behavior actually uses, with evidence that stays reviewable in Git.",
   icons: {
     icon: [
       {
@@ -33,7 +33,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "GrantTrace Docs",
     description:
-      "Scenario-bound GitHub App REST permission contracts that stay reviewable in Git.",
+      "See which GitHub App permissions each tested behavior actually uses, with evidence that stays reviewable in Git.",
     type: "website",
     siteName: "GrantTrace Docs",
   },
@@ -41,7 +41,7 @@ export const metadata: Metadata = {
     card: "summary",
     title: "GrantTrace Docs",
     description:
-      "Scenario-bound GitHub App REST permission contracts that stay reviewable in Git.",
+      "See which GitHub App permissions each tested behavior actually uses, with evidence that stays reviewable in Git.",
   },
 };
 

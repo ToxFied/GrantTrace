@@ -6,7 +6,7 @@ description: Create, review, and commit your first permission contract.
 ## Requirements
 
 - Node.js 22 or newer
-- A repeatable integration scenario
+- A Node.js project with a repeatable test or integration scenario
 
 <Steps>
 
@@ -15,12 +15,19 @@ description: Create, review, and commit your first permission contract.
 ### Install
 
 ```bash title="Terminal"
+npm install --save-dev granttrace@beta
+```
+
+If your project uses pnpm:
+
+```bash title="Terminal"
 pnpm add --save-dev granttrace@beta
 ```
 
-<Callout title="Developing GrantTrace">
-  When working on GrantTrace itself, substitute `pnpm granttrace` for `pnpm exec
-  granttrace`.
+<Callout title="One-time step">
+  GrantTrace is now published on npm. You install it directly from the registry;
+  you do not need to clone GrantTrace, download a package file, or copy its
+  source into your project.
 </Callout>
 
 </Step>
@@ -30,9 +37,15 @@ pnpm add --save-dev granttrace@beta
 ### Record a scenario
 
 ```bash title="Terminal"
-pnpm exec granttrace record issue-triage -- \
-  pnpm test -- issue-triage
+npx granttrace record issue-triage -- \
+  npm test -- issue-triage
 ```
+
+`issue-triage` is an example name. Replace the command after `--` with the
+existing command that exercises one real behavior of your GitHub App. GrantTrace
+runs that command and watches it; GrantTrace does not create the test for you.
+For pnpm projects, use `pnpm exec granttrace` and your normal pnpm test command
+instead.
 
 No source edit or separate initialization is required for the standard Node.js
 path. GrantTrace injects a preload into the child process and observes supported
@@ -80,9 +93,9 @@ install → record → review → commit
 ## Add more scenarios
 
 ```bash
-pnpm exec granttrace record release-read -- \
-  pnpm test -- release-read
-pnpm exec granttrace scenario list
+npx granttrace record release-read -- \
+  npm test -- release-read
+npx granttrace scenario list
 ```
 
 Each successful recording solves one aggregate contract while preserving which

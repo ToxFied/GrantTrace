@@ -10,7 +10,7 @@ explicit.
 ## Add a keep
 
 ```bash
-pnpm exec granttrace keep add contents:read \
+npx granttrace keep add contents:read \
   --reason "Required by a separately reviewed webhook recovery path"
 ```
 
@@ -21,8 +21,8 @@ responsible for excluding identities or sensitive context that a validator
 cannot recognize mechanically.
 
 ```bash
-pnpm exec granttrace keep list
-pnpm exec granttrace keep remove contents
+npx granttrace keep list
+npx granttrace keep remove contents
 ```
 
 `keep add` and `keep remove` intentionally update the accepted lockfile

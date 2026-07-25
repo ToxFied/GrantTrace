@@ -8,6 +8,10 @@ beta.
 
 ## [Unreleased]
 
+### Changed
+
+- Clarified the npm package summary and quickstart for both pnpm and npm users.
+
 ## [0.1.0-beta.1] - 2026-07-25
 
 This is the first public beta release.

@@ -54,7 +54,13 @@ decision.
 
 ## Add the check to CI
 
-After installing the published package, a consumer project can use:
+In a consumer project, install the published beta once:
+
+```bash
+pnpm add --save-dev granttrace@beta
+```
+
+Then record the scenario and verify its accepted contract in CI:
 
 ```bash
 pnpm exec granttrace record --no-review triage-comment -- \
