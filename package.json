@@ -39,7 +39,7 @@
     "tag": "beta"
   },
   "bin": {
-    "granttrace": "./dist/cli/bin.js"
+    "granttrace": "dist/cli/bin.js"
   },
   "exports": {
     ".": {
