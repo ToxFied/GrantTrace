@@ -8,6 +8,10 @@ beta.
 
 ## [Unreleased]
 
+## [0.1.0-beta.1] - 2026-07-25
+
+This is the first public beta release.
+
 ### Changed
 
 - Automatic capture accepts runtime permission-header evidence only from
@@ -21,14 +25,6 @@ beta.
 ### Added
 
 - A security reporting policy and GitHub contribution templates.
-
-## [0.1.0-beta.1] - 2026-07-24
-
-This is the current source-package version. It has not yet been published to
-npm or attached to a GitHub release.
-
-### Added
-
 - Scenario-bound recording for supported GitHub REST calls through Node global
   `fetch` and the explicit Octokit adapter.
 - Deterministic schema-v2 contracts with route-to-scenario attribution,
@@ -43,4 +39,4 @@ npm or attached to a GitHub release.
   deterministic-reproduction checks.
 
 [Unreleased]: https://github.com/ToxFied/GrantTrace/commits/main
-[0.1.0-beta.1]: https://github.com/ToxFied/GrantTrace/tree/6852a86
+[0.1.0-beta.1]: https://github.com/ToxFied/GrantTrace/releases/tag/v0.1.0-beta.1
