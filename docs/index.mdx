@@ -1,10 +1,11 @@
 ---
 title: Overview
-description: Scenario-bound GitHub App REST permission contracts.
+description: See which GitHub App permissions each tested behavior actually uses.
 ---
 
-GrantTrace turns the GitHub REST operations exercised by named test scenarios
-into a deterministic permission contract you can review in Git.
+GitHub shows what your app is allowed to access. GrantTrace records which
+permissions each tested behavior actually exercises, then saves that evidence
+in a reviewable `granttrace.lock.json` file.
 
 <Callout type="info" title="Guarantee boundary">
   GrantTrace reports the permissions those scenarios demonstrably require. It
@@ -13,10 +14,20 @@ into a deterministic permission contract you can review in Git.
   scenarios stay outside the result.
 </Callout>
 
+## Install the public beta
+
+```bash title="Terminal"
+npm install --save-dev granttrace@beta
+```
+
+GrantTrace is available on
+[npm](https://www.npmjs.com/package/granttrace). pnpm users can run
+`pnpm add --save-dev granttrace@beta` instead.
+
 ## Workflow
 
 ```text
-run a scenario through GrantTrace → review its permission diff
+install once → run a scenario through GrantTrace → review its permission diff
 → commit granttrace.lock.json → check it in CI → optionally prove live
 ```
 

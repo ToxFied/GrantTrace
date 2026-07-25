@@ -134,7 +134,7 @@ around setup.
 ## 5. Diagnose without using GitHub
 
 ```bash
-granttrace doctor
+npx granttrace doctor
 ```
 
 `doctor` checks:
@@ -161,8 +161,8 @@ stale session artifacts and any possible fixture residue before removing them.
 First make sure current recordings have an accepted schema-v2 contract:
 
 ```bash
-granttrace check
-granttrace prove <safe-name> -- <command> [args...]
+npx granttrace check
+npx granttrace prove <safe-name> -- <command> [args...]
 ```
 
 Before it loads credentials or mints a token, proof requires exact tool, API,

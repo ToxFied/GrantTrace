@@ -48,9 +48,9 @@ implementation, transport, or runtime needs the
 [explicit fallback](/docs/instrument-octokit).
 
 ```bash title="Terminal"
-pnpm exec granttrace doctor
-pnpm exec granttrace prove issue-triage -- \
-  pnpm test -- issue-triage
+npx granttrace doctor
+npx granttrace prove issue-triage -- \
+  npm test -- issue-triage
 ```
 
 Proof defaults to 15 minutes and accepts `--timeout` values from one second

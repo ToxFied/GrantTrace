@@ -1,6 +1,6 @@
 {
   "title": "GrantTrace",
-  "description": "Scenario-bound GitHub App permission contracts.",
+  "description": "See which GitHub App permissions each tested behavior actually uses.",
   "root": true,
   "pages": [
     "index",

@@ -28,19 +28,20 @@ jobs:
         with:
           node-version: 22
 
-      - run: corepack enable
-      - run: pnpm install --frozen-lockfile
+      - run: npm ci
       - run: >-
-          pnpm exec granttrace record --no-review issue-triage --
-          pnpm test -- issue-triage
+          npx granttrace record --no-review issue-triage --
+          npm test -- issue-triage
       - run: >-
-          pnpm exec granttrace record --no-review release-read --
-          pnpm test -- release-read
-      - run: pnpm exec granttrace check
+          npx granttrace record --no-review release-read --
+          npm test -- release-read
+      - run: npx granttrace check
 ```
 
 The example pins reviewed third-party actions to full commit SHAs. Re-review
-those revisions deliberately when upgrading them.
+those revisions deliberately when upgrading them. It uses npm for portability;
+keep your project's existing package manager and lockfile if you use pnpm or
+Yarn instead.
 
 ## Never accept in CI
 
