@@ -364,7 +364,7 @@ describe("record/check CLI workflow", () => {
         ],
         {
           cwd: workingDirectory,
-          env: process.env,
+          env: localTestEnvironment(),
           shell: false,
           stdio: ["ignore", "pipe", "pipe"],
         },
@@ -475,7 +475,7 @@ describe("record/check CLI workflow", () => {
         ["--import", tsxImport, cliPath, ...args],
         {
           cwd: workingDirectory,
-          env: process.env,
+          env: localTestEnvironment(),
           shell: false,
           stdio: ["ignore", "pipe", "pipe"],
         },
@@ -511,6 +511,15 @@ describe("record/check CLI workflow", () => {
     return contents.join("\n");
   }
 });
+
+function localTestEnvironment(): NodeJS.ProcessEnv {
+  const environment = { ...process.env };
+  delete environment["CI"];
+  delete environment["GITHUB_ACTIONS"];
+  delete environment["GITHUB_STEP_SUMMARY"];
+  delete environment["RUNNER_TEMP"];
+  return environment;
+}
 
 async function waitForSessionMarker(directory: string): Promise<void> {
   const sessions = join(directory, ".granttrace", "sessions");

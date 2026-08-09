@@ -21,6 +21,12 @@ import {
   renderCheckSuccess,
   renderContractDiff,
 } from "../reporting/terminal.js";
+import {
+  renderCheckMarkdown,
+  serializeCheckReport,
+  type CheckReportInput,
+} from "../reporting/check-output.js";
+import { appendGithubStepSummary } from "../reporting/github-summary.js";
 import type { Observation } from "../contract/observation.js";
 import { retainUnobservedManualKeeps } from "../contract/manual-keeps.js";
 import { preserveFrontierSelection } from "../contract/frontier.js";
@@ -34,8 +40,17 @@ import {
 
 type CheckOptions = {
   accept: boolean;
+  format: "json" | "markdown" | "text";
+  githubStepSummary: boolean;
   lockPath: string;
   observationsPath: string;
+};
+
+type CheckExecution = {
+  code: ExitCodeValue;
+  destination: "stdout" | "stderr";
+  report: CheckReportInput;
+  text: string;
 };
 
 const MAX_OBSERVATION_FILES = 128;
@@ -56,10 +71,14 @@ export async function runCheck(
         "Usage",
         "  granttrace check",
         "  granttrace check --accept",
+        "  granttrace check [--format <text|json|markdown>]",
+        "  granttrace check [--github-step-summary]",
         "  granttrace check [--observations <path>] [--lock <path>]",
         "",
         "Without --accept, every semantic change exits 6 for CI review.",
         "--accept writes the reviewed contract to granttrace.lock.json.",
+        "--accept is refused when CI is enabled.",
+        "--github-step-summary safely appends Markdown only when explicitly requested.",
         "",
       ].join("\n"),
     );
@@ -69,9 +88,22 @@ export async function runCheck(
   if (options === null) {
     writeLine(
       context.stderr,
-      "Usage: granttrace check [--accept] [--observations <path>] [--lock <path>]",
+      "Usage: granttrace check [--accept] [--format <text|json|markdown>] [--github-step-summary] [--observations <path>] [--lock <path>]",
     );
     return ExitCode.usage;
+  }
+
+  if (options.accept && isContinuousIntegration(context.environment)) {
+    return emitCheckExecution(options, context, {
+      code: ExitCode.usage,
+      destination: "stderr",
+      report: {
+        status: "acceptance_refused",
+        exitCode: ExitCode.usage,
+        reason: "ci_accept_forbidden",
+      },
+      text: renderCiAcceptRefused(),
+    });
   }
 
   let operationLock: LocalOperationLock | null = null;
@@ -79,8 +111,16 @@ export async function runCheck(
     try {
       operationLock = await acquireLocalOperationLock(context.cwd);
     } catch {
-      writeLine(context.stderr, renderOperationLocked("check --accept"));
-      return ExitCode.analysisFailure;
+      return emitCheckExecution(options, context, {
+        code: ExitCode.analysisFailure,
+        destination: "stderr",
+        report: {
+          status: "analysis_failed",
+          exitCode: ExitCode.analysisFailure,
+          reason: "operation_locked",
+        },
+        text: renderOperationLocked("check --accept"),
+      });
     }
   }
 
@@ -89,52 +129,72 @@ export async function runCheck(
     try {
       await operationLock.release();
     } catch {
-      writeLine(
-        context.stderr,
-        [
+      return emitCheckExecution(options, context, {
+        code: ExitCode.analysisFailure,
+        destination: "stderr",
+        report: {
+          status: "analysis_failed",
+          exitCode: ExitCode.analysisFailure,
+          reason: "operation_lock_cleanup_failed",
+        },
+        text: [
           "GrantTrace check cleanup failed",
           "",
           "The operation lock could not be removed. Inspect .granttrace/active-operation before retrying.",
           "",
         ].join("\n"),
-      );
-      return ExitCode.analysisFailure;
+      });
     }
   }
-  return result;
+  return emitCheckExecution(options, context, result);
 }
 
 async function executeCheck(
   options: CheckOptions,
   context: CliContext,
   presentation: "record" | "standalone",
-): Promise<ExitCodeValue> {
+): Promise<CheckExecution> {
   try {
     if (!(await pathExists(options.observationsPath))) {
-      writeLine(context.stderr, renderNoObservations());
-      return ExitCode.instrumentation;
+      return checkExecution(
+        ExitCode.instrumentation,
+        "no_observations",
+        renderNoObservations(),
+        "stderr",
+      );
     }
     const observations = await loadObservationSource(options.observationsPath);
     const lockExists = await pathExists(options.lockPath);
     if (observations.length === 0 && !lockExists) {
-      writeLine(context.stderr, renderNoObservations());
-      return ExitCode.instrumentation;
+      return checkExecution(
+        ExitCode.instrumentation,
+        "no_observations",
+        renderNoObservations(),
+        "stderr",
+      );
     }
 
     const next = buildContract(observations, githubPermissionCatalog);
     if (next.unknowns.length > 0) {
-      writeLine(
-        context.stderr,
+      return checkExecution(
+        ExitCode.evidenceBlocked,
+        "evidence_blocked",
         renderAnalysisReport(next, observations.length),
+        "stderr",
+        { contract: next },
       );
-      return ExitCode.evidenceBlocked;
     }
 
     if (!lockExists) {
       if (options.accept) {
         await writeContractAtomic(options.lockPath, next);
-        writeLine(context.stdout, renderAccepted(next));
-        return ExitCode.success;
+        return checkExecution(
+          ExitCode.success,
+          "accepted",
+          renderAccepted(next),
+          "stdout",
+          { contract: next },
+        );
       }
 
       const emptyPrevious = {
@@ -144,13 +204,16 @@ async function executeCheck(
         selectedPermissions: {},
         permissionFrontier: [{}],
       };
-      writeLine(
-        context.stderr,
-        renderContractDiff(diffContracts(emptyPrevious, next), next, {
+      const diff = diffContracts(emptyPrevious, next);
+      return checkExecution(
+        ExitCode.contractChanged,
+        "review_required",
+        renderContractDiff(diff, next, {
           nextAction: reviewNextAction(presentation, context),
         }),
+        "stderr",
+        { contract: next, diff },
       );
-      return ExitCode.contractChanged;
     }
 
     const loadedPrevious = await readContractWithMetadata(options.lockPath);
@@ -171,9 +234,16 @@ async function executeCheck(
       !loadedPrevious.migratedFromLegacyV2 &&
       serializeContract(previous) === serializeContract(nextWithManualKeeps)
     ) {
-      writeLine(context.stdout, renderCheckSuccess(nextWithManualKeeps));
-      return ExitCode.success;
+      return checkExecution(
+        ExitCode.success,
+        "passed",
+        renderCheckSuccess(nextWithManualKeeps),
+        "stdout",
+        { contract: nextWithManualKeeps },
+      );
     }
+
+    const diff = diffContracts(previous, nextWithManualKeeps);
 
     if (options.accept) {
       await writeContractAtomic(options.lockPath, nextWithManualKeeps);
@@ -181,31 +251,44 @@ async function executeCheck(
         (permission) =>
           nextWithManualKeeps.manualKeeps[permission] === undefined,
       );
-      writeLine(
-        context.stdout,
+      return checkExecution(
+        ExitCode.success,
+        "accepted",
         renderAccepted(nextWithManualKeeps, { removedKeeps }),
+        "stdout",
+        {
+          contract: nextWithManualKeeps,
+          diff,
+          migratedFromV1: loadedPrevious.migratedFromV1,
+          migratedFromLegacyV2: loadedPrevious.migratedFromLegacyV2,
+        },
       );
-      return ExitCode.success;
     }
 
-    const diff = diffContracts(previous, nextWithManualKeeps);
-
-    writeLine(
-      context.stderr,
+    return checkExecution(
+      ExitCode.contractChanged,
+      "review_required",
       renderContractDiff(diff, nextWithManualKeeps, {
         migratedFromV1: loadedPrevious.migratedFromV1,
         migratedFromLegacyV2: loadedPrevious.migratedFromLegacyV2,
         nextAction: reviewNextAction(presentation, context),
       }),
+      "stderr",
+      {
+        contract: nextWithManualKeeps,
+        diff,
+        migratedFromV1: loadedPrevious.migratedFromV1,
+        migratedFromLegacyV2: loadedPrevious.migratedFromLegacyV2,
+      },
     );
-    return ExitCode.contractChanged;
   } catch (error) {
     if (
       error instanceof ObservationFileError ||
       error instanceof ContractFileError
     ) {
-      writeLine(
-        context.stderr,
+      return checkExecution(
+        ExitCode.analysisFailure,
+        "analysis_failed",
         [
           "GrantTrace check blocked",
           "",
@@ -215,14 +298,17 @@ async function executeCheck(
           "  Repair or regenerate the affected file, then retry.",
           "",
         ].join("\n"),
+        "stderr",
+        { reason: "invalid_artifact" },
       );
-      return ExitCode.analysisFailure;
     }
-    writeLine(
-      context.stderr,
+    return checkExecution(
+      ExitCode.analysisFailure,
+      "analysis_failed",
       "GrantTrace check failed: the observations or accepted contract are invalid.",
+      "stderr",
+      { reason: "invalid_artifact" },
     );
-    return ExitCode.analysisFailure;
   }
 }
 
@@ -253,6 +339,9 @@ function parseCheckArguments(
   cwd: string,
 ): CheckOptions | null {
   let accept = false;
+  let format: CheckOptions["format"] = "text";
+  let formatSet = false;
+  let githubStepSummary = false;
   let lockPath = join(cwd, "granttrace.lock.json");
   let observationsPath = join(cwd, ".granttrace", "observations");
 
@@ -260,6 +349,20 @@ function parseCheckArguments(
     const argument = args[index];
     if (argument === "--accept" && !accept) {
       accept = true;
+      continue;
+    }
+    if (argument === "--github-step-summary" && !githubStepSummary) {
+      githubStepSummary = true;
+      continue;
+    }
+    if (argument === "--format" && !formatSet) {
+      const value = args[index + 1];
+      if (value !== "text" && value !== "json" && value !== "markdown") {
+        return null;
+      }
+      format = value;
+      formatSet = true;
+      index += 1;
       continue;
     }
     if (argument === "--lock" || argument === "--observations") {
@@ -278,7 +381,95 @@ function parseCheckArguments(
     return null;
   }
 
-  return { accept, lockPath, observationsPath };
+  return {
+    accept,
+    format,
+    githubStepSummary,
+    lockPath,
+    observationsPath,
+  };
+}
+
+async function emitCheckExecution(
+  options: CheckOptions,
+  context: CliContext,
+  execution: CheckExecution,
+): Promise<ExitCodeValue> {
+  if (options.githubStepSummary) {
+    try {
+      await appendGithubStepSummary(
+        context.environment,
+        renderCheckMarkdown(execution.report),
+      );
+    } catch {
+      const summaryFailure = checkExecution(
+        ExitCode.analysisFailure,
+        "analysis_failed",
+        [
+          "GrantTrace check blocked",
+          "",
+          "The GitHub step summary file is unavailable or unsafe.",
+          "",
+        ].join("\n"),
+        "stderr",
+        { reason: "summary_unavailable" },
+      );
+      writeCheckExecution(options.format, context, summaryFailure);
+      return summaryFailure.code;
+    }
+  }
+
+  writeCheckExecution(options.format, context, execution);
+  return execution.code;
+}
+
+function writeCheckExecution(
+  format: CheckOptions["format"],
+  context: CliContext,
+  execution: CheckExecution,
+): void {
+  if (format === "json") {
+    writeLine(context.stdout, serializeCheckReport(execution.report));
+    return;
+  }
+  if (format === "markdown") {
+    writeLine(context.stdout, renderCheckMarkdown(execution.report));
+    return;
+  }
+  writeLine(context[execution.destination], execution.text);
+}
+
+function checkExecution(
+  code: ExitCodeValue,
+  status: CheckReportInput["status"],
+  text: string,
+  destination: CheckExecution["destination"],
+  report: Omit<CheckReportInput, "exitCode" | "status"> = {},
+): CheckExecution {
+  return {
+    code,
+    destination,
+    report: { status, exitCode: code, ...report },
+    text,
+  };
+}
+
+function isContinuousIntegration(environment: NodeJS.ProcessEnv): boolean {
+  if (environment["GITHUB_ACTIONS"] === "true") {
+    return true;
+  }
+  const value = environment["CI"]?.trim().toLowerCase();
+  return value !== undefined && value !== "" && value !== "0" && value !== "false";
+}
+
+function renderCiAcceptRefused(): string {
+  return [
+    "GrantTrace check refused",
+    "",
+    "Contract acceptance is disabled when CI is enabled.",
+    "Review and accept the contract in a trusted local checkout.",
+    "",
+  ].join("\n");
 }
 
 async function loadObservationSource(path: string) {

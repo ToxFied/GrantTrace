@@ -63,12 +63,41 @@ guaranteed.
 ## `check`
 
 ```text
-granttrace check [--accept] [--observations <path>] [--lock <path>]
+granttrace check [--accept] [--format <text|json|markdown>]
+                 [--github-step-summary]
+                 [--observations <path>] [--lock <path>]
 ```
 
 Without `--accept`, the command never changes the contract. The path flags are
 advanced overrides for inspecting a different observation directory or
 contract file.
+
+`--format text` is the default and preserves the human-readable terminal
+report. `--format json` emits a versioned JSON object, and `--format markdown`
+emits a PR-ready Markdown report. Structured reports are written to stdout for
+every completed check, including nonzero review and evidence outcomes. The
+process exit code remains authoritative and has the same meaning in every
+format.
+
+The JSON object has `schemaVersion: 1`, a stable `status`, `exitCode`, an
+enumerated `reason` or `null`, aggregate `summary` counts, observed permissions,
+manual keeps without their free-form reasons, the mandatory baseline, a
+categorized `changes` object, safe findings, and migration identifiers. Arrays
+use the deterministic contract and diff ordering. JSON and Markdown deliberately
+omit scenario names, repository and resource identities, raw URLs, commands,
+credentials, manual reasons, paths, and raw error messages.
+
+`--github-step-summary` explicitly opts in to appending the same safe Markdown
+report to the file named by `GITHUB_STEP_SUMMARY`. It works only when
+`GITHUB_ACTIONS=true` and the runner-provided path resolves inside
+`RUNNER_TEMP` to an existing, bounded, same-owner regular file with no symlink
+or hard-link ambiguity. GrantTrace does not create, truncate, or follow links
+for this file. Terminal output still uses the selected `--format`; the summary
+is an additional destination. A missing or unsafe summary target is an analysis
+failure and exits `5` without following or modifying that target.
+
+Contract acceptance is refused when `CI` is enabled or
+`GITHUB_ACTIONS=true`. Review and accept changes from a trusted local checkout.
 
 Removing a recording is only a local change. The next check presents the
 scenario, route, attribution, and permission contraction for review. Removing
@@ -142,4 +171,5 @@ empty locks, symlinks, unsafe modes, and unexpected files are never removed.
 |   `8` | Live proof, negative-control, or cleanup failure                       |
 | `130` | Child interrupted by a terminal signal                                 |
 
-The CLI emits stable plain text without ANSI color.
+The default CLI output is stable plain text without ANSI color. JSON and
+Markdown check output are also deterministic and contain no ANSI styling.

@@ -144,7 +144,10 @@ pnpm exec granttrace check
 ```
 
 Use `--no-review` only when a final aggregate `check` is guaranteed. Never put
-`--accept` in CI.
+`--accept` in CI; GrantTrace refuses it when `CI` is enabled. Use
+`--format json` for machine-readable results or `--format markdown` for PR-ready
+output. GitHub Actions summaries are appended only with the explicit
+`--github-step-summary` flag.
 
 ## How the contract is built
 

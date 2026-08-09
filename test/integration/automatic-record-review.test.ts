@@ -44,7 +44,7 @@ describe("record and review with the explicit Octokit adapter", () => {
     let question = "";
     const context: CliContext = {
       cwd: workingDirectory,
-      environment: process.env,
+      environment: localTestEnvironment(),
       stdout: {
         write(value) {
           stdout += String(value);
@@ -109,7 +109,7 @@ describe("record and review with the explicit Octokit adapter", () => {
     let stderr = "";
     const context: CliContext = {
       cwd: workingDirectory,
-      environment: process.env,
+      environment: localTestEnvironment(),
       stdout: { write: () => true },
       stderr: {
         write(value) {
@@ -151,3 +151,12 @@ describe("record and review with the explicit Octokit adapter", () => {
     ).toContain('"scenario":"issue-triage"');
   });
 });
+
+function localTestEnvironment(): NodeJS.ProcessEnv {
+  const environment = { ...process.env };
+  delete environment["CI"];
+  delete environment["GITHUB_ACTIONS"];
+  delete environment["GITHUB_STEP_SUMMARY"];
+  delete environment["RUNNER_TEMP"];
+  return environment;
+}

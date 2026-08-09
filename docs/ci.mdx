@@ -35,7 +35,7 @@ jobs:
       - run: >-
           npx granttrace record --no-review release-read --
           npm test -- release-read
-      - run: npx granttrace check
+      - run: npx granttrace check --github-step-summary
 ```
 
 The example pins reviewed third-party actions to full commit SHAs. Re-review
@@ -51,10 +51,16 @@ the committed contract. Use it only when a final `granttrace check` is
 guaranteed.
 
 Without `--no-review`, `record` detects the noninteractive environment, prints
-the diff, never prompts, and never accepts it. Do not run `check --accept` in
-automation. Exit `6` from the final check is the intended signal that a human
-must review permission or coverage drift locally and commit the resulting
-lockfile deliberately.
+the diff, never prompts, and never accepts it. `check --accept` is refused when
+`CI` is enabled or `GITHUB_ACTIONS=true`, before the contract or local operation
+state can be written. Exit `6` from the final check is the intended signal that
+a human must review permission or coverage drift locally and commit the
+resulting lockfile deliberately.
+
+`--github-step-summary` is explicit opt-in. It appends a safe Markdown report to
+the runner-provided `GITHUB_STEP_SUMMARY` file while preserving the normal text
+and exit code. For machine processing instead, use `--format json`; structured
+output always goes to stdout, including when the check exits `6` or `7`.
 
 This also applies when a previously selected permission-frontier candidate is
 no longer valid. CI reports the proposed deterministic fallback as a normal

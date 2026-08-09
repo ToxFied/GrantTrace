@@ -12,6 +12,8 @@ beta.
 
 - An explicit `frontier list/select` workflow for choosing and retaining any
   complete nondominated permission assignment in the committed contract.
+- Stable, versioned JSON and PR-ready Markdown output for `granttrace check`,
+  plus explicit safe append support for GitHub Actions step summaries.
 
 ### Changed
 
@@ -19,6 +21,7 @@ beta.
 - Live-proof reports and CLI output now state whether restricted scope was
   reproduced, necessity was partially tested, necessity was tested, or no
   strength was established.
+- Contract acceptance is refused when CI is enabled.
 
 ## [0.1.0-beta.1] - 2026-07-25
 
