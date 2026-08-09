@@ -16,7 +16,11 @@ import {
   npmInvocation,
   pnpmInvocation,
 } from "./lib/package-manager.mjs";
-import { portableEnvironment, run } from "./lib/process.mjs";
+import {
+  portableEnvironment,
+  portableTemporaryAcceptanceEnvironment,
+  run,
+} from "./lib/process.mjs";
 import { projectRoot, readPackageManifest } from "./lib/project.mjs";
 import { readTarGzip } from "./lib/tar.mjs";
 
@@ -215,7 +219,7 @@ try {
     ["check", "--accept"],
     {
       cwd: installDirectory,
-      environment,
+      environment: portableTemporaryAcceptanceEnvironment(environment),
     },
   );
   const checked = await runInstalledCli(

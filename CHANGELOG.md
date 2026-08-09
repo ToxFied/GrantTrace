@@ -34,6 +34,12 @@ beta.
   credentials;
   its bounded verifier binds every route call to a hashed pinned line range.
 
+### Fixed
+
+- Offline contract reproduction and package smoke tests now leave CI safety
+  enabled except for the single disposable child that intentionally accepts a
+  temporary contract.
+
 ## [0.1.0-beta.1] - 2026-07-25
 
 This is the first public beta release.

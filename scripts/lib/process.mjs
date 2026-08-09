@@ -107,3 +107,15 @@ export function portableEnvironment(overrides = {}) {
     Object.entries(environment).filter(([, value]) => value !== undefined),
   );
 }
+
+/**
+ * Use only when a disposable verification harness intentionally accepts a
+ * temporary contract. Every other child keeps the fail-closed CI environment.
+ */
+export function portableTemporaryAcceptanceEnvironment(environment) {
+  return {
+    ...(environment ?? portableEnvironment()),
+    CI: "0",
+    GITHUB_ACTIONS: "false",
+  };
+}

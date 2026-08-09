@@ -10,7 +10,10 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { portableEnvironment, run } from "./lib/process.mjs";
+import {
+  portableTemporaryAcceptanceEnvironment,
+  run,
+} from "./lib/process.mjs";
 import { projectRoot, readPackageManifest } from "./lib/project.mjs";
 
 await readPackageManifest();
@@ -74,7 +77,7 @@ async function reproduce(directory) {
     [cliPath, "check", "--accept"],
     {
       cwd: directory,
-      environment: portableEnvironment(),
+      environment: portableTemporaryAcceptanceEnvironment(),
     },
   );
 
