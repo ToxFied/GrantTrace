@@ -173,6 +173,10 @@ describe("proof orchestration", () => {
     expect(result.report.selectedPermissions).toEqual({
       pull_requests: "write",
     });
+    expect(result.report.proofStrength).toBe(
+      "restricted_scope_reproduced",
+    );
+    expect(() => serializeProofReport(result.report)).not.toThrow();
   });
 
   it("writes a safe configuration failure state before token minting", async () => {
