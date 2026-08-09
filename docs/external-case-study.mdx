@@ -5,15 +5,15 @@ description: A source-pinned, credential-free GrantTrace study of the open-sourc
 
 ## Result
 
-GrantTrace was evaluated against the real, independently maintained
-[All Contributors Bot](https://github.com/all-contributors/app/tree/00f6362ffcc927a2d05fec27f42c3d09e4b03adb),
+GrantTrace was evaluated offline against source from the independently
+maintained [All Contributors Bot](https://github.com/all-contributors/app/tree/00f6362ffcc927a2d05fec27f42c3d09e4b03adb),
 an MIT-licensed Probot GitHub App. The study pins upstream commit
 [`00f6362ffcc927a2d05fec27f42c3d09e4b03adb`](https://github.com/all-contributors/app/commit/00f6362ffcc927a2d05fec27f42c3d09e4b03adb)
 and verifies SHA-256 hashes for every inspected upstream file.
 
 The result is mixed in a useful way:
 
-- GrantTrace fully resolves the App's standalone comment-reply behavior and
+- GrantTrace resolves the pinned source's standalone comment-reply route and
   preserves GitHub's `issues: write` **or** `pull_requests: write` choice.
 - For a source-derived “new branch and pull request” path, three unique routes
   are covered and four are catalog gaps. GrantTrace blocks the full analysis
@@ -37,8 +37,8 @@ The candidate was selected before interpreting the permission result:
   [MIT license](https://github.com/all-contributors/app/blob/00f6362ffcc927a2d05fec27f42c3d09e4b03adb/LICENSE);
 - its
   [`issue_comment.created` handler](https://github.com/all-contributors/app/blob/00f6362ffcc927a2d05fec27f42c3d09e4b03adb/app.js#L11-L35)
-  leads to both a small independently testable reply and a multi-route pull
-  request workflow; and
+  leads to both a small independently reviewable reply route and a multi-route
+  pull request workflow; and
 - it exercises covered routes and genuine catalog gaps, making the study more
   informative than a fixture chosen only because every route already passes.
 
@@ -50,20 +50,21 @@ The case study deliberately separates three different claims.
 
 `case-studies/all-contributors-app/case-study.json` records the repository,
 commit, license, declared permissions, source-linked route inventory, and
-whole-file hashes. The network verifier downloads files from the immutable
-commit and checks those hashes:
+whole-file hashes for the route-defining and transitive source-flow files. The
+bounded network verifier downloads those files from the immutable commit and
+checks their hashes:
 
 ```bash
 node scripts/verify-external-case-study.mjs
 ```
 
 This establishes which source was inspected. It does not establish that the
-code path ran.
+code path ran, and no fixture line is a runtime observation of the App.
 
-### 2. Credential-free executable replay
+### 2. Credential-free fixture analysis
 
-Two strict NDJSON fixtures replay the canonical, source-derived route evidence
-through GrantTrace's real parser, evidence resolver, and permission solver:
+Two strict NDJSON fixtures feed the canonical, source-derived route set through
+GrantTrace's real parser, evidence resolver, and permission solver:
 
 ```bash
 pnpm granttrace analyze \
@@ -74,21 +75,26 @@ pnpm granttrace analyze \
   case-studies/all-contributors-app/new-branch-pr.observations.ndjson
 ```
 
-The fixtures intentionally use `status: null` and catalog-only resolution.
-They do not invent a GitHub response, token, repository, or successful live
-run. Offline integration assertions lock the expected frontier, covered route
-set, blocking findings, and source manifest:
+The fixtures intentionally use `status: null`, carry no runtime permission
+header, and rely on catalog-only resolution. They do not invent a GitHub
+response, token, repository, runtime observation, or successful live run.
+Offline integration assertions lock the expected frontier, covered route set,
+blocking findings, fixture-to-manifest counts, and source manifest:
 
 ```bash
 pnpm vitest run test/integration/external-case-study.test.ts
 ```
+
+Each fixture has one record per distinct route or catalog gap in its scenario.
+It tests GrantTrace's deduplicated contract behavior; it does not claim the App
+would make each call exactly once.
 
 ### 3. Live and maintainer evidence not obtained
 
 No upstream dependency installation, GitHub App registration, credentials,
 live repository mutation, or All Contributors test suite was used. No
 maintainer was contacted, and no feedback has been attributed to the project.
-The replay therefore says nothing about unobserved branches, production
+The study therefore says nothing about unobserved branches, production
 configuration, or whether the maintainers would adopt the workflow.
 
 ## Route inventory
@@ -110,8 +116,8 @@ open a pull request, and send the reply.
 The standalone reply scenario covers the last route again, so the manifest
 contains four covered route occurrences representing three unique routes.
 The four gaps collapse to three safe findings in the contract (`GET`, `POST`,
-and `PUT`) because GrantTrace does not retain the template for an unresolved
-runtime route. The source inventory retains only canonical parameterized
+and `PUT`) because GrantTrace does not retain the template in an unresolved
+observation. The source inventory retains only canonical parameterized
 templates so catalog work remains reviewable without storing concrete owners,
 repositories, usernames, refs, or paths.
 
@@ -121,7 +127,7 @@ The pinned App manifest declares
 [`contents: write`, `issues: write`, `metadata: read`, and
 `pull_requests: write`](https://github.com/all-contributors/app/blob/00f6362ffcc927a2d05fec27f42c3d09e4b03adb/app.yml#L63-L85).
 
-The standalone reply produces this frontier:
+The source-derived standalone reply fixture produces this complete frontier:
 
 ```text
 issues: write
@@ -137,22 +143,20 @@ contents: read
 pull_requests: write
 ```
 
-The comment did not add `issues: write`: the existing pull-request grant
-satisfies that route. This demonstrates why a permission frontier matters.
-However, the full scenario is blocked. In particular, the uncovered
-`PUT /contents/{path}` call is strong source evidence for `contents: write`,
-and the webhook handler can receive comments on issues as well as pull
-requests. It would be unsafe to turn the subset result into an App-level
-permission reduction.
+In that subset, the comment route did not add `issues: write`: the existing
+pull-request grant satisfies it. This demonstrates why a permission frontier
+matters. However, analysis of the full source-derived scenario is blocked. In
+particular, the uncovered `PUT /contents/{path}` call is strong source evidence
+for `contents: write`, and the webhook handler can receive comments on issues
+as well as pull requests. It would be unsafe to turn the subset result into an
+App-level permission reduction.
 
 ## Setup time
 
-The reproducible commands report only researcher-side verification and replay
-cost, not maintainer onboarding. A single observed run on 2026-08-09 used
-Darwin arm64 and Node.js v26.0.0. The pinned-source verification completed in
-2.08 seconds. That single wall-clock observation is an operational note, not a
-benchmark. The offline replay was not timed in the isolated study worktree
-because its dependencies were intentionally not installed.
+The reproducible commands cover only researcher-side source verification and
+fixture analysis, not maintainer onboarding. No stable timing is published:
+the verifier depends on network conditions, and the fixture analysis was not
+benchmarked on a controlled host.
 
 Time spent understanding and adapting the upstream source was not measured
 prospectively, so this study does not publish a made-up end-to-end setup time.
@@ -161,7 +165,7 @@ tries the integration.
 
 ## What should happen next
 
-The four source-backed gaps give catalog expansion a concrete adopter-shaped
+The four source-backed gaps give catalog expansion a concrete workflow-based
 order: contents writes and Git reference creation enable the core mutation
 path; the global user lookup needs a separate product decision because
 GrantTrace currently limits its claim to repository-scoped permissions.

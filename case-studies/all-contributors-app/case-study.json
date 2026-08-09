@@ -26,6 +26,10 @@
         "sha256": "74aa75b0e15cfb7d1e55a935bff3e5316dbc73f6fa4b532bc3fa16bb863936fe"
       },
       {
+        "path": "lib/get-config.js",
+        "sha256": "851fe50a0ee34b4b16b511f913f67b7270e66e0246548cc5b3d6b7de5accd43e"
+      },
+      {
         "path": "lib/get-user-details.js",
         "sha256": "e56088c1569dc9c89c77498b4c9c2ed55cce8c44220798efc86dbd3e68fe3124"
       },
@@ -34,12 +38,24 @@
         "sha256": "2d4cf54b876ef0ef38b993122bb740d47c43f08b103fcdacb8cb1f754d66ee07"
       },
       {
+        "path": "lib/modules/config.js",
+        "sha256": "ba07f0566620f891bb43f958131b15365d54dd39580a9ba5d8d34f1b1b5bc127"
+      },
+      {
+        "path": "lib/modules/content-files.js",
+        "sha256": "586a0cca9881b621ce95624957ab4954bbb8a6575a8a17cab72d72e94cf9b5da"
+      },
+      {
         "path": "lib/modules/repository.js",
         "sha256": "6587d4ea9c15defe5a102c6df139673cd812007b91f843986464e3e34e3487c9"
       },
       {
         "path": "lib/process-issue-comment.js",
         "sha256": "442d16d2753de242b5caa74c4022118df924670ef9fbfb1266386e906b7ab0b6"
+      },
+      {
+        "path": "lib/setup-repository.js",
+        "sha256": "225a48efab0b3a9b5e0a625ebf6115ca57cd852face156c77e8f5e63f04e1ea6"
       }
     ]
   },

@@ -67,7 +67,7 @@ describe("permission engine properties", () => {
         const second = parseAcceptedPermissionsHeader(canonicalDNFKey(first));
         expect(second).toEqual(first);
       }),
-      { seed: PROPERTY_SEED },
+      { numRuns: 100, seed: PROPERTY_SEED },
     );
   });
 
@@ -154,13 +154,13 @@ describe("permission engine properties", () => {
           assignmentSatisfiesTerm({ [permission]: "write" }, term),
         ).toBe(true);
       }),
-      { seed: PROPERTY_SEED },
+      { numRuns: 100, seed: PROPERTY_SEED },
     );
   });
 
   it("arbitrary malformed evidence fails with a safe typed error", () => {
     fc.assert(
-      fc.property(fc.string(), (suffix) => {
+      fc.property(fc.string({ maxLength: 200 }), (suffix) => {
         const input = `SECRET_CANARY_${suffix}`;
         try {
           parseAcceptedPermissionsHeader(input);

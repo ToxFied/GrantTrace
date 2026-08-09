@@ -19,7 +19,9 @@ enumerates every assignment in a small permission lattice and compares the
 solver's selected assignment and nondominated frontier with an independent
 brute-force oracle. It also generates bounded route catalogs and request URLs,
 then compares parsing, matching, specificity, ambiguity, and fail-closed
-behavior with a straightforward reference matcher.
+behavior with a straightforward reference matcher. The oracle reimplements
+level ordering, dominance, URL parsing, and template matching; it does not use
+the production helpers that implement those decisions.
 
 These property tests also run under `pnpm test` and `pnpm test:coverage`; the
 focused command is only a faster way to reproduce this assurance layer.
@@ -30,9 +32,11 @@ focused command is only a faster way to reproduce this assurance layer.
 pnpm test:coverage
 ```
 
-Vitest's V8 provider enforces the existing repository-wide thresholds. It also
-checks each matched file separately so high coverage elsewhere cannot hide a
-critical file with weak coverage:
+Vitest's V8 provider enforces the existing repository-wide thresholds. Under
+the pinned Vitest 4.1 [glob-threshold syntax](https://v4.vitest.dev/config/coverage#coverage-thresholds-glob-pattern),
+one threshold object applies to the files matched by that pattern. The config
+therefore gives each critical file its own singleton threshold entry so high
+coverage elsewhere cannot hide a critical file with weak coverage:
 
 | Scope | Branches | Functions | Lines | Statements |
 | --- | ---: | ---: | ---: | ---: |
@@ -51,6 +55,10 @@ Install the repository's frozen dependencies, then run the opt-in benchmark:
 ```bash title="Terminal"
 pnpm benchmark
 ```
+
+The benchmark file is discovered through Vitest 4's separate
+[`benchmark.include`](https://v4.vitest.dev/config/benchmark#benchmark-include)
+configuration, while normal tests still include only `*.test.ts` files.
 
 The benchmark uses fixed synthetic inputs and fixed iteration counts:
 

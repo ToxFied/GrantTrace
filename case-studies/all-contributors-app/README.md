@@ -6,13 +6,17 @@ the public, MIT-licensed
 The upstream source is pinned to commit
 [`00f6362`](https://github.com/all-contributors/app/commit/00f6362ffcc927a2d05fec27f42c3d09e4b03adb).
 
-The NDJSON files are **source-derived, credential-free replay fixtures**. They
-are not recordings from a live installation and are not presented as upstream
-maintainer adoption. The full inventory in `case-study.json` links every route
-to the exact pinned source that motivated it. Unknown-route observations omit
-the route template, matching GrantTrace's identity-safe recorder output; the
-manifest retains only canonical, parameterized templates for reviewing catalog
-coverage.
+The NDJSON files are **source-derived, credential-free analysis fixtures**.
+They were written from pinned source inspection; they are not runtime
+observations or recordings from a live installation, and they are not
+presented as upstream maintainer adoption. The inventory in `case-study.json`
+links every route to the exact pinned source that motivated it and hashes the
+route-defining and transitive source-flow files. Unknown-route fixture records
+omit the route template, matching GrantTrace's identity-safe recorder output;
+the manifest retains only canonical, parameterized templates for reviewing
+catalog coverage. Each fixture contains one record per distinct route or
+catalog gap in that source-derived scenario; it does not model runtime call
+multiplicity.
 
 Reproduce the offline contract behavior:
 
@@ -20,7 +24,7 @@ Reproduce the offline contract behavior:
 pnpm granttrace analyze \
   case-studies/all-contributors-app/reply-only.observations.ndjson
 
-# Expected to exit 7 because the source-derived full path reaches catalog gaps.
+# Expected to exit 7 because the source-derived route set has catalog gaps.
 pnpm granttrace analyze \
   case-studies/all-contributors-app/new-branch-pr.observations.ndjson
 ```
