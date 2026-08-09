@@ -325,6 +325,7 @@ describe("All Contributors Bot credential-free runtime pilot", () => {
     );
     const contract = buildContract(observations, githubPermissionCatalog);
 
+    expect(contract.schemaVersion).toBe(3);
     expect(contract.selectedPermissions).toEqual(
       manifest.resolvableSubset.selectedPermissions,
     );

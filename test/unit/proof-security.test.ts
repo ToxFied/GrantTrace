@@ -1,3 +1,5 @@
+import { inspect } from "node:util";
+
 import { describe, expect, it } from "vitest";
 import {
   classifyGitHubFailure,
@@ -62,6 +64,18 @@ describe("proof failure classification", () => {
 });
 
 describe("proof child secret isolation", () => {
+  it("rejects empty secrets and redacts every implicit representation", () => {
+    expect(() => new SensitiveValue("")).toThrow(
+      "A sensitive value cannot be empty.",
+    );
+
+    const secret = new SensitiveValue("ghs_SECRET_CANARY");
+    expect(secret.reveal()).toBe("ghs_SECRET_CANARY");
+    expect(secret.toString()).toBe("[REDACTED]");
+    expect(JSON.stringify(secret)).toBe('"[REDACTED]"');
+    expect(inspect(secret)).toBe("[REDACTED]");
+  });
+
   it("starts from an allowlist and adds only the restricted token", () => {
     const restrictedToken = "ghs_RESTRICTED_CHILD_TOKEN";
     const environment = createProofChildEnvironment({
