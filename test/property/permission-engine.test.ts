@@ -25,6 +25,8 @@ import type {
   RouteRequirement,
 } from "../../src/permissions/types.js";
 
+const PROPERTY_SEED = 0x4752414e;
+
 const permissionArbitrary = fc.constantFrom(
   "actions",
   "contents",
@@ -65,6 +67,7 @@ describe("permission engine properties", () => {
         const second = parseAcceptedPermissionsHeader(canonicalDNFKey(first));
         expect(second).toEqual(first);
       }),
+      { seed: PROPERTY_SEED },
     );
   });
 
@@ -83,7 +86,7 @@ describe("permission engine properties", () => {
           expect(reverse).toEqual(forward);
         },
       ),
-      { numRuns: 60 },
+      { numRuns: 60, seed: PROPERTY_SEED },
     );
   });
 
@@ -103,7 +106,7 @@ describe("permission engine properties", () => {
           }
         },
       ),
-      { numRuns: 60 },
+      { numRuns: 60, seed: PROPERTY_SEED },
     );
   });
 
@@ -136,7 +139,7 @@ describe("permission engine properties", () => {
           }
         },
       ),
-      { numRuns: 60 },
+      { numRuns: 60, seed: PROPERTY_SEED },
     );
   });
 
@@ -151,6 +154,7 @@ describe("permission engine properties", () => {
           assignmentSatisfiesTerm({ [permission]: "write" }, term),
         ).toBe(true);
       }),
+      { seed: PROPERTY_SEED },
     );
   });
 
@@ -166,7 +170,7 @@ describe("permission engine properties", () => {
           expect(String(error)).not.toContain(input);
         }
       }),
-      { numRuns: 100 },
+      { numRuns: 100, seed: PROPERTY_SEED },
     );
   });
 
@@ -178,7 +182,7 @@ describe("permission engine properties", () => {
         expect(resolution.kind).toBe("unresolved");
         expect(JSON.stringify(resolution)).not.toContain(candidate);
       }),
-      { numRuns: 100 },
+      { numRuns: 100, seed: PROPERTY_SEED },
     );
   });
 });

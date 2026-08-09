@@ -1,0 +1,78 @@
+---
+title: Measured assurance
+description: Reproduce solver and route correctness checks, coverage floors, and bounded local benchmarks.
+---
+
+GrantTrace treats correctness evidence and performance measurements as two
+different workflows. Correctness is deterministic and enforced in the normal
+test suite. Benchmarks are opt-in diagnostics whose timings depend on the
+machine and runtime.
+
+## Correctness and oracle checks
+
+```bash title="Terminal"
+pnpm test:assurance
+```
+
+The focused suite uses fast-check with a fixed seed and explicit run counts. It
+enumerates every assignment in a small permission lattice and compares the
+solver's selected assignment and nondominated frontier with an independent
+brute-force oracle. It also generates bounded route catalogs and request URLs,
+then compares parsing, matching, specificity, ambiguity, and fail-closed
+behavior with a straightforward reference matcher.
+
+These property tests also run under `pnpm test` and `pnpm test:coverage`; the
+focused command is only a faster way to reproduce this assurance layer.
+
+## Per-file coverage floors
+
+```bash title="Terminal"
+pnpm test:coverage
+```
+
+Vitest's V8 provider enforces the existing repository-wide thresholds. It also
+checks each matched file separately so high coverage elsewhere cannot hide a
+critical file with weak coverage:
+
+| Scope | Branches | Functions | Lines | Statements |
+| --- | ---: | ---: | ---: | ---: |
+| Permission parsing, validation, canonicalization, and solving | 75% | 90% | 85% | 85% |
+| Safe-route parsing and runtime route matching | 75% | 90% | 85% | 85% |
+| Every `src/security/*.ts` file | 60% | 75% | 70% | 70% |
+
+The thresholds are review gates, not proof that unexecuted behavior is safe.
+Raise them when focused tests add meaningful branch coverage; do not lower them
+to accommodate an unrelated change.
+
+## Bounded local benchmarks
+
+Install the repository's frozen dependencies, then run the opt-in benchmark:
+
+```bash title="Terminal"
+pnpm benchmark
+```
+
+The benchmark uses fixed synthetic inputs and fixed iteration counts:
+
+| Case | Workload per measured iteration | Warmup | Measured |
+| --- | --- | ---: | ---: |
+| Permission solver | 6 routes, 3 alternatives per route | 10 | 100 |
+| Route URL parsing and catalog matching | One pinned REST URL against the checked-in catalog | 50 | 500 |
+
+Both cases set time-based sampling to zero, so the runner stops after the
+declared iteration counts instead of extending a run to meet a timing window.
+The benchmark does not run in `pnpm test`, `pnpm verify`, or CI, and it has no
+pass/fail latency threshold.
+
+For a useful comparison, use the same machine, power profile, Node.js version,
+package lockfile, and command. Record the commit and raw output. Vitest can also
+write machine-readable output for a later same-environment comparison:
+
+```bash title="Terminal"
+pnpm exec vitest bench --run --outputJson before.json
+pnpm exec vitest bench --run --compare before.json
+```
+
+Do not present a single local timing as a project guarantee. This repository
+does not check in benchmark numbers because no controlled reference host is
+defined.

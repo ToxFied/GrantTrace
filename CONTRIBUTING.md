@@ -71,6 +71,11 @@ usually need:
 Tests must not make unguarded live GitHub calls. Use injected transports and
 local fixtures.
 
+The deterministic oracle suite, per-file coverage floors, and opt-in benchmark
+workflow are documented in [docs/assurance.mdx](docs/assurance.mdx). Run
+`pnpm test:assurance` for the focused correctness checks. Performance
+measurements are intentionally separate from `pnpm test` and CI.
+
 ## Catalog changes
 
 Read [docs/catalog.md](docs/catalog.md). Use official GitHub documentation for

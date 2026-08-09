@@ -2,6 +2,9 @@ import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   test: {
+    benchmark: {
+      include: ["test/benchmark/**/*.bench.ts"],
+    },
     clearMocks: true,
     coverage: {
       include: ["src/**/*.ts"],
@@ -12,6 +15,27 @@ export default defineConfig({
         functions: 85,
         lines: 75,
         statements: 75,
+        "src/permissions/{canonical,header,schema,solver}.ts": {
+          branches: 75,
+          functions: 90,
+          lines: 85,
+          perFile: true,
+          statements: 85,
+        },
+        "src/{routes/canonical,runtime/route}.ts": {
+          branches: 75,
+          functions: 90,
+          lines: 85,
+          perFile: true,
+          statements: 85,
+        },
+        "src/security/*.ts": {
+          branches: 60,
+          functions: 75,
+          lines: 70,
+          perFile: true,
+          statements: 70,
+        },
       },
     },
     environment: "node",

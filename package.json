@@ -75,8 +75,10 @@
     "package:smoke": "node scripts/package-smoke.mjs",
     "prepack": "pnpm clean:dist && pnpm build",
     "test": "vitest run",
+    "test:assurance": "vitest run test/property",
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
+    "benchmark": "vitest bench --run",
     "typecheck": "tsc -p tsconfig.json",
     "verify": "pnpm typecheck && pnpm lint && pnpm test:coverage && pnpm build && pnpm contract:reproduce && pnpm ci:validate"
   },
