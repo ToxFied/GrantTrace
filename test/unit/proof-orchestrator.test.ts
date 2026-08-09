@@ -101,6 +101,7 @@ describe("proof orchestration", () => {
       },
       repositoryScopeVerified: true,
       contractMatched: true,
+      proofStrength: "necessity_tested",
       positiveProof: { status: "pass" },
       negativeControls: [
         {
@@ -144,6 +145,7 @@ describe("proof orchestration", () => {
       failure: "configuration_failure",
     });
     expect(result.report.effectivePermissions).toBeNull();
+    expect(result.report.proofStrength).toBe("not_established");
   });
 
   it("reports an unknown scenario as a contract mismatch before minting", async () => {
@@ -215,6 +217,7 @@ describe("proof orchestration", () => {
         status: "failed",
         failure,
       });
+      expect(result.report.proofStrength).toBe("not_established");
       expect(
         result.report.negativeControls.every(
           (control) => control.status === "not_run",
@@ -326,6 +329,7 @@ describe("proof orchestration", () => {
       status: "failed",
       failure: "cleanup_failure",
     });
+    expect(result.report.proofStrength).toBe("not_established");
     expect(() => serializeProofReport(result.report)).not.toThrow();
   });
 
@@ -363,6 +367,7 @@ describe("proof orchestration", () => {
       status: "indeterminate",
       failure: "rate_limited",
     });
+    expect(result.report.proofStrength).toBe("not_established");
   });
 });
 

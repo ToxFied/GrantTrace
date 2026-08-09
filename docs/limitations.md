@@ -86,6 +86,12 @@ part of the result, not footnotes.
   issue-comment creation. A control is not applicable when the route is
   absent, removing `issues` would leave another valid alternative, or an
   `issues` manual keep prevents removal.
+- Proof strength is calculated only from those built-in controls. A successful
+  reproduction with no applicable control says `restricted_scope_reproduced`;
+  coverage of only some selected permissions says
+  `necessity_partially_tested`. `necessity_tested` requires coverage of every
+  selected permission, but remains limited to the named scenario and does not
+  claim that manual keeps or mandatory access are necessary.
 - An authorization-shaped `403` is accepted only in the focused negative
   control. Authentication failures, rate limits, hidden resources, expiry,
   outages, test failures, and generic nonzero exits remain distinct.

@@ -293,6 +293,7 @@ function renderProofSuccess(
     `Observed    ${report.child.observedOperations} GitHub REST operation${
       report.child.observedOperations === 1 ? "" : "s"
     }`,
+    `Strength    ${proofStrengthLabel(report.proofStrength)}`,
     `Report      .granttrace/reports/${scenario}.json`,
     "",
     "Negative controls",
@@ -329,6 +330,7 @@ function renderProofFailure(
     "",
     `Positive    ${renderPositiveStatus(report)}`,
     `Cleanup     ${statusLabel(report.cleanup.status)}`,
+    `Strength    ${proofStrengthLabel(report.proofStrength)}`,
     `Report      .granttrace/reports/${scenario}.json`,
     "",
     "Negative controls",
@@ -395,6 +397,21 @@ function statusLabel(value: string | undefined): string {
       .map((word) => word[0]?.toUpperCase() + word.slice(1))
       .join(" ")
   );
+}
+
+function proofStrengthLabel(
+  strength: ProofRunReport["proofStrength"],
+): string {
+  switch (strength) {
+    case "not_established":
+      return "Not established";
+    case "restricted_scope_reproduced":
+      return "Restricted scope reproduced";
+    case "necessity_partially_tested":
+      return "Necessity partially tested";
+    case "necessity_tested":
+      return "Necessity tested";
+  }
 }
 
 function proofRecovery(report: ProofRunReport): string {

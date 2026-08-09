@@ -531,6 +531,7 @@ function validReport(): Record<string, unknown> {
     effectivePermissions: { issues: "read", metadata: "read" },
     repositoryScopeVerified: true,
     contractMatched: true,
+    proofStrength: "restricted_scope_reproduced",
     child: { exitCode: 0, signal: null, observedOperations: 1 },
     positiveProof: { status: "pass" },
     negativeControls: [

@@ -11,6 +11,9 @@ beta.
 ### Changed
 
 - Clarified the npm package summary and quickstart for both pnpm and npm users.
+- Live-proof reports and CLI output now state whether restricted scope was
+  reproduced, necessity was partially tested, necessity was tested, or no
+  strength was established.
 
 ## [0.1.0-beta.1] - 2026-07-25
 

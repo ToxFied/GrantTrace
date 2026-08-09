@@ -208,6 +208,7 @@ function proofReport(): Record<string, unknown> {
     },
     repositoryScopeVerified: true,
     contractMatched: true,
+    proofStrength: "restricted_scope_reproduced",
     child: {
       exitCode: 0,
       signal: null,

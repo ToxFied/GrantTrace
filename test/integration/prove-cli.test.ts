@@ -35,6 +35,16 @@ const observation: Observation = {
   evidenceSource: "runtime_header",
   finding: null,
 };
+const contentsObservation: Observation = {
+  schemaVersion: 1,
+  scenario: "disposable-comment",
+  method: "GET",
+  routeTemplate: "/repos/{owner}/{repo}/contents/{path}",
+  status: 200,
+  requirements: [[{ permission: "contents", level: "read" }]],
+  evidenceSource: "runtime_header",
+  finding: null,
+};
 
 describe("prove CLI workflow", () => {
   let workingDirectory: string;
@@ -113,6 +123,7 @@ describe("prove CLI workflow", () => {
       "sentinel-canary",
     ]);
     expect(result.stdout).toContain("GrantTrace prove passed");
+    expect(result.stdout).toContain("Strength    Necessity tested");
     expect(result.stdout).toContain("Rejected as expected");
     const reportPath = join(
       workingDirectory,
@@ -123,6 +134,7 @@ describe("prove CLI workflow", () => {
     expect((await stat(reportPath)).mode & 0o777).toBe(0o600);
     const report = await readFile(reportPath, "utf8");
     expect(report).toContain('"contractMatched": true');
+    expect(report).toContain('"proofStrength": "necessity_tested"');
     expect(report).toContain('"metadata": "read"');
     const retained = `${result.stdout}\n${result.stderr}\n${report}`;
     for (const forbidden of [
@@ -137,6 +149,63 @@ describe("prove CLI workflow", () => {
     ]) {
       expect(retained).not.toContain(forbidden);
     }
+  });
+
+  it("labels a completed proof with no applicable control as restricted-scope reproduction", async () => {
+    await writeContractAtomic(
+      join(workingDirectory, "granttrace.lock.json"),
+      buildContract([contentsObservation], fixtureCatalog),
+    );
+    const result = await invoke(
+      ["prove", "disposable-comment", "--", "unused-command"],
+      fixtureEnvironment(),
+      {
+        runChild: async () => ({
+          outcome: "pass",
+          exitCode: 0,
+          signal: null,
+          observations: [contentsObservation],
+          sessionCleanup: "pass",
+        }),
+        tokenTransport: echoingTokenTransport(),
+        now,
+        sourceCommit: null,
+      },
+    );
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain(
+      "Strength    Restricted scope reproduced",
+    );
+  });
+
+  it("labels necessity as partial when controls cover only some selected permissions", async () => {
+    await writeContractAtomic(
+      join(workingDirectory, "granttrace.lock.json"),
+      buildContract([observation, contentsObservation], fixtureCatalog),
+    );
+    const result = await invoke(
+      ["prove", "disposable-comment", "--", "unused-command"],
+      fixtureEnvironment(),
+      {
+        runChild: async () => ({
+          outcome: "pass",
+          exitCode: 0,
+          signal: null,
+          observations: [observation, contentsObservation],
+          sessionCleanup: "pass",
+        }),
+        tokenTransport: echoingTokenTransport(),
+        commentTransport: rejectionTransport(),
+        now,
+        sourceCommit: null,
+      },
+    );
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain(
+      "Strength    Necessity partially tested",
+    );
   });
 
   it("writes a safe failed report for malformed live configuration", async () => {
@@ -159,6 +228,7 @@ describe("prove CLI workflow", () => {
 
     expect(result.code).toBe(5);
     expect(result.stderr).toContain("Configuration Failure");
+    expect(result.stderr).toContain("Strength    Not established");
     const report = await readFile(
       join(
         workingDirectory,
@@ -324,6 +394,27 @@ function tokenTransport(): InstallationTokenTransport {
         permissions: negative
           ? { metadata: "read" }
           : { issues: "write", metadata: "read" },
+        repositories: [
+          {
+            full_name:
+              "fixture-owner/private-granttrace-fixture",
+          },
+        ],
+      };
+    },
+  };
+}
+
+function echoingTokenTransport(): InstallationTokenTransport {
+  return {
+    async createInstallationToken(request) {
+      return {
+        token: "ghs_SCOPED_TOKEN_CANARY",
+        expires_at: "2026-07-23T13:00:00.000Z",
+        permissions: {
+          ...request.permissions,
+          metadata: "read",
+        },
         repositories: [
           {
             full_name:

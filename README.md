@@ -174,7 +174,11 @@ pnpm exec granttrace prove issue-triage -- \
 Use only a dedicated disposable GitHub App installation and repository.
 GrantTrace requests the scenario permissions plus documented keeps, verifies
 the effective token scope, reproduces the accepted scenario, runs applicable
-negative controls, and reports cleanup separately.
+negative controls, and reports cleanup separately. Its explicit strength is
+limited to restricted-scope reproduction when no selected permission has an
+applicable control, partially tested necessity when controls cover only some
+selected permissions, or tested necessity when they cover every selected
+permission. Failed and incomplete runs establish no proof-strength claim.
 
 Proof reports identify a clean checkout by its HEAD commit. If the index or
 worktree is dirty—or Git provenance is unavailable—`sourceCommit` is `null`;

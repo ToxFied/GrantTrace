@@ -444,6 +444,7 @@ controls never require cleanup. Unsupported controls are marked not applicable.
 - documented manual keeps;
 - requested, mandatory, and effective assignments;
 - repository-scope and exact-contract booleans;
+- the deterministically derived proof-strength value;
 - safe child exit/signal/observation counts;
 - positive-proof state;
 - negative-control IDs, modes, removed permissions, states, and cleanup; and
@@ -452,6 +453,25 @@ controls never require cleanup. Unsupported controls are marked not applicable.
 It cannot contain credentials, commands, raw URLs, identities, responses, or
 rich errors. Unknown fields fail validation. The report directory is `0700`;
 the file is `0600`.
+
+`proofStrength` is derived from the allowlisted phase data and cannot be chosen
+independently:
+
+- `not_established` applies unless positive reproduction passed, aggregate
+  cleanup passed, and every built-in control ended in `expected_rejection` or
+  `not_applicable`;
+- `restricted_scope_reproduced` applies to such a completed run when no
+  selected permission was exercised by an applicable successful control;
+- `necessity_partially_tested` applies when successful controls removed at
+  least one but fewer than all scenario-selected permission names; and
+- `necessity_tested` applies when successful controls removed every
+  scenario-selected permission name.
+
+Manual keeps and mandatory permissions are excluded from the denominator and
+can never gain a necessity claim. Duplicate controls for the same removed
+permission count once. A failed, indeterminate, unexpectedly successful,
+uncleaned, or unfinished run must serialize `not_established`. The schema
+rejects both stronger and weaker caller-supplied values.
 
 Contract and observation inputs are size-bounded regular files. GrantTrace
 rejects symlinks and other nonregular types, uses a no-follow open where the

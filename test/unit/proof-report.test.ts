@@ -11,6 +11,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
+  deriveProofStrength,
   ProofReportError,
   serializeProofReport,
   writeProofReport,
@@ -39,6 +40,9 @@ describe("allowlisted ephemeral proof report", () => {
     );
     expect(serialized).toContain('"mandatoryPermissions"');
     expect(serialized).toContain('"contractMatched": true');
+    expect(serialized).toContain(
+      '"proofStrength": "restricted_scope_reproduced"',
+    );
     for (const forbidden of [
       "token",
       "owner",
@@ -192,6 +196,63 @@ describe("allowlisted ephemeral proof report", () => {
       }),
     ).toThrow(ProofReportError);
   });
+
+  it.each([
+    {
+      name: "does not establish a claim for an incomplete run",
+      selectedPermissions: { issues: "write" },
+      positiveProof: { status: "pass" },
+      negativeControls: [
+        { removedPermission: "issues", status: "not_run" },
+      ],
+      cleanup: { status: "pass" },
+      expected: "not_established",
+    },
+    {
+      name: "reports restricted-scope reproduction without an applicable control",
+      selectedPermissions: { contents: "read" },
+      positiveProof: { status: "pass" },
+      negativeControls: [
+        { removedPermission: "issues", status: "not_applicable" },
+      ],
+      cleanup: { status: "pass" },
+      expected: "restricted_scope_reproduced",
+    },
+    {
+      name: "reports partially tested necessity when only some selected permissions are removed",
+      selectedPermissions: { contents: "read", issues: "write" },
+      positiveProof: { status: "pass" },
+      negativeControls: [
+        { removedPermission: "issues", status: "expected_rejection" },
+      ],
+      cleanup: { status: "pass" },
+      expected: "necessity_partially_tested",
+    },
+    {
+      name: "reports tested necessity when every selected permission is removed",
+      selectedPermissions: { issues: "write" },
+      positiveProof: { status: "pass" },
+      negativeControls: [
+        { removedPermission: "issues", status: "expected_rejection" },
+      ],
+      cleanup: { status: "pass" },
+      expected: "necessity_tested",
+    },
+  ])("$name", ({ expected, ...report }) => {
+    expect(deriveProofStrength(report)).toBe(expected);
+  });
+
+  it("rejects an overclaimed or underclaimed proof strength", () => {
+    for (const proofStrength of [
+      "necessity_partially_tested",
+      "necessity_tested",
+      "not_established",
+    ]) {
+      expect(() =>
+        serializeProofReport({ ...validReport(), proofStrength }),
+      ).toThrow(ProofReportError);
+    }
+  });
 });
 
 function validReport(): Record<string, unknown> {
@@ -226,6 +287,7 @@ function validReport(): Record<string, unknown> {
     },
     repositoryScopeVerified: true,
     contractMatched: true,
+    proofStrength: "restricted_scope_reproduced",
     child: {
       exitCode: 0,
       signal: null,

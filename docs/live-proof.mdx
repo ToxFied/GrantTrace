@@ -68,6 +68,22 @@ worktree. It is `null` when tracked files, staged files, or untracked files are
 present, when the source is not in a Git checkout, or when Git is unavailable.
 This prevents modified code from being attributed to the last commit.
 
+## Read the proof strength
+
+The CLI and report state one derived proof-strength value:
+
+| Value                            | Meaning                                                                 |
+| -------------------------------- | ----------------------------------------------------------------------- |
+| `restricted_scope_reproduced`    | The scenario reproduced with the verified restricted scope and cleanup completed, but no selected permission had an applicable negative control. |
+| `necessity_partially_tested`     | Successful negative controls removed some, but not every, selected permission. |
+| `necessity_tested`               | Successful negative controls removed every selected permission, and each tested operation was rejected as expected. |
+| `not_established`                | The run failed, cleanup failed, or a negative control was incomplete or unsuccessful. |
+
+Coverage is computed over scenario-selected permission names. Manual keeps and
+GitHub's mandatory baseline are never counted as tested necessity. A level of
+`necessity_tested` describes only the named scenario and the built-in controls
+that were applicable; it does not widen the scenario or control coverage.
+
 ## Understand failures
 
 Authentication, authorization, rate limiting, token expiry, hidden resources,

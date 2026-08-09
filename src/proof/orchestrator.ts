@@ -26,7 +26,10 @@ import {
   type LiveReadControlTransport,
 } from "./negative-control.js";
 import { MANDATORY_INSTALLATION_PERMISSIONS } from "./permission-baseline.js";
-import type { ProofRunReport } from "./report.js";
+import {
+  deriveProofStrength,
+  type ProofRunReport,
+} from "./report.js";
 import {
   mintRestrictedInstallationToken,
   type InstallationTokenTransport,
@@ -180,13 +183,17 @@ export async function executeProof(input: {
       : { readTransport: dependencies.readControlTransport }),
     ...(dependencies.now === undefined ? {} : { now: dependencies.now }),
   });
-  report = {
+  const completedReport: ProofRunReport = {
     ...report,
     negativeControls: negative.results,
     cleanup:
       negative.cleanup === "pass"
         ? { status: "pass" }
         : { status: "failed", failure: "cleanup_failure" },
+  };
+  report = {
+    ...completedReport,
+    proofStrength: deriveProofStrength(completedReport),
   };
   const negativePassed = negative.results.every(
     (result) =>
@@ -227,6 +234,7 @@ function initialReport(
     effectivePermissions: null,
     repositoryScopeVerified: false,
     contractMatched: false,
+    proofStrength: "not_established",
     child: {
       exitCode: null,
       signal: null,

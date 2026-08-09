@@ -126,6 +126,56 @@ const CleanupResultSchema = z.discriminatedUnion("status", [
   }),
 ]);
 
+export const ProofStrengthSchema = z.enum([
+  "not_established",
+  "restricted_scope_reproduced",
+  "necessity_partially_tested",
+  "necessity_tested",
+]);
+
+export type ProofStrength = z.infer<typeof ProofStrengthSchema>;
+
+type ProofStrengthInput = {
+  selectedPermissions: Readonly<Record<string, unknown>>;
+  positiveProof: { status: string };
+  negativeControls: ReadonlyArray<{
+    removedPermission: string;
+    status: string;
+  }>;
+  cleanup: { status: string };
+};
+
+export function deriveProofStrength(
+  report: ProofStrengthInput,
+): ProofStrength {
+  const controlsCompletedSuccessfully = report.negativeControls.every(
+    (control) =>
+      control.status === "expected_rejection" ||
+      control.status === "not_applicable",
+  );
+  if (
+    report.positiveProof.status !== "pass" ||
+    report.cleanup.status !== "pass" ||
+    !controlsCompletedSuccessfully
+  ) {
+    return "not_established";
+  }
+
+  const selectedPermissions = Object.keys(report.selectedPermissions);
+  const testedPermissions = new Set(
+    report.negativeControls
+      .filter((control) => control.status === "expected_rejection")
+      .map((control) => control.removedPermission)
+      .filter((permission) => permission in report.selectedPermissions),
+  );
+  if (testedPermissions.size === 0) {
+    return "restricted_scope_reproduced";
+  }
+  return testedPermissions.size === selectedPermissions.length
+    ? "necessity_tested"
+    : "necessity_partially_tested";
+}
+
 export const ProofRunReportSchema = z
   .strictObject({
     schemaVersion: z.literal(2),
@@ -151,6 +201,7 @@ export const ProofRunReportSchema = z
     effectivePermissions: PermissionAssignmentSchema.nullable(),
     repositoryScopeVerified: z.boolean(),
     contractMatched: z.boolean(),
+    proofStrength: ProofStrengthSchema,
     child: z.strictObject({
       exitCode: z.number().int().min(0).max(255).nullable(),
       signal: z.string().regex(/^SIG[A-Z0-9]+$/u).nullable(),
@@ -193,6 +244,21 @@ export const ProofRunReportSchema = z
         code: "custom",
         path: ["cleanup"],
         message: "A negative-control cleanup failure must fail overall cleanup.",
+      });
+    }
+    if (
+      report.negativeControls.some(
+        (control) =>
+          control.status !== "not_run" &&
+          control.status !== "not_applicable" &&
+          report.selectedPermissions[control.removedPermission] === undefined,
+      )
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["negativeControls"],
+        message:
+          "An applicable negative control must remove a selected permission.",
       });
     }
     if (
@@ -328,6 +394,14 @@ export const ProofRunReportSchema = z
           "Negative controls cannot run before the positive proof passes.",
       });
     }
+    if (report.proofStrength !== deriveProofStrength(report)) {
+      context.addIssue({
+        code: "custom",
+        path: ["proofStrength"],
+        message:
+          "Proof strength must be derived from reproduction, cleanup, selected permissions, and negative controls.",
+      });
+    }
   });
 
 export type ProofRunReport = z.infer<typeof ProofRunReportSchema>;
@@ -377,6 +451,7 @@ export function serializeProofReport(input: unknown): string {
         : canonicalizeAssignment(parsed.data.effectivePermissions),
     repositoryScopeVerified: parsed.data.repositoryScopeVerified,
     contractMatched: parsed.data.contractMatched,
+    proofStrength: parsed.data.proofStrength,
     child: {
       exitCode: parsed.data.child.exitCode,
       signal: parsed.data.child.signal,
