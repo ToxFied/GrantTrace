@@ -6,7 +6,9 @@ description: Reproduce solver and route correctness checks, coverage floors, and
 GrantTrace treats correctness evidence and performance measurements as two
 different workflows. Correctness is deterministic and enforced in the normal
 test suite. Benchmarks are opt-in diagnostics whose timings depend on the
-machine and runtime.
+machine and runtime. The repository also retains a clearly labeled
+[informational local snapshot](https://github.com/ToxFied/GrantTrace/blob/main/benchmarks/2026-08-09-local.md)
+so reviewers can audit one concrete run without treating it as a target.
 
 ## Correctness and oracle checks
 
@@ -81,6 +83,6 @@ pnpm exec vitest bench --run --outputJson before.json
 pnpm exec vitest bench --run --compare before.json
 ```
 
-Do not present a single local timing as a project guarantee. This repository
-does not check in benchmark numbers because no controlled reference host is
-defined.
+Do not present a single local timing as a project guarantee. The checked-in
+snapshot records its date, source commit, host, runtime, workload, results, and
+limitations; it is not an SLA, a CI threshold, or a cross-host comparison.

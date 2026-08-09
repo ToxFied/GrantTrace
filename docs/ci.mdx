@@ -65,6 +65,11 @@ normal text and exit code. Container jobs may mount that file outside
 instead, use `--format json`; structured output always goes to stdout,
 including when the check exits `6` or `7`.
 
+Structured reports omit free-form reasons, scenario names, concrete URLs and
+paths, errors, and credentials. Permission identifiers remain visible because
+they are the machine-readable contract, including user-supplied manual-keep
+keys. Do not encode identities or secrets in a permission name.
+
 This also applies when a previously selected permission-frontier candidate is
 no longer valid. CI reports the proposed deterministic fallback as a normal
 contract diff and never persists a replacement selection.

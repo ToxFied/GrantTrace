@@ -1,12 +1,12 @@
 ---
 title: Independent compatibility study
-description: A source-pinned GrantTrace study with credential-free mocked runtime execution of the open-source All Contributors Bot.
+description: A source-pinned GrantTrace study with mocked runtime execution of the open-source All Contributors Bot without GitHub credentials.
 ---
 
 ## Result
 
-GrantTrace was evaluated against source and a credential-free mocked runtime
-from the independently
+GrantTrace was evaluated against source and a mocked runtime without GitHub
+credentials from the independently
 maintained [All Contributors Bot](https://github.com/all-contributors/app/tree/00f6362ffcc927a2d05fec27f42c3d09e4b03adb),
 an MIT-licensed Probot GitHub App. The study pins upstream commit
 [`00f6362ffcc927a2d05fec27f42c3d09e4b03adb`](https://github.com/all-contributors/app/commit/00f6362ffcc927a2d05fec27f42c3d09e4b03adb)
@@ -20,9 +20,9 @@ The result is mixed in a useful way:
 - GrantTrace resolves the pinned source's standalone comment-reply route and
   preserves GitHub's `issues: write` **or** `pull_requests: write` choice.
 - The pinned App's real Probot handler completed its upstream-mocked happy path
-  and emitted ten Octokit requests across seven unique normalized routes while
-  all network connections were disabled. GrantTrace's real recorder captured
-  all ten requests.
+  and emitted ten Octokit requests across seven unique normalized routes. Nock
+  rejected unmatched Node HTTP(S) requests on the observed Octokit path, and
+  GrantTrace's real recorder captured all ten requests.
 - Three unique runtime routes are covered and four are catalog gaps. GrantTrace
   blocks the full analysis instead of presenting a partial permission result as
   sufficient.
@@ -72,7 +72,7 @@ code path ran, and no fixture line is a runtime observation of the App. Route
 mapping is mechanically bound to the hashed source range and declared call;
 the mapping from that call to a canonical REST route remains human-reviewed.
 
-### 2. Credential-free fixture analysis
+### 2. Fixture analysis without GitHub credentials
 
 Two strict NDJSON fixtures feed the canonical, source-derived route set through
 GrantTrace's real parser, evidence resolver, and permission solver:
@@ -100,7 +100,7 @@ Each fixture has one record per distinct route or catalog gap in its scenario.
 It tests GrantTrace's deduplicated contract behavior; it does not claim the App
 would make each call exactly once.
 
-### 3. Credential-free mocked runtime execution
+### 3. Mocked runtime execution without GitHub credentials
 
 The runtime pilot checks out the exact commit, verifies the pinned
 `package-lock.json`, installs it with `npm ci --ignore-scripts`, and loads the
@@ -110,11 +110,13 @@ by composing GrantTrace's Octokit request hook with `ProbotOctokit`. The App
 then receives the real `issue_comment.created` payload and executes its real
 application and Octokit request paths.
 
-`nock.disableNetConnect()` forbids every network connection. A
-credential-scrubbed child process receives no credential environment variables;
-Probot gets only the upstream test's literal dummy token `test`. The harness
-requires every expected mock to be consumed and compares the recorder output
-and normalized request trace to the checked-in assets:
+`nock.disableNetConnect()` rejects unmatched Node HTTP(S) requests for clients
+it intercepts, including the observed Octokit path. A child process receives no
+GitHub credential environment variables; Probot gets only the upstream test's
+literal dummy token `test`. In this study, **credential-free means no GitHub
+credentials were passed**. The harness requires every expected mock to be
+consumed and compares the recorder output and normalized request trace to the
+checked-in assets:
 
 ```bash
 pnpm install --frozen-lockfile --ignore-scripts
@@ -127,6 +129,11 @@ only method, normalized route template, and mocked response status after a
 request completes. This companion is necessary because GrantTrace intentionally
 drops the template for catalog gaps. Neither artifact retains concrete route
 values, request data, credentials, or response bodies.
+
+Nock is not an OS network or filesystem sandbox. The pinned third-party code
+and its dependencies can still read accessible files, spawn processes, or use
+network channels nock does not intercept. Reproduce this pilot only in a
+disposable container or VM when those host capabilities are not acceptable.
 
 The mocked responses do not contain GitHub's
 `x-accepted-github-permissions` header. Covered routes therefore resolve from

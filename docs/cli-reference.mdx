@@ -86,6 +86,10 @@ categorized `changes` object, safe findings, and migration identifiers. Arrays
 use the deterministic contract and diff ordering. JSON and Markdown deliberately
 omit scenario names, repository and resource identities, raw URLs, commands,
 credentials, manual reasons, paths, and raw error messages.
+Permission identifiers are required machine-readable contract data and are not
+redacted, including syntactically valid user-supplied manual-keep keys. Use real
+GitHub permission names and never encode an identity, tenant, repository, path,
+or secret in a permission name.
 Only templates recognized by the pinned catalog are included; any other route
 template is represented as `null` in JSON and an em dash in Markdown.
 
@@ -138,6 +142,10 @@ granttrace keep add <permission>:<read|write> --reason <text>
 granttrace keep remove <permission>
 granttrace keep list
 ```
+
+Manual-keep reasons are validated review text and are omitted from structured
+check output. Permission keys are emitted, so use real GitHub permission names
+and never put identities or secrets in the key.
 
 ## `prove`
 

@@ -30,7 +30,8 @@ beta.
   when it is outside `RUNNER_TEMP`, while retaining link, inode, size, and
   append-only safeguards.
 - The All Contributors compatibility study now separates source-derived
-  fixtures from credential-free mocked execution of the pinned App handler;
+  fixtures from mocked execution of the pinned App handler without GitHub
+  credentials;
   its bounded verifier binds every route call to a hashed pinned line range.
 
 ## [0.1.0-beta.1] - 2026-07-25

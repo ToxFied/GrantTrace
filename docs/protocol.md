@@ -9,8 +9,8 @@ protocol implemented by GrantTrace.
 ## Versions
 
 - Observation schema: `1`
-- Contract schema: `2`
-- Proof-report schema: `2`
+- Contract schema: `3`
+- Proof-report schema: `3`
 - Tool version: `0.1.0-beta.1`
 - Pinned GitHub REST API: `2026-03-10`
 - Offline catalog source: `github-docs`
@@ -460,9 +460,8 @@ controls never require cleanup. Unsupported controls are marked not applicable.
 
 - schema/tool/API/catalog identity and source commit or `null`;
 - scenario and deterministic aggregate contract hash;
-- scenario-selected permissions;
-- documented manual keeps;
-- requested, mandatory, and effective assignments;
+- scenario-selected permissions, documented manual keeps, and requested,
+  mandatory, and effective assignments;
 - repository-scope and exact-contract booleans;
 - the deterministically derived proof-strength value;
 - safe child exit/signal/observation counts;
@@ -487,7 +486,7 @@ independently:
 - `necessity_tested` applies when successful controls removed every
   scenario-selected permission name.
 
-These two stable enum values describe permission-name removal tests. They do
+These four stable enum values describe permission-name removal tests. They do
 not establish that a `write` level is minimal relative to `read`, because the
 current controls remove the permission name rather than comparing access
 levels.

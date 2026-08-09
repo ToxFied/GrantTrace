@@ -128,7 +128,7 @@ describe("contract-check structured output", () => {
       ...contract,
       selectedPermissions: nondefault!,
       manualKeeps: {
-        actions: {
+        custom_integration_permission: {
           level: "read",
           reason: "private-manual-keep-reason",
         },
@@ -146,8 +146,11 @@ describe("contract-check structured output", () => {
       observedPermissions: [
         { permission: "pull_requests", level: "write" },
       ],
-      manualKeeps: [{ permission: "actions", level: "read" }],
+      manualKeeps: [
+        { permission: "custom_integration_permission", level: "read" },
+      ],
     });
+    expect(output.stdout()).toContain("custom_integration_permission");
     expect(output.stdout()).not.toContain("private-manual-keep-reason");
     expect(
       await readFile(join(directory, "granttrace.lock.json"), "utf8"),

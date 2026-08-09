@@ -23,6 +23,12 @@ import {
   renderCiContractMutationRefused,
 } from "./ci-environment.js";
 
+type KeepExecution = {
+  code: ExitCodeValue;
+  destination: "stderr" | "stdout";
+  text: string;
+};
+
 export async function runKeep(
   args: string[],
   context: CliContext,
@@ -44,16 +50,24 @@ export async function runKeep(
   }
 
   const lockPath = join(context.cwd, "granttrace.lock.json");
+  let operationLock: LocalOperationLock | null = null;
+  let execution = keepExecution(
+    ExitCode.analysisFailure,
+    "stderr",
+    "GrantTrace keep failed: contract processing did not complete.",
+  );
   try {
-    let operationLock: LocalOperationLock | null = null;
-    try {
-      if (args[0] === "add" || args[0] === "remove") {
-        operationLock = await acquireLocalOperationLock(context.cwd);
-      }
+    if (args[0] === "add" || args[0] === "remove") {
+      operationLock = await (
+        context.keepDependencies?.acquireOperationLock ??
+        acquireLocalOperationLock
+      )(context.cwd);
+    }
     const loaded = await readContractWithMetadata(lockPath);
     if (loaded.migrations.length > 0) {
-      writeLine(
-        context.stderr,
+      execution = keepExecution(
+        ExitCode.contractChanged,
+        "stderr",
         [
           "GrantTrace keep blocked",
           "",
@@ -65,144 +79,14 @@ export async function runKeep(
           "",
         ].join("\n"),
       );
-      return ExitCode.contractChanged;
-    }
-    const contract = loaded.contract;
-
-    if (args[0] === "list" && args.length === 1) {
-      const keeps = Object.entries(contract.manualKeeps);
-      writeLine(
-        context.stdout,
-        [
-          "Manual keeps (retained, not proven necessary)",
-          "",
-          ...(keeps.length === 0
-            ? ["  (none)"]
-            : keeps.flatMap(([permission, keep]) => [
-                `  ${permission}: ${keep.level}`,
-                `    ${keep.reason}`,
-              ])),
-          "",
-        ].join("\n"),
-      );
-      return ExitCode.success;
-    }
-
-    if (args[0] === "add") {
-      const parsed = parseAdd(args.slice(1));
-      if (parsed === null) {
-        writeLine(
-          context.stderr,
-          [
-            "GrantTrace keep usage error",
-            "",
-            "Use <permission>:<read|write> and a 1–240 character reason.",
-            "Use plain text without secrets, URLs, or personal identifiers.",
-            "",
-            helpText(),
-          ].join("\n"),
-        );
-        return ExitCode.usage;
-      }
-      if (parsed.permission === "metadata") {
-        writeLine(
-          context.stderr,
-          "GrantTrace keep blocked: metadata:read is already modeled as GitHub's mandatory baseline.",
-        );
-        return ExitCode.usage;
-      }
-      const observed = contract.selectedPermissions[parsed.permission];
-      if (
-        observed !== undefined &&
-        comparePermissionLevels(observed, parsed.level) >= 0
-      ) {
-        writeLine(
-          context.stderr,
-          "GrantTrace keep blocked: the accepted scenarios already select that access level.",
-        );
-        return ExitCode.usage;
-      }
-      const previous = contract.manualKeeps[parsed.permission];
-      const next = {
-        ...contract,
-        manualKeeps: {
-          ...contract.manualKeeps,
-          [parsed.permission]: {
-            level: parsed.level,
-            reason: parsed.reason,
-          },
-        },
-      };
-      await writeContractAtomic(lockPath, next);
-      writeLine(
-        context.stdout,
-        [
-          previous === undefined
-            ? "Manual keep added"
-            : "Manual keep updated",
-          "",
-          `  ${parsed.permission}: ${parsed.level}`,
-          `  Reason: ${parsed.reason}`,
-          "",
-          "Meaning",
-          "  This permission will be requested during live proof, but GrantTrace",
-          "  will not call it observed or proven necessary.",
-          "",
-          "Next",
-          "  Review and commit granttrace.lock.json.",
-          "",
-        ].join("\n"),
-      );
-      return ExitCode.success;
-    }
-
-    if (args[0] === "remove") {
-      if (args.length !== 2) {
-        writeLine(context.stderr, helpText());
-        return ExitCode.usage;
-      }
-      const permission = PermissionNameSchema.safeParse(args[1]);
-      if (!permission.success) {
-        writeLine(context.stderr, helpText());
-        return ExitCode.usage;
-      }
-      if (contract.manualKeeps[permission.data] === undefined) {
-        writeLine(
-          context.stderr,
-          `GrantTrace keep failed: no manual keep exists for ${permission.data}.`,
-        );
-        return ExitCode.usage;
-      }
-      const manualKeeps = { ...contract.manualKeeps };
-      delete manualKeeps[permission.data];
-      await writeContractAtomic(lockPath, { ...contract, manualKeeps });
-      writeLine(
-        context.stdout,
-        [
-          "Manual keep removed",
-          "",
-          `  ${permission.data}`,
-          "",
-          "Meaning",
-          "  Future live proofs will no longer request this unproven access.",
-          "",
-          "Next",
-          "  Review and commit granttrace.lock.json.",
-          "",
-        ].join("\n"),
-      );
-      return ExitCode.success;
-    }
-
-    writeLine(context.stderr, helpText());
-    return ExitCode.usage;
-    } finally {
-      await operationLock?.release();
+    } else {
+      execution = await executeKeepCommand(args, loaded.contract, lockPath);
     }
   } catch (error) {
     if (error instanceof LocalOperationLockError) {
-      writeLine(
-        context.stderr,
+      execution = keepExecution(
+        ExitCode.analysisFailure,
+        "stderr",
         [
           "GrantTrace keep blocked",
           "",
@@ -213,22 +97,181 @@ export async function runKeep(
           "",
         ].join("\n"),
       );
+    } else {
+      execution = keepExecution(
+        ExitCode.analysisFailure,
+        "stderr",
+        [
+          "GrantTrace keep failed",
+          "",
+          "GrantTrace could not read or update granttrace.lock.json.",
+          "",
+          "Next",
+          "  Create or validate granttrace.lock.json with granttrace check.",
+          "",
+        ].join("\n"),
+      );
+    }
+  }
+
+  if (operationLock !== null) {
+    try {
+      await operationLock.release();
+    } catch {
+      writeLine(
+        context.stderr,
+        [
+          "GrantTrace keep cleanup failed",
+          "",
+          "The contract update may have completed, but the operation lock could not be removed.",
+          "Inspect .granttrace/active-operation and validate the contract before retrying.",
+          "",
+        ].join("\n"),
+      );
       return ExitCode.analysisFailure;
     }
-    writeLine(
-      context.stderr,
+  }
+
+  writeLine(context[execution.destination], execution.text);
+  return execution.code;
+}
+
+async function executeKeepCommand(
+  args: string[],
+  contract: Awaited<ReturnType<typeof readContractWithMetadata>>["contract"],
+  lockPath: string,
+): Promise<KeepExecution> {
+  if (args[0] === "list" && args.length === 1) {
+    const keeps = Object.entries(contract.manualKeeps);
+    return keepExecution(
+      ExitCode.success,
+      "stdout",
       [
-        "GrantTrace keep failed",
+        "Manual keeps (retained, not proven necessary)",
         "",
-        "GrantTrace could not read or update granttrace.lock.json.",
-        "",
-        "Next",
-        "  Create or validate granttrace.lock.json with granttrace check.",
+        ...(keeps.length === 0
+          ? ["  (none)"]
+          : keeps.flatMap(([permission, keep]) => [
+              `  ${permission}: ${keep.level}`,
+              `    ${keep.reason}`,
+            ])),
         "",
       ].join("\n"),
     );
-    return ExitCode.analysisFailure;
   }
+
+  if (args[0] === "add") {
+    const parsed = parseAdd(args.slice(1));
+    if (parsed === null) {
+      return keepExecution(
+        ExitCode.usage,
+        "stderr",
+        [
+          "GrantTrace keep usage error",
+          "",
+          "Use <permission>:<read|write> and a 1–240 character reason.",
+          "Use plain text without secrets, URLs, or personal identifiers.",
+          "",
+          helpText(),
+          "",
+        ].join("\n"),
+      );
+    }
+    if (parsed.permission === "metadata") {
+      return keepExecution(
+        ExitCode.usage,
+        "stderr",
+        "GrantTrace keep blocked: metadata:read is already modeled as GitHub's mandatory baseline.",
+      );
+    }
+    const observed = contract.selectedPermissions[parsed.permission];
+    if (
+      observed !== undefined &&
+      comparePermissionLevels(observed, parsed.level) >= 0
+    ) {
+      return keepExecution(
+        ExitCode.usage,
+        "stderr",
+        "GrantTrace keep blocked: the accepted scenarios already select that access level.",
+      );
+    }
+    const previous = contract.manualKeeps[parsed.permission];
+    const next = {
+      ...contract,
+      manualKeeps: {
+        ...contract.manualKeeps,
+        [parsed.permission]: {
+          level: parsed.level,
+          reason: parsed.reason,
+        },
+      },
+    };
+    await writeContractAtomic(lockPath, next);
+    return keepExecution(
+      ExitCode.success,
+      "stdout",
+      [
+        previous === undefined ? "Manual keep added" : "Manual keep updated",
+        "",
+        `  ${parsed.permission}: ${parsed.level}`,
+        `  Reason: ${parsed.reason}`,
+        "",
+        "Meaning",
+        "  This permission will be requested during live proof, but GrantTrace",
+        "  will not call it observed or proven necessary.",
+        "",
+        "Next",
+        "  Review and commit granttrace.lock.json.",
+        "",
+      ].join("\n"),
+    );
+  }
+
+  if (args[0] === "remove") {
+    if (args.length !== 2) {
+      return keepExecution(ExitCode.usage, "stderr", helpText());
+    }
+    const permission = PermissionNameSchema.safeParse(args[1]);
+    if (!permission.success) {
+      return keepExecution(ExitCode.usage, "stderr", helpText());
+    }
+    if (contract.manualKeeps[permission.data] === undefined) {
+      return keepExecution(
+        ExitCode.usage,
+        "stderr",
+        `GrantTrace keep failed: no manual keep exists for ${permission.data}.`,
+      );
+    }
+    const manualKeeps = { ...contract.manualKeeps };
+    delete manualKeeps[permission.data];
+    await writeContractAtomic(lockPath, { ...contract, manualKeeps });
+    return keepExecution(
+      ExitCode.success,
+      "stdout",
+      [
+        "Manual keep removed",
+        "",
+        `  ${permission.data}`,
+        "",
+        "Meaning",
+        "  Future live proofs will no longer request this unproven access.",
+        "",
+        "Next",
+        "  Review and commit granttrace.lock.json.",
+        "",
+      ].join("\n"),
+    );
+  }
+
+  return keepExecution(ExitCode.usage, "stderr", helpText());
+}
+
+function keepExecution(
+  code: ExitCodeValue,
+  destination: KeepExecution["destination"],
+  text: string,
+): KeepExecution {
+  return { code, destination, text };
 }
 
 function parseAdd(args: string[]): {

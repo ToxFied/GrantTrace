@@ -172,6 +172,56 @@ describe("manual keeps", () => {
     }
   });
 
+  it.each(["add", "remove"] as const)(
+    "reports %s lock-release failure before any success output",
+    async (operation) => {
+      const permission = "custom_integration_permission";
+      if (operation === "remove") {
+        await writeContractAtomic(join(directory, "granttrace.lock.json"), {
+          ...buildContract([issueObservation()], githubPermissionCatalog),
+          manualKeeps: {
+            [permission]: {
+              level: "read",
+              reason: "Required outside the recorded scenarios.",
+            },
+          },
+        });
+      }
+
+      const output = captureContext(directory, {});
+      output.context.keepDependencies = {
+        acquireOperationLock: async () => ({
+          release: async () => {
+            throw new Error("release failure canary");
+          },
+        }),
+      };
+      const args =
+        operation === "add"
+          ? [
+              "keep",
+              "add",
+              `${permission}:read`,
+              "--reason",
+              "Required outside the recorded scenarios.",
+            ]
+          : ["keep", "remove", permission];
+
+      expect(await runCli(args, output.context)).toBe(5);
+      expect(output.stdout()).toBe("");
+      expect(output.stderr()).toContain("keep cleanup failed");
+      expect(output.stderr()).toContain("may have completed");
+      expect(output.stderr()).not.toContain(
+        operation === "add" ? "Manual keep added" : "Manual keep removed",
+      );
+
+      const stored = JSON.parse(
+        await readFile(join(directory, "granttrace.lock.json"), "utf8"),
+      ) as { manualKeeps: Record<string, unknown> };
+      expect(permission in stored.manualKeeps).toBe(operation === "add");
+    },
+  );
+
   it("requires requested and effective proof access to include manual keeps exactly", () => {
     const valid = proofReport();
     const serialized = serializeProofReport(valid);

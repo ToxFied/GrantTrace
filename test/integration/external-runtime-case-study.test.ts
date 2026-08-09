@@ -41,6 +41,8 @@ type RuntimeManifest = {
     liveGitHub: boolean;
     credentials: string;
     networkBoundary: string;
+    runtimeIsolation: string;
+    rerunRecommendation: string;
     setupMeasurements: Array<{
       command: string;
       cwd?: string;
@@ -136,7 +138,8 @@ describe("All Contributors Bot credential-free runtime pilot", () => {
       execution: {
         capturedOn: "2026-08-09",
         liveGitHub: false,
-        networkBoundary: "nock.disableNetConnect()",
+        networkBoundary:
+          "nock rejects unmatched Node HTTP(S) requests on the observed Octokit path",
       },
       maintainerFeedback: {
         solicited: false,
@@ -144,7 +147,15 @@ describe("All Contributors Bot credential-free runtime pilot", () => {
       },
     });
     expect(manifest.upstream.packageLockSha256).toMatch(/^[a-f0-9]{64}$/u);
+    expect(manifest.execution.credentials).toContain(
+      "no GitHub credentials passed",
+    );
     expect(manifest.execution.credentials).toContain("dummy");
+    expect(manifest.execution.runtimeIsolation).toContain("not an OS");
+    expect(manifest.execution.runtimeIsolation).toContain("spawn processes");
+    expect(manifest.execution.rerunRecommendation).toContain(
+      "disposable container or VM",
+    );
     expect(manifestText).not.toMatch(
       /(?:\/private\/tmp(?:\/|\b)|\/var\/folders(?:\/|\b))/u,
     );
@@ -180,7 +191,7 @@ describe("All Contributors Bot credential-free runtime pilot", () => {
       expect(measurement.elapsedSeconds).toBeGreaterThan(0);
     }
     expect(manifest.limitations).toContain(
-      "This was credential-free mocked runtime execution, not live GitHub behavior.",
+      "Credential-free means no GitHub credentials were passed; it does not mean the process had no other host capabilities.",
     );
     expect(manifest.permissionAssumption).toMatchObject({
       scope: "covered subset of this executed scenario only",
@@ -188,7 +199,7 @@ describe("All Contributors Bot credential-free runtime pilot", () => {
     });
   });
 
-  it("keeps checksum preflight and mocked networking fail-closed", async () => {
+  it("keeps checksum preflight and nock-intercepted traffic fail-closed", async () => {
     const harness = await readFile(runtimeHarnessPath, "utf8");
     const preflight = harness.indexOf(
       "await assertPinnedCheckout(upstreamDirectory);",
@@ -229,7 +240,8 @@ describe("All Contributors Bot credential-free runtime pilot", () => {
       upstreamCommit: pinnedCommit,
       scenario: manifest.scenario.name,
       liveGitHub: false,
-      networkBoundary: "nock.disableNetConnect()",
+      networkBoundary:
+        "nock rejects unmatched Node HTTP(S) requests on the observed Octokit path",
     });
     expect(emitted.requests).toHaveLength(manifest.scenario.requestCount);
     expect(observations).toHaveLength(manifest.scenario.requestCount);

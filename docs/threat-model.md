@@ -6,8 +6,8 @@ description: Assets, trust boundaries, controls, and residual risks.
 ## Security objective
 
 GrantTrace is designed to make scenario-bound GitHub App REST permission
-evidence deterministic, reviewable, identity-free, and safe to prove against a
-disposable one-repository installation.
+evidence deterministic, reviewable, identity-minimized, and safe to prove
+against a disposable one-repository installation.
 
 It is not designed to sandbox arbitrary test code, protect a compromised
 developer machine, or establish whole-application least privilege.
@@ -136,6 +136,14 @@ persisted.
 Contracts contain no commands, local paths, owners, repositories, resource
 IDs, timestamps, or machine values. Proof reports omit fixture coordinates and
 raw responses.
+
+Permission identifiers are intentionally retained in contracts and structured
+check output because they are the subject of review. This includes
+syntactically valid, user-supplied manual-keep keys for catalog gaps. GrantTrace
+does not redact these keys; users must not encode account identities,
+repositories, paths, tenant names, or secrets in a permission name. Free-form
+manual-keep reasons, scenario names, concrete URLs and paths, raw errors, and
+credentials remain omitted from structured check output.
 
 ### Runtime/catalog contradiction
 

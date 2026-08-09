@@ -32,6 +32,8 @@ const commit = "00f6362ffcc927a2d05fec27f42c3d09e4b03adb";
 const packageLockSha256 =
   "0b05468b4debbc54eb1d88d0c4778d50f68a6e40d7ed398dbdc593960b10ca24";
 const scenario = "all-contributors-mocked-runtime";
+const mockedNetworkBoundary =
+  "nock rejects unmatched Node HTTP(S) requests on the observed Octokit path";
 const maximumLockfileBytes = 2 * 1024 * 1024;
 const scriptPath = fileURLToPath(import.meta.url);
 const assetDirectory = join(
@@ -141,9 +143,9 @@ async function runPilot(options) {
       JSON.stringify(
         {
           upstreamCommit: commit,
-          execution: "credential-free mocked Probot runtime",
+          execution: "mocked Probot runtime without GitHub credentials",
           liveGitHub: false,
-          networkBoundary: "nock.disableNetConnect()",
+          networkBoundary: mockedNetworkBoundary,
           setup,
           runtime: {
             command: runtime.command,
@@ -275,7 +277,7 @@ async function executeRuntime({
       upstreamCommit: commit,
       scenario,
       liveGitHub: false,
-      networkBoundary: "nock.disableNetConnect()",
+      networkBoundary: mockedNetworkBoundary,
       requests: emitted,
     };
     await writeFile(
@@ -285,8 +287,9 @@ async function executeRuntime({
     );
   } finally {
     nock.cleanAll();
-    // This runs in an isolated child. Keep network access disabled until that
-    // process exits so late App work cannot escape the mocked boundary.
+    // Nock scopes intercepted Node HTTP(S) clients in this child; it is not an
+    // OS sandbox. Keep unmatched requests disabled until exit for every client
+    // on the observed Octokit path that nock intercepts.
   }
 }
 

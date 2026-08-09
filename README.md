@@ -151,6 +151,12 @@ mutate the accepted contract in CI; GrantTrace refuses `check --accept`,
 output. GitHub Actions summaries are appended only with the explicit
 `--github-step-summary` flag.
 
+Structured output omits free-form manual-keep reasons, scenario names,
+concrete URLs and paths, errors, and credentials. It intentionally emits
+permission identifiers as contract data, including user-supplied manual-keep
+keys. Use real GitHub permission names; never encode identities or secrets in
+a permission name.
+
 ## How the contract is built
 
 1. The managed child records safe route templates, never concrete URLs.
@@ -242,6 +248,7 @@ short-lived installation token it can use or print.
 | [Independent compatibility study](https://toxfied.github.io/GrantTrace/docs/external-case-study/) | Source-pinned and mocked-runtime external App evidence |
 | [CI](https://toxfied.github.io/GrantTrace/docs/ci/)                             | Reproducing scenarios without auto-acceptance |
 | [Live proof](https://toxfied.github.io/GrantTrace/docs/live-proof/)             | Optional restricted-token verification        |
+| [Measured assurance](https://toxfied.github.io/GrantTrace/docs/assurance/)      | Oracle checks, coverage floors, and benchmarks |
 | [Protocol](https://toxfied.github.io/GrantTrace/docs/protocol/)                 | Normative contract semantics                  |
 | [Threat model](https://toxfied.github.io/GrantTrace/docs/threat-model/)         | Assets, trust boundaries, and residual risk   |
 | [Limitations](https://toxfied.github.io/GrantTrace/docs/limitations/)           | Exact unsupported behavior                    |

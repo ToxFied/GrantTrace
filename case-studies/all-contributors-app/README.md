@@ -1,7 +1,7 @@
 # All Contributors Bot case-study assets
 
-These files support GrantTrace's offline compatibility study against
-the public, MIT-licensed
+These files support GrantTrace's independent compatibility study, combining
+source inspection and a mocked runtime exercise of the public, MIT-licensed
 [`all-contributors/app`](https://github.com/all-contributors/app) GitHub App.
 The upstream source is pinned to commit
 [`00f6362`](https://github.com/all-contributors/app/commit/00f6362ffcc927a2d05fec27f42c3d09e4b03adb).
@@ -17,11 +17,12 @@ The assets contain two deliberately separate evidence layers:
   declared source call; the REST-route mapping remains human-reviewed. Each
   fixture contains one record per distinct route or catalog gap and does not
   model runtime call multiplicity.
-- `runtime.observations.ndjson` is a **credential-free mocked runtime
-  recording** produced by GrantTrace's real Octokit recorder while the pinned
+- `runtime.observations.ndjson` is a **mocked runtime recording without GitHub
+  credentials** produced by GrantTrace's real Octokit recorder while the pinned
   App handled an `issue_comment.created` payload through Probot. The upstream
-  `nock` boundary disabled all network connections and supplied the upstream
-  fixtures, so this is not live GitHub behavior. The separate
+  `nock` boundary supplied the upstream fixtures and rejected unmatched Node
+  HTTP(S) requests on the observed Octokit path, so this is not live GitHub
+  behavior. The separate
   `runtime-emitted-requests.json` preserves only the exact method and
   normalized Octokit template observed after each mocked request completed;
   `runtime-case-study.json` records provenance, timings, route coverage,
@@ -57,12 +58,13 @@ Run the offline assertions:
 pnpm vitest run test/integration/external-case-study.test.ts
 ```
 
-Reproduce the real credential-free mocked runtime from a fresh disposable
-clone. This verifies the exact commit and package-lock checksum before the
-install, installs the upstream lockfile with lifecycle scripts disabled,
-re-verifies the checkout, runs the Probot handler in a credential-scrubbed
-child process whose network boundary remains disabled until exit, compares
-both runtime artifacts byte for byte, and deletes the temporary clone:
+Reproduce the real mocked runtime, without passing GitHub credentials, from a
+fresh temporary clone. This verifies the exact commit and package-lock checksum
+before the install, installs the upstream lockfile with lifecycle scripts
+disabled, re-verifies the checkout, runs the Probot handler in a
+GitHub-credential-scrubbed child process whose nock-intercepted unmatched
+HTTP(S) requests remain disabled until exit, compares both runtime artifacts
+byte for byte, and deletes the temporary clone:
 
 ```bash
 pnpm install --frozen-lockfile --ignore-scripts
@@ -80,6 +82,11 @@ The reusable checkout must have clean tracked files, the exact pinned `HEAD`,
 the pinned `package-lock.json`, and its frozen dependencies already installed.
 The harness composes GrantTrace's Octokit hook with upstream Probot 12.2.8 and
 uses only the literal dummy token `test`; it does not forward credential
-environment variables into the runtime child.
+GitHub environment variables into the runtime child.
+
+`nock.disableNetConnect()` is a Node HTTP(S) mocking control, not an OS network
+or filesystem sandbox. The pinned application and dependencies can still read
+files, spawn processes, or use channels nock does not intercept. Run this
+third-party code in a disposable container or VM when reproducing the pilot.
 
 See `docs/external-case-study.mdx` for the findings and limits.

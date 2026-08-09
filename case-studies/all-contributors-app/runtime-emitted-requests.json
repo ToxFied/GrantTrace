@@ -4,7 +4,7 @@
   "upstreamCommit": "00f6362ffcc927a2d05fec27f42c3d09e4b03adb",
   "scenario": "all-contributors-mocked-runtime",
   "liveGitHub": false,
-  "networkBoundary": "nock.disableNetConnect()",
+  "networkBoundary": "nock rejects unmatched Node HTTP(S) requests on the observed Octokit path",
   "requests": [
     {
       "method": "GET",

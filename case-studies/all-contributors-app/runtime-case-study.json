@@ -23,8 +23,10 @@
   "execution": {
     "capturedOn": "2026-08-09",
     "liveGitHub": false,
-    "credentials": "none; the upstream Probot test constructor received the literal dummy value test",
-    "networkBoundary": "nock.disableNetConnect()",
+    "credentials": "no GitHub credentials passed; the upstream Probot test constructor received the literal dummy value test",
+    "networkBoundary": "nock rejects unmatched Node HTTP(S) requests on the observed Octokit path",
+    "runtimeIsolation": "none; nock is not an OS or filesystem sandbox, and pinned code can read files, spawn processes, or use transports nock does not intercept",
+    "rerunRecommendation": "execute the pinned third-party application and dependencies in a disposable container or VM",
     "environment": {
       "os": "Darwin 27.0.0 arm64",
       "node": "v26.0.0",
@@ -193,7 +195,9 @@
     "status": "unavailable"
   },
   "limitations": [
-    "This was credential-free mocked runtime execution, not live GitHub behavior.",
+    "Credential-free means no GitHub credentials were passed; it does not mean the process had no other host capabilities.",
+    "Nock rejects unmatched Node HTTP(S) traffic that it intercepts on the observed Octokit path; it is not an OS network or filesystem sandbox.",
+    "Pinned third-party code can read files, spawn processes, or use channels nock does not intercept, so reruns should use a disposable container or VM.",
     "The upstream nock responses do not contain x-accepted-github-permissions headers.",
     "Four runtime-emitted routes are absent from GrantTrace's pinned catalog, so the permission result is incomplete.",
     "One upstream happy path does not establish coverage of every application branch or webhook payload.",

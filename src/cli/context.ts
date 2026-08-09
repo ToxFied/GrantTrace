@@ -20,6 +20,9 @@ export type CliContext = {
   frontierDependencies?: {
     acquireOperationLock?: (cwd: string) => Promise<LocalOperationLock>;
   };
+  keepDependencies?: {
+    acquireOperationLock?: (cwd: string) => Promise<LocalOperationLock>;
+  };
 };
 
 export function defaultCliContext(): CliContext {
