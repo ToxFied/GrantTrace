@@ -70,7 +70,6 @@ export async function appendGithubStepSummary(
     !before.isFile() ||
     before.isSymbolicLink() ||
     before.nlink !== 1 ||
-    !ownedByCurrentUser(before) ||
     before.size > MAX_EXISTING_SUMMARY_BYTES - contentBytes
   ) {
     throw new GithubStepSummaryError();
@@ -91,7 +90,6 @@ export async function appendGithubStepSummary(
       opened.dev !== before.dev ||
       opened.ino !== before.ino ||
       opened.nlink !== 1 ||
-      !ownedByCurrentUser(opened) ||
       opened.size > MAX_EXISTING_SUMMARY_BYTES - contentBytes
     ) {
       throw new GithubStepSummaryError();
@@ -102,9 +100,4 @@ export async function appendGithubStepSummary(
   } finally {
     await handle?.close().catch(() => undefined);
   }
-}
-
-function ownedByCurrentUser(details: { uid: number }): boolean {
-  const uid = process.getuid?.();
-  return uid === undefined || details.uid === uid;
 }

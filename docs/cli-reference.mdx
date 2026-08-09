@@ -86,15 +86,19 @@ categorized `changes` object, safe findings, and migration identifiers. Arrays
 use the deterministic contract and diff ordering. JSON and Markdown deliberately
 omit scenario names, repository and resource identities, raw URLs, commands,
 credentials, manual reasons, paths, and raw error messages.
+Only templates recognized by the pinned catalog are included; any other route
+template is represented as `null` in JSON and an em dash in Markdown.
 
 `--github-step-summary` explicitly opts in to appending the same safe Markdown
 report to the file named by `GITHUB_STEP_SUMMARY`. It works only when
 `GITHUB_ACTIONS=true` and the runner-provided path resolves inside
-`RUNNER_TEMP` to an existing, bounded, same-owner regular file with no symlink
-or hard-link ambiguity. GrantTrace does not create, truncate, or follow links
-for this file. Terminal output still uses the selected `--format`; the summary
-is an additional destination. A missing or unsafe summary target is an analysis
-failure and exits `5` without following or modifying that target.
+`RUNNER_TEMP` to an existing, bounded regular file with no symlink or hard-link
+ambiguity. This also supports runner-created files mounted into GitHub Actions
+containers under a different numeric user ID. GrantTrace does not create,
+truncate, or follow links for this file. Terminal output still uses the selected
+`--format`; the summary is an additional destination. A missing or unsafe
+summary target is an analysis failure and exits `5` without following or
+modifying that target.
 
 Contract acceptance is refused when `CI` is enabled or
 `GITHUB_ACTIONS=true`. Review and accept changes from a trusted local checkout.

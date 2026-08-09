@@ -1,6 +1,7 @@
 import type { ContractDiff, PermissionChange } from "../contract/diff.js";
 import type { GrantTraceContract } from "../contract/schema.js";
 import type { ExitCodeValue } from "../cli/exit-codes.js";
+import { githubPermissionCatalog } from "../evidence/catalog.js";
 import { MANDATORY_INSTALLATION_PERMISSIONS } from "../proof/permission-baseline.js";
 
 export type CheckStatus =
@@ -38,7 +39,7 @@ type SafePermissionChange = {
 
 type SafeRouteChange = {
   method: string;
-  template: string;
+  template: string | null;
 };
 
 export type CheckReport = {
@@ -196,7 +197,7 @@ export function createCheckReport(input: CheckReportInput): CheckReport {
       contract?.unknowns.map((unknown) => ({
         finding: unknown.finding,
         method: unknown.method,
-        template: unknown.template,
+        template: safeRouteTemplate(unknown.method, unknown.template),
       })) ?? [],
     migrations: [
       ...(input.migratedFromV1 === true
@@ -280,8 +281,23 @@ function safePermissionChanges(
   }));
 }
 
-function safeRouteChange(change: SafeRouteChange): SafeRouteChange {
-  return { method: change.method, template: change.template };
+function safeRouteChange(change: {
+  method: string;
+  template: string;
+}): SafeRouteChange {
+  return {
+    method: change.method,
+    template: safeRouteTemplate(change.method, change.template),
+  };
+}
+
+function safeRouteTemplate(
+  method: string,
+  template: string | null,
+): string | null {
+  return template !== null && githubPermissionCatalog.has({ method, template })
+    ? template
+    : null;
 }
 
 function hasNamedDiffChange(diff: ContractDiff): boolean {
@@ -422,7 +438,9 @@ function appendRouteChanges(lines: string[], report: CheckReport): void {
     "| --- | --- | --- |",
   );
   for (const route of routeChanges) {
-    lines.push(`| ${route.change} | ${route.method} | ${route.template} |`);
+    lines.push(
+      `| ${route.change} | ${route.method} | ${route.template ?? "—"} |`,
+    );
   }
 }
 

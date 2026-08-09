@@ -17,6 +17,10 @@ import type { CliContext } from "../../src/cli/context.js";
 import { runInit } from "../../src/cli/init.js";
 import { writeObservations } from "../../src/contract/observation-file.js";
 import type { Observation } from "../../src/contract/observation.js";
+import {
+  readContract,
+  writeContractAtomic,
+} from "../../src/contract/serialize.js";
 
 describe("contract-check structured output", () => {
   let directory: string;
@@ -104,6 +108,80 @@ describe("contract-check structured output", () => {
     expect(output.stdout()).not.toContain("private-identity");
   });
 
+  it("preserves a valid nondefault frontier selection without exposing manual reasons", async () => {
+    await writeObservations(
+      join(directory, ".granttrace", "observations", "private-identity.ndjson"),
+      [commentObservation()],
+    );
+    expect(await runCheck(["--accept"], captureContext(directory).context)).toBe(
+      0,
+    );
+    const contract = await readContract(
+      join(directory, "granttrace.lock.json"),
+    );
+    const nondefault = contract.permissionFrontier.find(
+      (candidate) => candidate["pull_requests"] === "write",
+    );
+    expect(nondefault).toEqual({ pull_requests: "write" });
+    await writeContractAtomic(join(directory, "granttrace.lock.json"), {
+      ...contract,
+      selectedPermissions: nondefault!,
+      manualKeeps: {
+        actions: {
+          level: "read",
+          reason: "private-manual-keep-reason",
+        },
+      },
+    });
+    const acceptedBytes = await readFile(
+      join(directory, "granttrace.lock.json"),
+      "utf8",
+    );
+    const output = captureContext(directory);
+
+    expect(await runCheck(["--format", "json"], output.context)).toBe(0);
+    expect(JSON.parse(output.stdout())).toMatchObject({
+      status: "passed",
+      observedPermissions: [
+        { permission: "pull_requests", level: "write" },
+      ],
+      manualKeeps: [{ permission: "actions", level: "read" }],
+    });
+    expect(output.stdout()).not.toContain("private-manual-keep-reason");
+    expect(
+      await readFile(join(directory, "granttrace.lock.json"), "utf8"),
+    ).toBe(acceptedBytes);
+  });
+
+  it("redacts non-catalog route templates from a valid prior contract", async () => {
+    expect(await runCheck(["--accept"], captureContext(directory).context)).toBe(
+      0,
+    );
+    const lockPath = join(directory, "granttrace.lock.json");
+    const contract = await readContract(lockPath);
+    await writeContractAtomic(lockPath, {
+      ...contract,
+      routes: contract.routes.map((route) => ({
+        ...route,
+        template: "/repos/private-owner/{repo}/issues",
+      })),
+    });
+    const json = captureContext(directory);
+
+    expect(await runCheck(["--format", "json"], json.context)).toBe(6);
+    expect(JSON.parse(json.stdout())).toMatchObject({
+      changes: {
+        routeRemovals: [{ method: "GET", template: null }],
+      },
+    });
+    expect(json.stdout()).not.toContain("private-owner");
+
+    const markdown = captureContext(directory);
+    expect(await runCheck(["--format", "markdown"], markdown.context)).toBe(6);
+    expect(markdown.stdout()).toContain("| Removed | GET | — |");
+    expect(markdown.stdout()).not.toContain("private-owner");
+  });
+
   it("appends Markdown only with the explicit safe GitHub summary option", async () => {
     const summaryPath = join(directory, "step-summary.md");
     await writeFile(summaryPath, "existing summary\n", {
@@ -156,8 +234,11 @@ describe("contract-check structured output", () => {
     },
   );
 
-  it("refuses acceptance in CI before writing the contract", async () => {
-    const output = captureContext(directory, { CI: "true" });
+  it.each([
+    { CI: "true" },
+    { CI: "false", GITHUB_ACTIONS: "true" },
+  ])("refuses acceptance in CI before writing the contract", async (environment) => {
+    const output = captureContext(directory, environment);
 
     expect(
       await runCheck(["--accept", "--format", "json"], output.context),
@@ -200,6 +281,22 @@ function issueObservation(): Observation {
     routeTemplate: "/repos/{owner}/{repo}/issues",
     status: 200,
     requirements: [[{ permission: "issues", level: "read" }]],
+    evidenceSource: "runtime_header",
+    finding: null,
+  };
+}
+
+function commentObservation(): Observation {
+  return {
+    schemaVersion: 1,
+    scenario: "private-identity",
+    method: "POST",
+    routeTemplate: "/repos/{owner}/{repo}/issues/{issue_number}/comments",
+    status: 201,
+    requirements: [
+      [{ permission: "issues", level: "write" }],
+      [{ permission: "pull_requests", level: "write" }],
+    ],
     evidenceSource: "runtime_header",
     finding: null,
   };
