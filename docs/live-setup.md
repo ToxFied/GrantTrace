@@ -141,7 +141,7 @@ npx granttrace doctor
 
 - Node 22 or newer;
 - private ignored local state and stale sessions;
-- whether `granttrace.lock.json` is valid schema v2 or needs migration; and
+- whether `granttrace.lock.json` is valid schema v3 or needs migration; and
 - whether optional live configuration is complete and whether key providers
   conflict.
 
@@ -158,7 +158,7 @@ stale session artifacts and any possible fixture residue before removing them.
 
 ## 6. Prove one accepted scenario
 
-First make sure current recordings have an accepted schema-v2 contract:
+First make sure current recordings have an accepted schema-v3 contract:
 
 ```bash
 npx granttrace check

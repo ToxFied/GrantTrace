@@ -50,11 +50,13 @@ part of the result, not footnotes.
 
 ## Contracts and migration
 
-- Schema v2 attributes routes to scenario names, not commands, test files, or
+- Schema v3 attributes routes to scenario names, not commands, test files, or
   source-code locations.
 - A schema-v1 contract is read conservatively by attributing every route to
-  every declared scenario. `prove` blocks until current recordings are
-  reviewed and accepted as v2.
+  every declared scenario. Released schema-v2 contracts are read only after
+  their deterministic-default selection is validated. Both versions block
+  mutation and `prove` until current recordings are reviewed and accepted as
+  v3.
 - Contract acceptance is a human decision. An interactive `record` prompt or
   `check --accept` can accept a coverage contraction just as it can accept an
   addition; review removals carefully. Noninteractive recording never accepts.
@@ -94,6 +96,8 @@ part of the result, not footnotes.
   `necessity_partially_tested`. `necessity_tested` requires coverage of every
   selected permission, but remains limited to the named scenario and does not
   claim that manual keeps or mandatory access are necessary.
+- Necessity strength covers permission-name removal only. It does not establish
+  that `write` rather than `read` is the minimal access level for a permission.
 - An authorization-shaped `403` is accepted only in the focused negative
   control. Authentication failures, rate limits, hidden resources, expiry,
   outages, test failures, and generic nonzero exits remain distinct.

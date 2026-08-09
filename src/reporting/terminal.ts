@@ -1,4 +1,5 @@
 import type { GrantTraceContract } from "../contract/schema.js";
+import type { ContractMigration } from "../contract/serialize.js";
 import type { ContractDiff } from "../contract/diff.js";
 
 const COVERAGE =
@@ -100,26 +101,32 @@ export function renderContractDiff(
   diff: ContractDiff,
   next: GrantTraceContract,
   options: {
-    migratedFromLegacyV2?: boolean;
-    migratedFromV1?: boolean;
+    migrations?: ContractMigration[];
     nextAction?: "prompt" | "noninteractive" | "standalone";
   } = {},
 ): string {
   const lines = ["GrantTrace contract review required", ""];
 
-  if (options.migratedFromV1 === true) {
-    lines.push(
-      "Schema migration required",
-      "  v1 -> v2 adds exact route-to-scenario attribution.",
-      "",
-    );
-  }
-  if (options.migratedFromLegacyV2 === true) {
-    lines.push(
-      "Schema v2 provenance upgrade required",
-      "  Route evidence is now attributed to each scenario, not only merged globally.",
-      "",
-    );
+  for (const migration of options.migrations ?? []) {
+    if (migration === "schema_v1_to_v3") {
+      lines.push(
+        "Schema migration required",
+        "  v1 -> v3 adds exact route-to-scenario attribution and explicit frontier selection.",
+        "",
+      );
+    } else if (migration === "schema_v2_to_v3") {
+      lines.push(
+        "Schema migration required",
+        "  v2 -> v3 permits an explicitly reviewed exact frontier member.",
+        "",
+      );
+    } else {
+      lines.push(
+        "Legacy schema v2 migration required",
+        "  v3 adds per-scenario evidence provenance and explicit frontier selection.",
+        "",
+      );
+    }
   }
   if (diff.toolVersionChanged) {
     lines.push("Tool contract version changed", "");

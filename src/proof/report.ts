@@ -178,7 +178,7 @@ export function deriveProofStrength(
 
 export const ProofRunReportSchema = z
   .strictObject({
-    schemaVersion: z.literal(2),
+    schemaVersion: z.literal(3),
     toolVersion: z.string().min(1).max(64),
     apiVersion: z.string().regex(/^\d{4}-\d{2}-\d{2}$/u),
     sourceCommit: z
@@ -420,7 +420,7 @@ export function serializeProofReport(input: unknown): string {
   }
 
   const report: ProofRunReport = {
-    schemaVersion: 2,
+    schemaVersion: 3,
     toolVersion: parsed.data.toolVersion,
     apiVersion: parsed.data.apiVersion,
     sourceCommit: parsed.data.sourceCommit,

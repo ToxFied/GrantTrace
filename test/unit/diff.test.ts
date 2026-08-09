@@ -96,7 +96,7 @@ function contract(
   selectedPermissions: GrantTraceContract["selectedPermissions"],
 ): GrantTraceContract {
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     toolVersion: "0.1.0-beta.1",
     apiVersion: "2026-03-10",
     catalog: fixtureCatalog.identity,

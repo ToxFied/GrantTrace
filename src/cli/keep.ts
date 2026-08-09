@@ -18,6 +18,10 @@ import {
   LocalOperationLockError,
   type LocalOperationLock,
 } from "../security/local-state.js";
+import {
+  isContinuousIntegration,
+  renderCiContractMutationRefused,
+} from "./ci-environment.js";
 
 export async function runKeep(
   args: string[],
@@ -31,6 +35,14 @@ export async function runKeep(
     return ExitCode.success;
   }
 
+  if (
+    (args[0] === "add" || args[0] === "remove") &&
+    isContinuousIntegration(context.environment)
+  ) {
+    writeLine(context.stderr, renderCiContractMutationRefused("keep"));
+    return ExitCode.usage;
+  }
+
   const lockPath = join(context.cwd, "granttrace.lock.json");
   try {
     let operationLock: LocalOperationLock | null = null;
@@ -39,15 +51,13 @@ export async function runKeep(
         operationLock = await acquireLocalOperationLock(context.cwd);
       }
     const loaded = await readContractWithMetadata(lockPath);
-    if (loaded.migratedFromV1 || loaded.migratedFromLegacyV2) {
+    if (loaded.migrations.length > 0) {
       writeLine(
         context.stderr,
         [
           "GrantTrace keep blocked",
           "",
-          loaded.migratedFromV1
-            ? "The accepted contract is schema v1."
-            : "The accepted contract needs the schema-v2 provenance upgrade.",
+          "The accepted contract is not schema v3.",
           "",
           "Next",
           "  Re-record if needed, review granttrace check, then run:",
@@ -262,6 +272,7 @@ function helpText(): string {
     "Manual keeps are requested in live tokens but are never reported as",
     "observed or proven necessary. Every keep requires a committed,",
     "identity-free and secret-free human reason.",
+    "Adding or removing a keep is refused when CI is enabled.",
     "",
   ].join("\n");
 }

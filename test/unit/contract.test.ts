@@ -39,7 +39,7 @@ describe("deterministic contract", () => {
     };
 
     expect(JSON.parse(serializeContract(selectedAlternative))).toMatchObject({
-      schemaVersion: 2,
+      schemaVersion: 3,
       selectedPermissions: { pull_requests: "write" },
     });
     expect(() =>

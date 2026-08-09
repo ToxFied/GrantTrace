@@ -2,10 +2,9 @@ import { constants, type Stats } from "node:fs";
 import {
   lstat,
   open,
-  realpath,
   type FileHandle,
 } from "node:fs/promises";
-import { dirname, isAbsolute, relative, sep } from "node:path";
+import { isAbsolute } from "node:path";
 
 const MAX_EXISTING_SUMMARY_BYTES = 1024 * 1024;
 const MAX_APPEND_BYTES = 64 * 1024;
@@ -22,39 +21,24 @@ export async function appendGithubStepSummary(
   markdown: string,
 ): Promise<void> {
   const path = environment["GITHUB_STEP_SUMMARY"];
-  const runnerTemp = environment["RUNNER_TEMP"];
   if (
     environment["GITHUB_ACTIONS"] !== "true" ||
     path === undefined ||
-    runnerTemp === undefined ||
     path.length === 0 ||
-    runnerTemp.length === 0 ||
     path.includes("\0") ||
-    runnerTemp.includes("\0") ||
-    !isAbsolute(path) ||
-    !isAbsolute(runnerTemp)
+    !isAbsolute(path)
   ) {
     throw new GithubStepSummaryError();
   }
 
-  try {
-    const [resolvedRunnerTemp, resolvedParent] = await Promise.all([
-      realpath(runnerTemp),
-      realpath(dirname(path)),
-    ]);
-    const relativeParent = relative(resolvedRunnerTemp, resolvedParent);
-    if (
-      relativeParent === ".." ||
-      relativeParent.startsWith(`..${sep}`) ||
-      isAbsolute(relativeParent)
-    ) {
-      throw new GithubStepSummaryError();
-    }
-  } catch {
+  const safeMarkdown = markdown.trimEnd();
+  if (
+    safeMarkdown.length === 0 ||
+    /[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/u.test(safeMarkdown)
+  ) {
     throw new GithubStepSummaryError();
   }
-
-  const content = `\n${markdown.trimEnd()}\n`;
+  const content = `\n${safeMarkdown}\n`;
   const contentBytes = Buffer.byteLength(content, "utf8");
   if (contentBytes > MAX_APPEND_BYTES) {
     throw new GithubStepSummaryError();

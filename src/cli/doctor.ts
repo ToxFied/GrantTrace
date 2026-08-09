@@ -281,19 +281,18 @@ async function contractState(cwd: string): Promise<{
     const result = await readContractWithMetadata(
       join(cwd, "granttrace.lock.json"),
     );
-    if (result.migratedFromV1 || result.migratedFromLegacyV2) {
+    if (result.migrations.length > 0) {
       return {
         ready: false,
         invalid: false,
-        message: result.migratedFromV1
-          ? "Contract is schema v1; run granttrace check --accept after review"
-          : "Contract needs scenario-provenance review; run granttrace check",
+        message:
+          "Contract needs schema-v3 migration review; run granttrace check",
       };
     }
     return {
       ready: true,
       invalid: false,
-      message: `Schema v2 contract is valid (${result.contract.scenarios.length} scenario${
+      message: `Schema v3 contract is valid (${result.contract.scenarios.length} scenario${
         result.contract.scenarios.length === 1 ? "" : "s"
       })`,
     };

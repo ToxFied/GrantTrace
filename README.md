@@ -10,7 +10,7 @@
   · <a href="#see-it-work">Demo</a>
   · <a href="#quickstart">Quickstart</a>
   · <a href="https://toxfied.github.io/GrantTrace/docs/case-study/">Case study</a>
-  · <a href="https://toxfied.github.io/GrantTrace/docs/external-case-study/">External integration</a>
+  · <a href="https://toxfied.github.io/GrantTrace/docs/external-case-study/">Offline compatibility study</a>
   · <a href="https://github.com/ToxFied/GrantTrace/blob/main/SECURITY.md">Security</a>
 </p>
 
@@ -144,8 +144,9 @@ pnpm exec granttrace record --no-review issue-triage -- \
 pnpm exec granttrace check
 ```
 
-Use `--no-review` only when a final aggregate `check` is guaranteed. Never put
-`--accept` in CI; GrantTrace refuses it when `CI` is enabled. Use
+Use `--no-review` only when a final aggregate `check` is guaranteed. Never
+mutate the accepted contract in CI; GrantTrace refuses `check --accept`,
+`frontier select`, and `keep add/remove` when `CI` is enabled. Use
 `--format json` for machine-readable results or `--format markdown` for PR-ready
 output. GitHub Actions summaries are appended only with the explicit
 `--github-step-summary` flag.
@@ -193,9 +194,11 @@ GrantTrace requests the scenario permissions plus documented keeps, verifies
 the effective token scope, reproduces the accepted scenario, runs applicable
 negative controls, and reports cleanup separately. Its explicit strength is
 limited to restricted-scope reproduction when no selected permission has an
-applicable control, partially tested necessity when controls cover only some
-selected permissions, or tested necessity when they cover every selected
-permission. Failed and incomplete runs establish no proof-strength claim.
+applicable control, partially tested permission-name necessity when controls
+remove only some selected permission names, or tested permission-name
+necessity when they remove every selected permission name. These controls do
+not prove write-vs-read access-level minimality. Failed and incomplete runs
+establish no proof-strength claim.
 
 Proof reports identify a clean checkout by its HEAD commit. If the index or
 worktree is dirty—or Git provenance is unavailable—`sourceCommit` is `null`;
@@ -236,7 +239,7 @@ short-lived installation token it can use or print.
 | [Getting started](https://toxfied.github.io/GrantTrace/docs/getting-started/)   | First contract from install to commit         |
 | [How it works](https://toxfied.github.io/GrantTrace/docs/how-it-works/)         | Evidence, solving, and claim boundary         |
 | [Engineering case study](https://toxfied.github.io/GrantTrace/docs/case-study/) | Architecture and design tradeoffs             |
-| [Independent integration](https://toxfied.github.io/GrantTrace/docs/external-case-study/) | Source-pinned external App evidence    |
+| [Offline compatibility study](https://toxfied.github.io/GrantTrace/docs/external-case-study/) | Source-pinned external App evidence    |
 | [CI](https://toxfied.github.io/GrantTrace/docs/ci/)                             | Reproducing scenarios without auto-acceptance |
 | [Live proof](https://toxfied.github.io/GrantTrace/docs/live-proof/)             | Optional restricted-token verification        |
 | [Protocol](https://toxfied.github.io/GrantTrace/docs/protocol/)                 | Normative contract semantics                  |

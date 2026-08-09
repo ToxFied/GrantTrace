@@ -17,7 +17,7 @@ and executes applicable negative controls.
 
 1. The exact tool, API, and catalog identity match, and every accepted route DNF
    rebinds to the current pinned catalog before credentials are loaded.
-2. The accepted schema-v2 contract contains the named scenario.
+2. The accepted schema-v3 contract contains the named scenario.
 3. Requested permissions equal that scenario's selected permissions plus all
    manual keeps.
 4. Effective permissions equal the request plus mandatory `metadata:read`.
@@ -66,6 +66,9 @@ groups.
 After the accepted-contract preflight succeeds, proof execution writes an
 identity-free local report to `.granttrace/reports/<scenario>.json`. Do not
 commit or upload `.granttrace/`.
+The write-only report artifact uses schema v3 and requires the derived
+`proofStrength` field; GrantTrace does not claim a compatibility reader for
+older reports.
 
 The report's `sourceCommit` is HEAD only when Git reports a clean index and
 worktree. It is `null` when tracked files, staged files, or untracked files are
@@ -79,14 +82,17 @@ The CLI and report state one derived proof-strength value:
 | Value                            | Meaning                                                                 |
 | -------------------------------- | ----------------------------------------------------------------------- |
 | `restricted_scope_reproduced`    | The scenario reproduced with the verified restricted scope and cleanup completed, but no selected permission had an applicable negative control. |
-| `necessity_partially_tested`     | Successful negative controls removed some, but not every, selected permission. |
-| `necessity_tested`               | Successful negative controls removed every selected permission, and each tested operation was rejected as expected. |
+| `necessity_partially_tested`     | Successful negative controls removed some, but not every, selected permission name. |
+| `necessity_tested`               | Successful negative controls removed every selected permission name, and each tested operation was rejected as expected. |
 | `not_established`                | The run failed, cleanup failed, or a negative control was incomplete or unsuccessful. |
 
 Coverage is computed over scenario-selected permission names. Manual keeps and
 GitHub's mandatory baseline are never counted as tested necessity. A level of
 `necessity_tested` describes only the named scenario and the built-in controls
 that were applicable; it does not widen the scenario or control coverage.
+These values test removal of permission names. They do not prove that a
+selected `write` level is minimal relative to `read`; the current controls do
+not perform access-level downgrades.
 
 ## Understand failures
 

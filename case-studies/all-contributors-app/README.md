@@ -1,6 +1,6 @@
 # All Contributors Bot case-study assets
 
-These files support GrantTrace's independent integration case study against
+These files support GrantTrace's offline compatibility study against
 the public, MIT-licensed
 [`all-contributors/app`](https://github.com/all-contributors/app) GitHub App.
 The upstream source is pinned to commit
@@ -11,7 +11,12 @@ The assets contain two deliberately separate evidence layers:
 - `reply-only.observations.ndjson` and
   `new-branch-pr.observations.ndjson` are **source-derived, credential-free
   analysis fixtures**. They are not runtime observations. `case-study.json`
-  links their routes to pinned source and hashes the reviewed files.
+  links their routes to pinned source and hashes the route-defining and
+  transitive source-flow files. The bounded verifier checks that each link
+  names the pinned repository, commit, hashed file, exact line range, and
+  declared source call; the REST-route mapping remains human-reviewed. Each
+  fixture contains one record per distinct route or catalog gap and does not
+  model runtime call multiplicity.
 - `runtime.observations.ndjson` is a **credential-free mocked runtime
   recording** produced by GrantTrace's real Octokit recorder while the pinned
   App handled an `issue_comment.created` payload through Probot. The upstream

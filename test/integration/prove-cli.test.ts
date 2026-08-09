@@ -123,7 +123,9 @@ describe("prove CLI workflow", () => {
       "sentinel-canary",
     ]);
     expect(result.stdout).toContain("GrantTrace prove passed");
-    expect(result.stdout).toContain("Strength    Necessity tested");
+    expect(result.stdout).toContain(
+      "Strength    Necessity tested (permission-name removal)",
+    );
     expect(result.stdout).toContain("Rejected as expected");
     const reportPath = join(
       workingDirectory,
@@ -179,7 +181,7 @@ describe("prove CLI workflow", () => {
     );
   });
 
-  it("labels necessity as partial when controls cover only some selected permissions", async () => {
+  it("labels permission-name necessity as partial when controls cover only some selected permissions", async () => {
     await writeContractAtomic(
       join(workingDirectory, "granttrace.lock.json"),
       buildContract([observation, contentsObservation], fixtureCatalog),
@@ -204,7 +206,7 @@ describe("prove CLI workflow", () => {
 
     expect(result.code).toBe(0);
     expect(result.stdout).toContain(
-      "Strength    Necessity partially tested",
+      "Strength    Necessity partially tested (permission-name removal)",
     );
   });
 

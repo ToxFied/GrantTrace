@@ -19,9 +19,18 @@ beta.
 
 - Clarified the npm package summary and quickstart for both pnpm and npm users.
 - Live-proof reports and CLI output now state whether restricted scope was
-  reproduced, necessity was partially tested, necessity was tested, or no
-  strength was established.
-- Contract acceptance is refused when CI is enabled.
+  reproduced, permission-name necessity was partially tested, permission-name
+  necessity was tested, or no strength was established, without claiming
+  write-vs-read access-level minimality.
+- Contract schema v3 permits any explicitly selected exact frontier member;
+  released v2 forms migrate only after their deterministic default is
+  validated. Proof-report schema v3 makes `proofStrength` required.
+- Every accepted-contract mutation is refused when CI is enabled.
+- GitHub summary output accepts the runner's absolute file-command path even
+  when it is outside `RUNNER_TEMP`, while retaining link, inode, size, and
+  append-only safeguards.
+- The All Contributors artifact is titled an offline compatibility study, and
+  its bounded verifier now binds every route call to a hashed pinned line range.
 
 ## [0.1.0-beta.1] - 2026-07-25
 

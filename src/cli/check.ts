@@ -34,6 +34,10 @@ import type { CliContext } from "./context.js";
 import { writeLine } from "./context.js";
 import { ExitCode, type ExitCodeValue } from "./exit-codes.js";
 import {
+  isContinuousIntegration,
+  renderCiContractMutationRefused,
+} from "./ci-environment.js";
+import {
   acquireLocalOperationLock,
   type LocalOperationLock,
 } from "../security/local-state.js";
@@ -230,8 +234,7 @@ async function executeCheck(
       ),
     };
     if (
-      !loadedPrevious.migratedFromV1 &&
-      !loadedPrevious.migratedFromLegacyV2 &&
+      loadedPrevious.migrations.length === 0 &&
       serializeContract(previous) === serializeContract(nextWithManualKeeps)
     ) {
       return checkExecution(
@@ -259,8 +262,7 @@ async function executeCheck(
         {
           contract: nextWithManualKeeps,
           diff,
-          migratedFromV1: loadedPrevious.migratedFromV1,
-          migratedFromLegacyV2: loadedPrevious.migratedFromLegacyV2,
+          migrations: loadedPrevious.migrations,
         },
       );
     }
@@ -269,16 +271,14 @@ async function executeCheck(
       ExitCode.contractChanged,
       "review_required",
       renderContractDiff(diff, nextWithManualKeeps, {
-        migratedFromV1: loadedPrevious.migratedFromV1,
-        migratedFromLegacyV2: loadedPrevious.migratedFromLegacyV2,
+        migrations: loadedPrevious.migrations,
         nextAction: reviewNextAction(presentation, context),
       }),
       "stderr",
       {
         contract: nextWithManualKeeps,
         diff,
-        migratedFromV1: loadedPrevious.migratedFromV1,
-        migratedFromLegacyV2: loadedPrevious.migratedFromLegacyV2,
+        migrations: loadedPrevious.migrations,
       },
     );
   } catch (error) {
@@ -454,22 +454,8 @@ function checkExecution(
   };
 }
 
-function isContinuousIntegration(environment: NodeJS.ProcessEnv): boolean {
-  if (environment["GITHUB_ACTIONS"] === "true") {
-    return true;
-  }
-  const value = environment["CI"]?.trim().toLowerCase();
-  return value !== undefined && value !== "" && value !== "0" && value !== "false";
-}
-
 function renderCiAcceptRefused(): string {
-  return [
-    "GrantTrace check refused",
-    "",
-    "Contract acceptance is disabled when CI is enabled.",
-    "Review and accept the contract in a trusted local checkout.",
-    "",
-  ].join("\n");
+  return renderCiContractMutationRefused("check");
 }
 
 async function loadObservationSource(path: string) {

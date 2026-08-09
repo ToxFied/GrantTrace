@@ -44,8 +44,7 @@ const ManualKeepSchema = z.strictObject({
     .refine(isSafeReviewText),
 });
 
-export const GrantTraceContractSchema = z.strictObject({
-  schemaVersion: z.literal(2),
+const ContractBodyShape = {
   toolVersion: z.string().min(1).max(64),
   apiVersion: z.string().regex(/^\d{4}-\d{2}-\d{2}$/u),
   catalog: CatalogIdentitySchema,
@@ -78,9 +77,19 @@ export const GrantTraceContractSchema = z.strictObject({
       finding: ObservationFindingSchema,
     }),
   ),
+};
+
+export const GrantTraceContractSchema = z.strictObject({
+  schemaVersion: z.literal(3),
+  ...ContractBodyShape,
 });
 
 export type GrantTraceContract = z.infer<typeof GrantTraceContractSchema>;
+
+export const GrantTraceContractV2Schema = z.strictObject({
+  schemaVersion: z.literal(2),
+  ...ContractBodyShape,
+});
 
 export const GrantTraceContractLegacyV2Schema = z.strictObject({
   schemaVersion: z.literal(2),

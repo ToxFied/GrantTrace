@@ -91,21 +91,22 @@ template is represented as `null` in JSON and an em dash in Markdown.
 
 `--github-step-summary` explicitly opts in to appending the same safe Markdown
 report to the file named by `GITHUB_STEP_SUMMARY`. It works only when
-`GITHUB_ACTIONS=true` and the runner-provided path resolves inside
-`RUNNER_TEMP` to an existing, bounded regular file with no symlink or hard-link
-ambiguity. This also supports runner-created files mounted into GitHub Actions
-containers under a different numeric user ID. GrantTrace does not create,
-truncate, or follow links for this file. Terminal output still uses the selected
+`GITHUB_ACTIONS=true` and that runner-provided value is an absolute path to an
+existing, bounded regular file with no symlink or hard-link ambiguity. The path
+may live on GitHub's separate `/github/file_commands` container mount and is
+not required to be under `RUNNER_TEMP`. GrantTrace does not create, truncate,
+or follow links for this file. Terminal output still uses the selected
 `--format`; the summary is an additional destination. A missing or unsafe
 summary target is an analysis failure and exits `5` without following or
 modifying that target.
 
-Contract acceptance is refused when `CI` is enabled or
-`GITHUB_ACTIONS=true`. Review and accept changes from a trusted local checkout.
+Contract acceptance, frontier selection, and manual-keep mutation are refused
+when `CI` is enabled or `GITHUB_ACTIONS=true`, before acquiring the mutation
+lock or writing. Review and update contracts from a trusted local checkout.
 
 Removing a recording is only a local change. The next check presents the
 scenario, route, attribution, and permission contraction for review. Removing
-the final recording can therefore produce a deterministic zero-scenario v2
+the final recording can therefore produce a deterministic zero-scenario v3
 contract after `check --accept`; validated manual keeps remain until explicitly
 removed.
 
@@ -127,6 +128,8 @@ assignments and arbitrary permission text are not accepted. It changes
 `selectedPermissions` atomically without changing the evidence or frontier.
 Review and commit the resulting `granttrace.lock.json` diff. A selection that
 would duplicate a manual keep is blocked rather than removing the keep.
+Selection is blocked until any v1/v2 contract migration is accepted as v3,
+and it is refused in CI. `list` remains available because it does not mutate.
 
 ## `keep`
 
@@ -142,7 +145,7 @@ granttrace keep list
 granttrace prove <name> [--timeout 15m] -- <command> [args...]
 ```
 
-The scenario must exist in an accepted schema-v2 contract. See
+The scenario must exist in an accepted schema-v3 contract. See
 [live proof](/docs/live-proof). Proof requires initialized safe local state and
 complete live setup. It defaults to 15 minutes and allows at most 30 minutes;
 durations accept `ms`, `s`, or `m` with an effective one-second minimum.

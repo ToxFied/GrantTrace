@@ -3,6 +3,7 @@ import type { GrantTraceContract } from "../contract/schema.js";
 import type { ExitCodeValue } from "../cli/exit-codes.js";
 import { githubPermissionCatalog } from "../evidence/catalog.js";
 import { MANDATORY_INSTALLATION_PERMISSIONS } from "../proof/permission-baseline.js";
+import type { ContractMigration } from "../contract/serialize.js";
 
 export type CheckStatus =
   | "accepted"
@@ -27,8 +28,7 @@ export type CheckReportInput = {
   reason?: CheckReason;
   contract?: GrantTraceContract;
   diff?: ContractDiff;
-  migratedFromV1?: boolean;
-  migratedFromLegacyV2?: boolean;
+  migrations?: ContractMigration[];
 };
 
 type SafePermissionChange = {
@@ -112,7 +112,7 @@ export type CheckReport = {
     method: string;
     template: string | null;
   }>;
-  migrations: Array<"schema_v1" | "schema_v2_provenance">;
+  migrations: ContractMigration[];
 };
 
 export function createCheckReport(input: CheckReportInput): CheckReport {
@@ -199,14 +199,7 @@ export function createCheckReport(input: CheckReportInput): CheckReport {
         method: unknown.method,
         template: safeRouteTemplate(unknown.method, unknown.template),
       })) ?? [],
-    migrations: [
-      ...(input.migratedFromV1 === true
-        ? (["schema_v1"] as const)
-        : []),
-      ...(input.migratedFromLegacyV2 === true
-        ? (["schema_v2_provenance"] as const)
-        : []),
-    ],
+    migrations: [...(input.migrations ?? [])],
   };
 }
 
@@ -557,9 +550,14 @@ function reasonLabel(reason: Exclude<CheckReason, null>): string {
 function migrationLabel(
   migration: CheckReport["migrations"][number],
 ): string {
-  return migration === "schema_v1"
-    ? "Schema v1 to v2"
-    : "Schema v2 scenario-provenance upgrade";
+  switch (migration) {
+    case "schema_v1_to_v3":
+      return "Schema v1 to v3";
+    case "schema_v2_to_v3":
+      return "Schema v2 to v3 frontier-selection semantics";
+    case "legacy_schema_v2_to_v3":
+      return "Legacy schema v2 provenance and frontier-selection semantics to v3";
+  }
 }
 
 function findingLabel(finding: CheckReport["findings"][number]["finding"]): string {

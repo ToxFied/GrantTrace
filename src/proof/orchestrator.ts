@@ -217,7 +217,7 @@ function initialReport(
     ? contractForScenario(contract, scenario).selectedPermissions
     : {};
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     toolVersion: TOOL_VERSION,
     apiVersion: GITHUB_API_VERSION,
     sourceCommit,

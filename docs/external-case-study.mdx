@@ -10,7 +10,10 @@ from the independently
 maintained [All Contributors Bot](https://github.com/all-contributors/app/tree/00f6362ffcc927a2d05fec27f42c3d09e4b03adb),
 an MIT-licensed Probot GitHub App. The study pins upstream commit
 [`00f6362ffcc927a2d05fec27f42c3d09e4b03adb`](https://github.com/all-contributors/app/commit/00f6362ffcc927a2d05fec27f42c3d09e4b03adb)
-and verifies SHA-256 hashes for every inspected upstream file.
+and verifies SHA-256 hashes for every inspected upstream file. The bounded
+verifier also checks that every declared route source URL names that repository
+and commit, a hashed file and line range, and text containing the declared
+Octokit source call.
 
 The result is mixed in a useful way:
 
@@ -28,8 +31,9 @@ The result is mixed in a useful way:
   satisfies the comment route. That is a concrete permission assumption to
   review, not evidence that the App can drop the grant globally.
 
-This is an independent evaluation, not an All Contributors endorsement or an
-adoption claim.
+This is a source-pinned compatibility evaluation with mocked runtime evidence,
+not a live GitHub integration, an All Contributors endorsement, or an adoption
+claim.
 
 ## Why this App
 
@@ -64,7 +68,9 @@ node scripts/verify-external-case-study.mjs
 ```
 
 This establishes which source was inspected. It does not establish that the
-code path ran, and no fixture line is a runtime observation of the App.
+code path ran, and no fixture line is a runtime observation of the App. Route
+mapping is mechanically bound to the hashed source range and declared call;
+the mapping from that call to a canonical REST route remains human-reviewed.
 
 ### 2. Credential-free fixture analysis
 
@@ -83,7 +89,7 @@ pnpm granttrace analyze \
 The fixtures intentionally use `status: null`, carry no runtime permission
 header, and rely on catalog-only resolution. They do not invent a GitHub
 response, token, repository, runtime observation, or successful live run.
-Offline integration assertions lock the expected frontier, covered route set,
+Offline compatibility assertions lock the expected frontier, covered route set,
 blocking findings, fixture-to-manifest counts, and source manifest:
 
 ```bash
@@ -134,6 +140,13 @@ mutation was used. No maintainer was contacted: feedback is unavailable and
 was not solicited. The study therefore says nothing about unobserved branches,
 production configuration, live GitHub response behavior, or whether the
 maintainers would adopt the workflow.
+
+No new negative controls were added for this artifact. Permission-removal
+controls require a real adopter scenario and disposable live fixture so that
+authorization rejection and mutation cleanup can be observed safely. Neither
+source-derived fixtures nor responses mocked by the upstream test can provide
+that evidence, so treating those controls as complete here would overstate the
+study.
 
 ## Route inventory
 

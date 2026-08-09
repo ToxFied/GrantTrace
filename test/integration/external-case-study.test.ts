@@ -46,7 +46,7 @@ const fixtureDirectory = join(
   "all-contributors-app",
 );
 
-describe("All Contributors Bot external case study", () => {
+describe("All Contributors Bot offline compatibility study", () => {
   it("pins reviewable upstream provenance and catalog coverage", async () => {
     const manifest = await loadManifest();
 

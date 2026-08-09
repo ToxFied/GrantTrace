@@ -11,6 +11,7 @@ import type { Observation } from "../../src/contract/observation.js";
 import { writeContractAtomic } from "../../src/contract/serialize.js";
 import { githubPermissionCatalog } from "../../src/evidence/catalog.js";
 import { serializeProofReport } from "../../src/proof/report.js";
+import { acquireLocalOperationLock } from "../../src/security/local-state.js";
 import { TOOL_VERSION } from "../../src/version.js";
 
 const issueRoute = "/repos/{owner}/{repo}/issues";
@@ -141,6 +142,36 @@ describe("manual keeps", () => {
     expect(mandatory.stderr()).toContain("mandatory baseline");
   });
 
+  it.each([
+    { CI: "true" },
+    { CI: "false", GITHUB_ACTIONS: "true" },
+  ])("refuses accepted-contract keep mutations in CI", async (environment) => {
+    const lockPath = join(directory, "granttrace.lock.json");
+    const before = await readFile(lockPath, "utf8");
+    const activeLock = await acquireLocalOperationLock(directory);
+    try {
+      const output = captureContext(directory, environment);
+      expect(
+        await runCli(
+          [
+            "keep",
+            "add",
+            "actions:read",
+            "--reason",
+            "Required by an integration outside recorded scenarios.",
+          ],
+          output.context,
+        ),
+      ).toBe(2);
+      expect(output.stderr()).toContain(
+        "Accepted-contract mutations are disabled",
+      );
+      expect(await readFile(lockPath, "utf8")).toBe(before);
+    } finally {
+      await activeLock.release();
+    }
+  });
+
   it("requires requested and effective proof access to include manual keeps exactly", () => {
     const valid = proofReport();
     const serialized = serializeProofReport(valid);
@@ -182,7 +213,7 @@ function issueObservation(): Observation {
 
 function proofReport(): Record<string, unknown> {
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     toolVersion: TOOL_VERSION,
     apiVersion: "2026-03-10",
     sourceCommit: null,

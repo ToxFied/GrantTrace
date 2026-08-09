@@ -59,7 +59,7 @@ This isolates broker credentials; it is still not an OS sandbox.
 
 The terminal, README, contract semantics, and reports consistently bind the
 claim to named, recorded scenarios. Routes carry deterministic scenario
-attribution and per-scenario evidence provenance in schema v2. Proving one
+attribution and per-scenario evidence provenance in schema v3. Proving one
 scenario slices and resolves only its attributed routes and exact provenance.
 Unknown and unobserved behavior never becomes an empty requirement. Automatic
 recording is limited to supported Node global-`fetch` traffic targeting exactly

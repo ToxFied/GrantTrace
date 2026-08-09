@@ -3,6 +3,7 @@ import {
   mkdtemp,
   readFile,
   rm,
+  writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -116,6 +117,80 @@ describe("selectable permission frontier", () => {
     expect(await readFile(lockPath, "utf8")).toBe(before);
   });
 
+  it.each([
+    { CI: "true" },
+    { CI: "false", GITHUB_ACTIONS: "true" },
+  ])(
+    "refuses selection in CI before acquiring a lock or changing the contract",
+    async (environment) => {
+      const before = await readFile(lockPath, "utf8");
+      let acquireCalled = false;
+      const output = captureContext(directory, environment);
+      output.context.frontierDependencies = {
+        acquireOperationLock: async () => {
+          acquireCalled = true;
+          throw new Error("must not acquire");
+        },
+      };
+
+      expect(
+        await runCli(["frontier", "select", "2"], output.context),
+      ).toBe(2);
+      expect(output.stderr()).toContain(
+        "Accepted-contract mutations are disabled",
+      );
+      expect(acquireCalled).toBe(false);
+      expect(await readFile(lockPath, "utf8")).toBe(before);
+
+      const listed = captureContext(directory, environment);
+      expect(await runCli(["frontier", "list"], listed.context)).toBe(0);
+      expect(listed.stdout()).toContain("Permission frontier");
+    },
+  );
+
+  it("reports lock-release failure before any success output", async () => {
+    const output = captureContext(directory);
+    output.context.frontierDependencies = {
+      acquireOperationLock: async () => ({
+        release: async () => {
+          throw new Error("release failure canary");
+        },
+      }),
+    };
+
+    expect(
+      await runCli(["frontier", "select", "2"], output.context),
+    ).toBe(5);
+    expect(output.stdout()).toBe("");
+    expect(output.stderr()).toContain("frontier cleanup failed");
+    expect(output.stderr()).toContain("may have completed");
+    expect(output.stderr()).not.toContain("selection updated");
+    expect((await readContract(lockPath)).selectedPermissions).toEqual({
+      pull_requests: "write",
+    });
+  });
+
+  it("blocks selection until a migrated schema-v2 contract is accepted as v3", async () => {
+    const contract = await readContract(lockPath);
+    await writeFile(
+      lockPath,
+      `${JSON.stringify({ ...contract, schemaVersion: 2 }, null, 2)}\n`,
+      "utf8",
+    );
+    const before = await readFile(lockPath, "utf8");
+    const output = captureContext(directory);
+
+    expect(
+      await runCli(["frontier", "select", "2"], output.context),
+    ).toBe(6);
+    expect(output.stderr()).toContain("not schema v3");
+    expect(await readFile(lockPath, "utf8")).toBe(before);
+
+    const listed = captureContext(directory);
+    expect(await runCli(["frontier", "list"], listed.context)).toBe(0);
+    expect(listed.stdout()).toContain("Permission frontier");
+  });
+
   it("does not silently replace a conflicting manual keep", async () => {
     const contract = await readContract(lockPath);
     await writeContractAtomic(lockPath, {
@@ -168,7 +243,10 @@ function issueObservation(): Observation {
   };
 }
 
-function captureContext(cwd: string): {
+function captureContext(
+  cwd: string,
+  environment: NodeJS.ProcessEnv = {},
+): {
   context: CliContext;
   stdout(): string;
   stderr(): string;
@@ -178,7 +256,7 @@ function captureContext(cwd: string): {
   return {
     context: {
       cwd,
-      environment: {},
+      environment,
       stdout: {
         write(value) {
           stdout += String(value);

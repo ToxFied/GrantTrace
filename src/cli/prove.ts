@@ -138,15 +138,13 @@ export async function runProve(
       const loaded = await readContractWithMetadata(
         join(context.cwd, "granttrace.lock.json"),
       );
-      if (loaded.migratedFromV1 || loaded.migratedFromLegacyV2) {
+      if (loaded.migrations.length > 0) {
         writeLine(
           context.stderr,
           [
             "GrantTrace prove blocked",
             "",
-            loaded.migratedFromV1
-              ? "Schema v1 contracts do not contain exact route-to-scenario attribution."
-              : "This schema-v2 contract lacks scenario-specific evidence provenance.",
+            "This accepted contract is not schema v3.",
             "",
             "Next",
             "  Re-record the scenario if needed, review granttrace check, then run:",
@@ -408,9 +406,9 @@ function proofStrengthLabel(
     case "restricted_scope_reproduced":
       return "Restricted scope reproduced";
     case "necessity_partially_tested":
-      return "Necessity partially tested";
+      return "Necessity partially tested (permission-name removal)";
     case "necessity_tested":
-      return "Necessity tested";
+      return "Necessity tested (permission-name removal)";
   }
 }
 

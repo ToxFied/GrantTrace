@@ -1,6 +1,7 @@
 import {
   access,
   chmod,
+  link,
   mkdtemp,
   readFile,
   rm,
@@ -182,7 +183,7 @@ describe("contract-check structured output", () => {
     expect(markdown.stdout()).not.toContain("private-owner");
   });
 
-  it("appends Markdown only with the explicit safe GitHub summary option", async () => {
+  it("appends Markdown only by explicit opt-in when RUNNER_TEMP is unrelated", async () => {
     const summaryPath = join(directory, "step-summary.md");
     await writeFile(summaryPath, "existing summary\n", {
       encoding: "utf8",
@@ -201,7 +202,7 @@ describe("contract-check structured output", () => {
       CI: "true",
       GITHUB_ACTIONS: "true",
       GITHUB_STEP_SUMMARY: summaryPath,
-      RUNNER_TEMP: directory,
+      RUNNER_TEMP: join(directory, "unrelated-runner-temp"),
     });
     expect(
       await runCheck(["--github-step-summary"], withOptIn.context),
@@ -224,6 +225,27 @@ describe("contract-check structured output", () => {
         GITHUB_ACTIONS: "true",
         GITHUB_STEP_SUMMARY: linked,
         RUNNER_TEMP: directory,
+      });
+
+      expect(
+        await runCheck(["--github-step-summary"], output.context),
+      ).toBe(5);
+      expect(output.stderr()).toContain("unavailable or unsafe");
+      expect(await readFile(target, "utf8")).toBe("do not modify\n");
+    },
+  );
+
+  it.skipIf(process.platform === "win32")(
+    "refuses to append to a hard-linked GitHub summary",
+    async () => {
+      const target = join(directory, "summary-target.md");
+      const linked = join(directory, "summary-hard-link.md");
+      await writeFile(target, "do not modify\n", "utf8");
+      await link(target, linked);
+      const output = captureContext(directory, {
+        GITHUB_ACTIONS: "true",
+        GITHUB_STEP_SUMMARY: linked,
+        RUNNER_TEMP: join(directory, "unrelated-runner-temp"),
       });
 
       expect(

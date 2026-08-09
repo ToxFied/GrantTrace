@@ -43,6 +43,7 @@ describe("allowlisted ephemeral proof report", () => {
     expect(serialized).toContain(
       '"proofStrength": "restricted_scope_reproduced"',
     );
+    expect(serialized).toContain('"schemaVersion": 3');
     for (const forbidden of [
       "token",
       "owner",
@@ -219,7 +220,7 @@ describe("allowlisted ephemeral proof report", () => {
       expected: "restricted_scope_reproduced",
     },
     {
-      name: "reports partially tested necessity when only some selected permissions are removed",
+      name: "reports partially tested permission-name necessity when only some names are removed",
       selectedPermissions: { contents: "read", issues: "write" },
       positiveProof: { status: "pass" },
       negativeControls: [
@@ -229,7 +230,7 @@ describe("allowlisted ephemeral proof report", () => {
       expected: "necessity_partially_tested",
     },
     {
-      name: "reports tested necessity when every selected permission is removed",
+      name: "reports tested permission-name necessity when every name is removed",
       selectedPermissions: { issues: "write" },
       positiveProof: { status: "pass" },
       negativeControls: [
@@ -253,11 +254,21 @@ describe("allowlisted ephemeral proof report", () => {
       ).toThrow(ProofReportError);
     }
   });
+
+  it("requires proofStrength in schema-v3 reports and rejects schema v2", () => {
+    const { proofStrength: _proofStrength, ...missingStrength } = validReport();
+    expect(() => serializeProofReport(missingStrength)).toThrow(
+      ProofReportError,
+    );
+    expect(() =>
+      serializeProofReport({ ...validReport(), schemaVersion: 2 }),
+    ).toThrow(ProofReportError);
+  });
 });
 
 function validReport(): Record<string, unknown> {
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     toolVersion: "0.1.0-beta.1",
     apiVersion: "2026-03-10",
     sourceCommit: "abcdef1234567",

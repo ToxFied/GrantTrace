@@ -1,6 +1,7 @@
 import { join } from "node:path";
 
 import { findManualKeepConflicts } from "../contract/manual-keeps.js";
+import type { GrantTraceContract } from "../contract/schema.js";
 import {
   readContractWithMetadata,
   writeContractAtomic,
@@ -15,10 +16,20 @@ import {
 import type { CliContext } from "./context.js";
 import { writeLine } from "./context.js";
 import { ExitCode, type ExitCodeValue } from "./exit-codes.js";
+import {
+  isContinuousIntegration,
+  renderCiContractMutationRefused,
+} from "./ci-environment.js";
 
 type FrontierOperation =
   | { kind: "list" }
   | { index: number; kind: "select" };
+
+type FrontierExecution = {
+  code: ExitCodeValue;
+  destination: "stderr" | "stdout";
+  text: string;
+};
 
 export async function runFrontier(
   args: string[],
@@ -38,23 +49,41 @@ export async function runFrontier(
     return ExitCode.usage;
   }
 
+  if (
+    operation.kind === "select" &&
+    isContinuousIntegration(context.environment)
+  ) {
+    writeLine(
+      context.stderr,
+      renderCiContractMutationRefused("frontier selection"),
+    );
+    return ExitCode.usage;
+  }
+
   const lockPath = join(context.cwd, "granttrace.lock.json");
   let operationLock: LocalOperationLock | null = null;
+  let execution = frontierExecution(
+    ExitCode.analysisFailure,
+    "stderr",
+    "GrantTrace frontier failed: contract processing did not complete.",
+  );
   try {
     if (operation.kind === "select") {
-      operationLock = await acquireLocalOperationLock(context.cwd);
+      operationLock = await (
+        context.frontierDependencies?.acquireOperationLock ??
+        acquireLocalOperationLock
+      )(context.cwd);
     }
 
     const loaded = await readContractWithMetadata(lockPath);
-    if (loaded.migratedFromV1 || loaded.migratedFromLegacyV2) {
-      writeLine(
-        context.stderr,
+    if (operation.kind === "select" && loaded.migrations.length > 0) {
+      execution = frontierExecution(
+        ExitCode.contractChanged,
+        "stderr",
         [
           "GrantTrace frontier blocked",
           "",
-          loaded.migratedFromV1
-            ? "The accepted contract is schema v1."
-            : "The accepted contract needs the schema-v2 provenance upgrade.",
+          "The accepted contract is not schema v3.",
           "",
           "Next",
           "  Re-record if needed, review granttrace check, then run:",
@@ -62,87 +91,18 @@ export async function runFrontier(
           "",
         ].join("\n"),
       );
-      return ExitCode.contractChanged;
-    }
-
-    const contract = loaded.contract;
-    if (operation.kind === "list") {
-      writeLine(context.stdout, renderFrontier(contract));
-      return ExitCode.success;
-    }
-
-    const selected = contract.permissionFrontier[operation.index - 1];
-    if (selected === undefined) {
-      writeLine(
-        context.stderr,
-        `GrantTrace frontier usage error: choose a candidate from 1 to ${contract.permissionFrontier.length}.`,
+    } else {
+      execution = await executeFrontierOperation(
+        operation,
+        loaded.contract,
+        lockPath,
       );
-      return ExitCode.usage;
     }
-
-    const next = { ...contract, selectedPermissions: selected };
-    const conflicts = findManualKeepConflicts(
-      next,
-      selected,
-      MANDATORY_INSTALLATION_PERMISSIONS,
-    );
-    if (conflicts.length > 0) {
-      writeLine(
-        context.stderr,
-        [
-          "GrantTrace frontier selection blocked",
-          "",
-          "The candidate duplicates access already recorded as a manual keep:",
-          ...conflicts.map((conflict) => `  ${conflict.permission}`),
-          "",
-          "Next",
-          "  Remove the conflicting manual keep only if the frontier candidate should replace it.",
-          "",
-        ].join("\n"),
-      );
-      return ExitCode.usage;
-    }
-
-    if (
-      assignmentKey(contract.selectedPermissions) === assignmentKey(selected)
-    ) {
-      writeLine(
-        context.stdout,
-        [
-          "Permission frontier selection unchanged",
-          "",
-          `  Candidate ${operation.index} is already selected.`,
-          "",
-        ].join("\n"),
-      );
-      return ExitCode.success;
-    }
-
-    await writeContractAtomic(lockPath, next);
-    writeLine(
-      context.stdout,
-      [
-        "Permission frontier selection updated",
-        "",
-        "Previous selection",
-        ...renderAssignment(contract.selectedPermissions).map(
-          (line) => `  ${line}`,
-        ),
-        "",
-        "Selected assignment",
-        `  Candidate ${operation.index} of ${contract.permissionFrontier.length}`,
-        ...renderAssignment(selected).map((line) => `  ${line}`),
-        "",
-        "Next",
-        "  Review and commit the granttrace.lock.json diff.",
-        "",
-      ].join("\n"),
-    );
-    return ExitCode.success;
   } catch (error) {
     if (error instanceof LocalOperationLockError) {
-      writeLine(
-        context.stderr,
+      execution = frontierExecution(
+        ExitCode.analysisFailure,
+        "stderr",
         [
           "GrantTrace frontier blocked",
           "",
@@ -153,24 +113,133 @@ export async function runFrontier(
           "",
         ].join("\n"),
       );
+    } else {
+      execution = frontierExecution(
+        ExitCode.analysisFailure,
+        "stderr",
+        [
+          "GrantTrace frontier failed",
+          "",
+          "GrantTrace could not read or update granttrace.lock.json.",
+          "",
+          "Next",
+          "  Create or validate granttrace.lock.json with granttrace check.",
+          "",
+        ].join("\n"),
+      );
+    }
+  }
+
+  if (operationLock !== null) {
+    try {
+      await operationLock.release();
+    } catch {
+      writeLine(
+        context.stderr,
+        [
+          "GrantTrace frontier cleanup failed",
+          "",
+          "The contract update may have completed, but the operation lock could not be removed.",
+          "Inspect .granttrace/active-operation and validate the contract before retrying.",
+          "",
+        ].join("\n"),
+      );
       return ExitCode.analysisFailure;
     }
-    writeLine(
-      context.stderr,
+  }
+  writeLine(context[execution.destination], execution.text);
+  return execution.code;
+}
+
+async function executeFrontierOperation(
+  operation: FrontierOperation,
+  contract: GrantTraceContract,
+  lockPath: string,
+): Promise<FrontierExecution> {
+  if (operation.kind === "list") {
+    return frontierExecution(
+      ExitCode.success,
+      "stdout",
+      renderFrontier(contract),
+    );
+  }
+
+  const selected = contract.permissionFrontier[operation.index - 1];
+  if (selected === undefined) {
+    return frontierExecution(
+      ExitCode.usage,
+      "stderr",
+      `GrantTrace frontier usage error: choose a candidate from 1 to ${contract.permissionFrontier.length}.`,
+    );
+  }
+
+  const next = { ...contract, selectedPermissions: selected };
+  const conflicts = findManualKeepConflicts(
+    next,
+    selected,
+    MANDATORY_INSTALLATION_PERMISSIONS,
+  );
+  if (conflicts.length > 0) {
+    return frontierExecution(
+      ExitCode.usage,
+      "stderr",
       [
-        "GrantTrace frontier failed",
+        "GrantTrace frontier selection blocked",
         "",
-        "GrantTrace could not read or update granttrace.lock.json.",
+        "The candidate duplicates access already recorded as a manual keep:",
+        ...conflicts.map((conflict) => `  ${conflict.permission}`),
         "",
         "Next",
-        "  Create or validate granttrace.lock.json with granttrace check.",
+        "  Remove the conflicting manual keep only if the frontier candidate should replace it.",
         "",
       ].join("\n"),
     );
-    return ExitCode.analysisFailure;
-  } finally {
-    await operationLock?.release();
   }
+
+  if (
+    assignmentKey(contract.selectedPermissions) === assignmentKey(selected)
+  ) {
+    return frontierExecution(
+      ExitCode.success,
+      "stdout",
+      [
+        "Permission frontier selection unchanged",
+        "",
+        `  Candidate ${operation.index} is already selected.`,
+        "",
+      ].join("\n"),
+    );
+  }
+
+  await writeContractAtomic(lockPath, next);
+  return frontierExecution(
+    ExitCode.success,
+    "stdout",
+    [
+      "Permission frontier selection updated",
+      "",
+      "Previous selection",
+      ...renderAssignment(contract.selectedPermissions).map(
+        (line) => `  ${line}`,
+      ),
+      "",
+      "Selected assignment",
+      `  Candidate ${operation.index} of ${contract.permissionFrontier.length}`,
+      ...renderAssignment(selected).map((line) => `  ${line}`),
+      "",
+      "Next",
+      "  Review and commit the granttrace.lock.json diff.",
+      "",
+    ].join("\n"),
+  );
+}
+
+function frontierExecution(
+  code: ExitCodeValue,
+  destination: FrontierExecution["destination"],
+  text: string,
+): FrontierExecution {
+  return { code, destination, text };
 }
 
 function parseOperation(args: string[]): FrontierOperation | null {
@@ -230,6 +299,7 @@ function helpText(): string {
     "",
     "Listing is read-only. Selection changes only selectedPermissions in the",
     "accepted contract and must always name an existing numbered candidate.",
+    "Selection is refused when CI is enabled.",
     "Review and commit the resulting granttrace.lock.json diff.",
     "",
   ].join("\n");

@@ -235,7 +235,7 @@ try {
     await readFile(join(installDirectory, "granttrace.lock.json"), "utf8"),
   );
   if (
-    accepted.schemaVersion !== 2 ||
+    accepted.schemaVersion !== 3 ||
     accepted.scenarios?.length !== 1 ||
     accepted.scenarios[0]?.name !== "package-smoke"
   ) {

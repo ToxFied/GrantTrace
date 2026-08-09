@@ -2,6 +2,7 @@ import { createInterface } from "node:readline/promises";
 
 import type { ProofExecutionDependencies } from "../proof/orchestrator.js";
 import type { LiveFixtureConfig } from "../proof/live-config.js";
+import type { LocalOperationLock } from "../security/local-state.js";
 
 export type CliContext = {
   cwd: string;
@@ -15,6 +16,9 @@ export type CliContext = {
   ) => LiveFixtureConfig;
   recordDependencies?: {
     removeSession?: (path: string) => Promise<void>;
+  };
+  frontierDependencies?: {
+    acquireOperationLock?: (cwd: string) => Promise<LocalOperationLock>;
   };
 };
 

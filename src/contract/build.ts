@@ -18,7 +18,7 @@ export function buildContract(
   });
 
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     toolVersion: TOOL_VERSION,
     apiVersion: GITHUB_API_VERSION,
     catalog: {

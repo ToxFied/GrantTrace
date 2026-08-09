@@ -30,7 +30,7 @@ const contentsRoute = "/repos/{owner}/{repo}/contents/{path}";
 const commentRoute =
   "/repos/{owner}/{repo}/issues/{issue_number}/comments";
 
-describe("schema-v2 multi-scenario contracts", () => {
+describe("schema-v3 multi-scenario contracts and released-schema migration", () => {
   let directory: string;
 
   beforeEach(async () => {
@@ -180,13 +180,66 @@ describe("schema-v2 multi-scenario contracts", () => {
     ).toBe(serializeContract(contract));
   });
 
-  it("requires review when upgrading an early schema-v2 provenance union", async () => {
+  it("migrates a released schema-v2 contract with scenario evidence", async () => {
+    const contract = buildContract(
+      [observed("issues-read", "GET", issueRoute, "issues", "read")],
+      githubPermissionCatalog,
+    );
+    const schemaV2 = { ...contract, schemaVersion: 2 };
+    const path = join(directory, "schema-v2.json");
+    await writeFile(path, `${JSON.stringify(schemaV2, null, 2)}\n`, "utf8");
+
+    const migrated = await readContractWithMetadata(path);
+    expect(migrated.migrations).toEqual(["schema_v2_to_v3"]);
+    expect(migrated.contract.schemaVersion).toBe(3);
+  });
+
+  it("requires review before accepting an otherwise-equal schema-v2 contract as v3", async () => {
+    const observations = [
+      observed("issues-read", "GET", issueRoute, "issues", "read"),
+    ];
+    const contract = buildContract(observations, githubPermissionCatalog);
+    const observationDirectory = join(
+      directory,
+      ".granttrace",
+      "observations",
+    );
+    await mkdir(observationDirectory, { recursive: true, mode: 0o700 });
+    await writeObservations(
+      join(observationDirectory, "issues-read.ndjson"),
+      observations,
+    );
+    const lockPath = join(directory, "granttrace.lock.json");
+    await writeFile(
+      lockPath,
+      `${JSON.stringify({ ...contract, schemaVersion: 2 }, null, 2)}\n`,
+      "utf8",
+    );
+    const before = await readFile(lockPath, "utf8");
+    const review = captureContext(directory);
+
+    expect(await runCheck(["--format", "json"], review.context)).toBe(6);
+    expect(JSON.parse(review.stdout())).toMatchObject({
+      status: "review_required",
+      migrations: ["schema_v2_to_v3"],
+    });
+    expect(await readFile(lockPath, "utf8")).toBe(before);
+
+    const accepted = captureContext(directory);
+    expect(await runCheck(["--accept"], accepted.context)).toBe(0);
+    expect(JSON.parse(await readFile(lockPath, "utf8"))).toMatchObject({
+      schemaVersion: 3,
+    });
+  });
+
+  it("migrates a legacy schema-v2 provenance union", async () => {
     const observations = [
       observed("issues-read", "GET", issueRoute, "issues", "read"),
     ];
     const contract = buildContract(observations, githubPermissionCatalog);
     const legacyV2 = {
       ...contract,
+      schemaVersion: 2,
       routes: contract.routes.map(
         ({ scenarioEvidence: _scenarioEvidence, ...route }) => route,
       ),
@@ -195,10 +248,43 @@ describe("schema-v2 multi-scenario contracts", () => {
     await writeFile(path, `${JSON.stringify(legacyV2, null, 2)}\n`, "utf8");
 
     const migrated = await readContractWithMetadata(path);
-    expect(migrated.migratedFromLegacyV2).toBe(true);
+    expect(migrated.migrations).toEqual(["legacy_schema_v2_to_v3"]);
+    expect(migrated.contract.schemaVersion).toBe(3);
     expect(migrated.contract.routes[0]?.scenarioEvidence).toEqual({
       "issues-read": ["runtime_header", "pinned_catalog"],
     });
+  });
+
+  it("rejects a schema-v2 contract that violates its deterministic-default semantics", async () => {
+    const observation: Observation = {
+      schemaVersion: 1,
+      scenario: "comments",
+      method: "POST",
+      routeTemplate: commentRoute,
+      status: 201,
+      requirements: [
+        [{ permission: "issues", level: "write" }],
+        [{ permission: "pull_requests", level: "write" }],
+      ],
+      evidenceSource: "runtime_header",
+      finding: null,
+    };
+    const contract = buildContract([observation], githubPermissionCatalog);
+    const invalidSchemaV2 = {
+      ...contract,
+      schemaVersion: 2,
+      selectedPermissions: { pull_requests: "write" },
+    };
+    const path = join(directory, "invalid-schema-v2.json");
+    await writeFile(
+      path,
+      `${JSON.stringify(invalidSchemaV2, null, 2)}\n`,
+      "utf8",
+    );
+
+    await expect(readContractWithMetadata(path)).rejects.toThrow(
+      ContractFileError,
+    );
   });
 
   it("migrates v1 deterministically and reports the migration metadata", async () => {
@@ -230,8 +316,8 @@ describe("schema-v2 multi-scenario contracts", () => {
     await writeFile(path, `${JSON.stringify(legacy, null, 2)}\n`, "utf8");
 
     const migrated = await readContractWithMetadata(path);
-    expect(migrated.migratedFromV1).toBe(true);
-    expect(migrated.contract.schemaVersion).toBe(2);
+    expect(migrated.migrations).toEqual(["schema_v1_to_v3"]);
+    expect(migrated.contract.schemaVersion).toBe(3);
     expect(
       migrated.contract.routes.every(
         (route) =>
@@ -278,7 +364,7 @@ describe("schema-v2 multi-scenario contracts", () => {
     expect(code).toBe(6);
     expect(output.stderr()).toContain("Schema migration required");
     expect(output.stderr()).toContain(
-      "v1 -> v2 adds exact route-to-scenario attribution",
+      "v1 -> v3 adds exact route-to-scenario attribution",
     );
     expect(JSON.parse(await readFile(lockPath, "utf8"))).toMatchObject({
       schemaVersion: 1,

@@ -13,6 +13,7 @@ import { MANDATORY_INSTALLATION_PERMISSIONS } from "../proof/permission-baseline
 import {
   GrantTraceContractSchema,
   GrantTraceContractLegacyV2Schema,
+  GrantTraceContractV2Schema,
   GrantTraceContractV1Schema,
   type GrantTraceContract,
 } from "./schema.js";
@@ -48,9 +49,17 @@ export async function readContract(path: string): Promise<GrantTraceContract> {
 
 export type ReadContractResult = {
   contract: GrantTraceContract;
-  migratedFromLegacyV2: boolean;
-  migratedFromV1: boolean;
+  migrations: ContractMigration[];
 };
+
+export const ContractMigration = {
+  schemaV1ToV3: "schema_v1_to_v3",
+  schemaV2ToV3: "schema_v2_to_v3",
+  legacySchemaV2ToV3: "legacy_schema_v2_to_v3",
+} as const;
+
+export type ContractMigration =
+  (typeof ContractMigration)[keyof typeof ContractMigration];
 
 export async function readContractWithMetadata(
   path: string,
@@ -77,45 +86,56 @@ export async function readContractWithMetadata(
     if (current.success) {
       return {
         contract: canonicalizeContract(current.data),
-        migratedFromLegacyV2: false,
-        migratedFromV1: false,
+        migrations: [],
+      };
+    }
+    const schemaV2 = GrantTraceContractV2Schema.safeParse(raw);
+    if (schemaV2.success) {
+      const contract = canonicalizeContract({
+        ...schemaV2.data,
+        schemaVersion: 3,
+      });
+      validateDeterministicDefaultSelection(contract);
+      return {
+        contract,
+        migrations: [ContractMigration.schemaV2ToV3],
       };
     }
     const legacyV2 = GrantTraceContractLegacyV2Schema.safeParse(raw);
     if (legacyV2.success) {
+      const contract = canonicalizeContract({
+        ...legacyV2.data,
+        schemaVersion: 3,
+        routes: legacyV2.data.routes.map((route) => ({
+          ...route,
+          scenarioEvidence: Object.fromEntries(
+            route.scenarios.map((scenario) => [scenario, route.evidence]),
+          ),
+        })),
+      });
+      validateDeterministicDefaultSelection(contract);
       return {
-        contract: canonicalizeContract({
-          ...legacyV2.data,
-          routes: legacyV2.data.routes.map((route) => ({
-            ...route,
-            scenarioEvidence: Object.fromEntries(
-              route.scenarios.map((scenario) => [
-                scenario,
-                route.evidence,
-              ]),
-            ),
-          })),
-        }),
-        migratedFromLegacyV2: true,
-        migratedFromV1: false,
+        contract,
+        migrations: [ContractMigration.legacySchemaV2ToV3],
       };
     }
     const legacy = GrantTraceContractV1Schema.parse(raw);
     const scenarios = legacy.scenarios.map((scenario) => scenario.name);
+    const contract = canonicalizeContract({
+      ...legacy,
+      schemaVersion: 3,
+      routes: legacy.routes.map((route) => ({
+        ...route,
+        scenarioEvidence: Object.fromEntries(
+          scenarios.map((scenario) => [scenario, route.evidence]),
+        ),
+        scenarios,
+      })),
+    });
+    validateDeterministicDefaultSelection(contract);
     return {
-      contract: canonicalizeContract({
-        ...legacy,
-        schemaVersion: 2,
-        routes: legacy.routes.map((route) => ({
-          ...route,
-          scenarioEvidence: Object.fromEntries(
-            scenarios.map((scenario) => [scenario, route.evidence]),
-          ),
-          scenarios,
-        })),
-      }),
-      migratedFromLegacyV2: false,
-      migratedFromV1: true,
+      contract,
+      migrations: [ContractMigration.schemaV1ToV3],
     };
   } catch {
     throw new ContractFileError("Contract file is invalid.");
@@ -146,7 +166,7 @@ export async function writeContractAtomic(
 function canonicalizeContract(contract: GrantTraceContract): GrantTraceContract {
   const parsed = GrantTraceContractSchema.parse(contract);
   const canonical: GrantTraceContract = {
-    schemaVersion: 2,
+    schemaVersion: 3,
     toolVersion: parsed.toolVersion,
     apiVersion: parsed.apiVersion,
     catalog: {
@@ -212,6 +232,29 @@ function canonicalizeContract(contract: GrantTraceContract): GrantTraceContract 
   };
   validateContractSemantics(canonical);
   return canonical;
+}
+
+function validateDeterministicDefaultSelection(
+  contract: GrantTraceContract,
+): void {
+  const solution = solvePermissionContract(
+    contract.routes.map((route) => ({
+      route: { method: route.method, template: route.template },
+      alternatives: route.alternatives,
+      evidence: route.evidence,
+      scenarioEvidence: route.scenarioEvidence,
+      scenarios: route.scenarios,
+    })),
+    { baseline: MANDATORY_INSTALLATION_PERMISSIONS },
+  );
+  if (
+    assignmentKey(contract.selectedPermissions) !==
+    assignmentKey(solution.selected)
+  ) {
+    throw new ContractFileError(
+      "Legacy contracts must use the deterministic default permission selection.",
+    );
+  }
 }
 
 function validateContractSemantics(contract: GrantTraceContract): void {

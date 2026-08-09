@@ -215,7 +215,7 @@ frontier. Otherwise the deterministic default is proposed as a normal
 review-required contract change; a noninteractive check never writes or
 accepts it.
 
-## Contract schema v2
+## Contract schema v3
 
 `granttrace.lock.json` stores:
 
@@ -231,7 +231,7 @@ accepts it.
 - safe unknown findings.
 
 Unless the contract intentionally contains zero scenarios, every declared
-scenario must appear in route or unknown attribution. A zero-scenario v2
+scenario must appear in route or unknown attribution. A zero-scenario v3
 contract must also contain zero routes, selected permissions, and unknowns,
 with the single empty assignment in its frontier. It is the explicit reviewed
 representation of retiring all observed coverage. Validated manual keeps remain
@@ -248,19 +248,21 @@ resource ID, token, JWT, or private key.
 Atomic writes create a sibling temporary file and rename it only after strict
 serialization succeeds.
 
-## Schema-v1 migration
+## Contract migration to v3
 
 A valid v1 contract remains readable. V1 routes have no scenario attribution,
 so the reader conservatively attaches every declared scenario to every route.
-This is intentionally broad and is exposed as `migratedFromV1`.
+This is intentionally broad and is exposed as the structured migration ID
+`schema_v1_to_v3`.
 
 The migration:
 
 - never guesses narrower route ownership;
 - never silently writes the converted object;
-- causes `check` to show a v1-to-v2 migration review;
+- causes `check` to show a v1-to-v3 migration review;
 - preserves validated manual keeps; and
-- blocks `prove` until current observations are accepted as v2.
+- blocks contract mutation and `prove` until current observations are accepted
+  as v3.
 
 The deterministic migration path is:
 
@@ -271,10 +273,19 @@ record current named scenarios
   -> granttrace check --accept
 ```
 
-Legacy schema-v2 contracts without per-scenario provenance remain readable.
-They are conservatively expanded in memory, exposed as a migration review, and
-blocked from `keep` and `prove` until current recordings are explicitly
-accepted with per-scenario provenance.
+Released schema-v2 contracts remain readable in both forms: the current
+`scenarioEvidence` shape and the older legacy-v2 shape without per-scenario
+provenance. Before either form is migrated, the reader recomputes the frontier
+and requires `selectedPermissions` to equal v2's deterministic default. A v2
+artifact with any other selection is invalid; permission to choose any exact
+frontier member begins with v3.
+
+The current v2 shape is exposed as `schema_v2_to_v3`. The legacy shape is
+conservatively expanded in memory and exposed as
+`legacy_schema_v2_to_v3`. Neither migration silently writes. `check` exits `6`
+until the migration is reviewed and accepted, and `frontier select`, `keep`,
+and `prove` remain blocked until a v3 contract is accepted. `frontier list`
+remains read-only and may display the validated in-memory frontier.
 
 ## Multi-scenario operations
 
@@ -355,12 +366,14 @@ includes:
 - DNF or evidence-provenance changes;
 - manual-keep additions/removals/updates;
 - tool, API, or catalog identity changes; and
-- schema-v1 migration.
+- schema migration identifiers.
 
 Unknown, malformed, unsupported, or contradictory evidence exits `7` before
 acceptance. `check --accept`, or an explicit yes to the interactive `record`
-prompt, writes the exact reviewed v2 contract atomically. There is no
-interactive CI prompt and no noninteractive auto-acceptance.
+prompt, writes the exact reviewed v3 contract atomically. Contract acceptance,
+manual-keep mutation, and frontier selection are refused when `CI` is enabled
+or `GITHUB_ACTIONS=true`, before acquiring the mutation lock or writing. There
+is no interactive CI prompt and no noninteractive auto-acceptance.
 
 ## Live proof state machine
 
@@ -368,7 +381,7 @@ interactive CI prompt and no noninteractive auto-acceptance.
 implements:
 
 ```text
-strict accepted v2 contract validated
+strict accepted v3 contract validated
   -> named scenario slice solved
   -> every route and DNF rebound to the exact pinned catalog
   -> guarded fixture configuration validated
@@ -443,7 +456,7 @@ controls never require cleanup. Unsupported controls are marked not applicable.
 
 ## Ephemeral proof report
 
-`.granttrace/reports/<scenario>.json` uses strict schema v2 and stores only:
+`.granttrace/reports/<scenario>.json` uses strict schema v3 and stores only:
 
 - schema/tool/API/catalog identity and source commit or `null`;
 - scenario and deterministic aggregate contract hash;
@@ -473,6 +486,11 @@ independently:
   least one but fewer than all scenario-selected permission names; and
 - `necessity_tested` applies when successful controls removed every
   scenario-selected permission name.
+
+These two stable enum values describe permission-name removal tests. They do
+not establish that a `write` level is minimal relative to `read`, because the
+current controls remove the permission name rather than comparing access
+levels.
 
 Manual keeps and mandatory permissions are excluded from the denominator and
 can never gain a necessity claim. Duplicate controls for the same removed
