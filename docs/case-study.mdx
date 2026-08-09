@@ -118,7 +118,9 @@ permissions, and then lexical order.
 
 **Tradeoff:** the selected result is a documented policy choice, not a claim
 that every alternative is objectively worse. Keeping the frontier makes that
-judgment inspectable.
+judgment inspectable. Reviewers can explicitly commit another complete
+candidate with `granttrace frontier select NUMBER`; later checks preserve it
+while it remains valid and require review before any fallback is accepted.
 
 ## Decision 4: deterministic, identity-free artifacts
 

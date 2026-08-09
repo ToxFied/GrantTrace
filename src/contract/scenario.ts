@@ -1,6 +1,7 @@
 import { canonicalizeAssignment } from "../permissions/canonical.js";
 import { solvePermissionContract } from "../permissions/solver.js";
 import { MANDATORY_INSTALLATION_PERMISSIONS } from "../proof/permission-baseline.js";
+import { findCoveredFrontierAssignment } from "./frontier.js";
 import type { GrantTraceContract } from "./schema.js";
 
 export function contractForScenario(
@@ -27,12 +28,17 @@ export function contractForScenario(
     })),
     { baseline: MANDATORY_INSTALLATION_PERMISSIONS },
   );
+  const selected =
+    findCoveredFrontierAssignment(
+      solution.frontier,
+      contract.selectedPermissions,
+    ) ?? solution.selected;
 
   return {
     ...contract,
     scenarios: [{ name: scenario }],
     routes,
-    selectedPermissions: canonicalizeAssignment(solution.selected),
+    selectedPermissions: canonicalizeAssignment(selected),
     permissionFrontier: solution.frontier.map(canonicalizeAssignment),
     unknowns: contract.unknowns.filter(
       (unknown) => unknown.scenario === scenario,

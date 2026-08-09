@@ -290,17 +290,20 @@ function validateContractSemantics(contract: GrantTraceContract): void {
     })),
     { baseline: MANDATORY_INSTALLATION_PERMISSIONS },
   );
-  if (
-    assignmentKey(solution.selected) !==
-      assignmentKey(contract.selectedPermissions) ||
-    solution.frontier.map(assignmentKey).sort(compareAscii).join("\n") !==
-      contract.permissionFrontier
-        .map(assignmentKey)
-        .sort(compareAscii)
-        .join("\n")
-  ) {
+  const solvedFrontierKeys = solution.frontier
+    .map(assignmentKey)
+    .sort(compareAscii);
+  const storedFrontierKeys = contract.permissionFrontier
+    .map(assignmentKey)
+    .sort(compareAscii);
+  if (solvedFrontierKeys.join("\n") !== storedFrontierKeys.join("\n")) {
     throw new ContractFileError(
-      "Selected permissions do not exactly match the attributed routes.",
+      "Permission frontier does not exactly match the attributed routes.",
+    );
+  }
+  if (!solvedFrontierKeys.includes(assignmentKey(contract.selectedPermissions))) {
+    throw new ContractFileError(
+      "Selected permissions must exactly match one permission frontier assignment.",
     );
   }
 

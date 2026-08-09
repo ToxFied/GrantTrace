@@ -72,9 +72,10 @@ GrantTrace adapter.
 
 Observation and contract input schemas are strict and resource-bounded;
 proof-report objects are strictly validated before serialization.
-Semantic contract validation recomputes selected/frontier permissions from
-routes and verifies scenario attribution. Unknown fields fail instead of being
-spread, preserved, or redacted.
+Semantic contract validation recomputes the permission frontier from routes,
+requires the selected permissions to equal one complete frontier assignment,
+and verifies scenario attribution. Unknown fields fail instead of being spread,
+preserved, or redacted.
 
 Contracts are written through a sibling temporary file and rename. Local
 observations and proof reports use allowlisted serialization. Contract and

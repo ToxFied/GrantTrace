@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import { buildContract } from "../../src/contract/build.js";
 import { loadObservations } from "../../src/contract/observation-file.js";
 import {
+  ContractFileError,
   contractHash,
   serializeContract,
 } from "../../src/contract/serialize.js";
@@ -27,6 +28,26 @@ describe("deterministic contract", () => {
       "pinned_catalog",
     ]);
     expect(contract.unknowns).toEqual([]);
+  });
+
+  it("accepts any complete frontier assignment as the selected policy", async () => {
+    const observations = await loadObservations(fixturePath.pathname);
+    const contract = buildContract(observations, fixtureCatalog);
+    const selectedAlternative = {
+      ...contract,
+      selectedPermissions: { pull_requests: "write" as const },
+    };
+
+    expect(JSON.parse(serializeContract(selectedAlternative))).toMatchObject({
+      schemaVersion: 2,
+      selectedPermissions: { pull_requests: "write" },
+    });
+    expect(() =>
+      serializeContract({
+        ...contract,
+        selectedPermissions: { contents: "read" },
+      }),
+    ).toThrow(ContractFileError);
   });
 
   it("is byte-identical for semantically identical reordered input", async () => {

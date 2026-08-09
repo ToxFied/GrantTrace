@@ -1,4 +1,5 @@
 import { buildContract } from "../contract/build.js";
+import { preserveFrontierSelection } from "../contract/frontier.js";
 import type { Observation } from "../contract/observation.js";
 import type { GrantTraceContract } from "../contract/schema.js";
 import { serializeContract } from "../contract/serialize.js";
@@ -56,8 +57,12 @@ export function verifyProofObservations(
   validateAcceptedProofContract(contract, scenario);
   const expected = contractForScenario(contract, scenario);
   const observed = buildContract(observations, githubPermissionCatalog);
+  const observedWithSelection = preserveFrontierSelection(
+    observed,
+    expected.selectedPermissions,
+  );
   const observedWithManualKeeps = {
-    ...observed,
+    ...observedWithSelection,
     manualKeeps: expected.manualKeeps,
   };
   if (

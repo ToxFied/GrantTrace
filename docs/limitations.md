@@ -58,8 +58,10 @@ part of the result, not footnotes.
 - Contract acceptance is a human decision. An interactive `record` prompt or
   `check --accept` can accept a coverage contraction just as it can accept an
   addition; review removals carefully. Noninteractive recording never accepts.
-- The deterministic selected solution is one risk-policy choice among the
-  nondominated frontier, not proof that every alternative is worse.
+- The deterministic default solution is one risk-policy choice among the
+  nondominated frontier, not proof that every alternative is worse. Reviewers
+  can explicitly commit another complete frontier assignment; GrantTrace does
+  not choose one silently in automation.
 - Manual keeps are global to the accepted contract and therefore requested in
   every scenario proof. They are explicitly retained access, never observed
   or proven necessity. Retiring the final scenario preserves validated keeps

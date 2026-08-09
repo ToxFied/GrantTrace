@@ -200,7 +200,7 @@ GitHub's mandatory `metadata:read` is supplied to the solver as a baseline.
 Routes satisfied entirely by that baseline do not add `metadata` to
 `selectedPermissions`.
 
-The default selected sufficient contract uses:
+For a new contract, the default selected sufficient contract uses:
 
 1. fewest write permissions;
 2. lowest total weight (`read = 1`, `write = 4`);
@@ -208,7 +208,12 @@ The default selected sufficient contract uses:
 4. lexicographically smallest canonical assignment.
 
 This is a deterministic risk policy, not universal optimality. Every
-nondominated choice remains in `permissionFrontier`.
+nondominated choice remains in `permissionFrontier`. A reviewer may explicitly
+replace `selectedPermissions` with any one complete frontier assignment. On a
+later check, that exact assignment is retained if it remains in the recomputed
+frontier. Otherwise the deterministic default is proposed as a normal
+review-required contract change; a noninteractive check never writes or
+accepts it.
 
 ## Contract schema v2
 
@@ -231,8 +236,9 @@ contract must also contain zero routes, selected permissions, and unknowns,
 with the single empty assignment in its frontier. It is the explicit reviewed
 representation of retiring all observed coverage. Validated manual keeps remain
 until explicitly removed and remain unproven retained access. Routes must be
-unique. Selected/frontier assignments are recomputed from the stored routes
-during validation and must match exactly.
+unique. The frontier is recomputed from the stored routes during validation
+and must match exactly. `selectedPermissions` must exactly equal one complete
+assignment in that frontier.
 
 Serialization uses stable object construction, two-space JSON indentation, and
 one trailing newline. It contains no timestamp, command, test path, working
@@ -295,11 +301,12 @@ scenario:
 
 - only routes attributed to that scenario remain;
 - each retained route is attributed only to that scenario;
-- selected/frontier permissions are solved again; and
+- frontier permissions are solved again and the first candidate covered by the
+  accepted aggregate selection becomes the scenario selection; and
 - only unknowns belonging to that scenario remain.
 
 Live observations must serialize exactly as that scenario slice after
-validated manual keeps are applied.
+the same compatible frontier selection and validated manual keeps are applied.
 
 ## Manual keeps
 

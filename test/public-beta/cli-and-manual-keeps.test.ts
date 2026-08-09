@@ -26,6 +26,7 @@ describe("public-beta CLI surface", () => {
     expect(help.stdout()).toContain("granttrace init");
     expect(help.stdout()).toContain("granttrace doctor");
     expect(help.stdout()).toContain("granttrace keep add|remove|list");
+    expect(help.stdout()).toContain("granttrace frontier list|select");
     expect(help.stdout()).toContain("granttrace scenario");
     expect(help.stdout()).toContain("Untested behavior is outside the claim");
     expect(help.stdout()).not.toMatch(/\u001b\[[0-9;]*m/u);

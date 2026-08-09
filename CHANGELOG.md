@@ -8,6 +8,11 @@ beta.
 
 ## [Unreleased]
 
+### Added
+
+- An explicit `frontier list/select` workflow for choosing and retaining any
+  complete nondominated permission assignment in the committed contract.
+
 ### Changed
 
 - Clarified the npm package summary and quickstart for both pnpm and npm users.

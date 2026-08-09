@@ -23,6 +23,7 @@ import {
 } from "../reporting/terminal.js";
 import type { Observation } from "../contract/observation.js";
 import { retainUnobservedManualKeeps } from "../contract/manual-keeps.js";
+import { preserveFrontierSelection } from "../contract/frontier.js";
 import type { CliContext } from "./context.js";
 import { writeLine } from "./context.js";
 import { ExitCode, type ExitCodeValue } from "./exit-codes.js";
@@ -154,11 +155,15 @@ async function executeCheck(
 
     const loadedPrevious = await readContractWithMetadata(options.lockPath);
     const previous = loadedPrevious.contract;
+    const nextWithSelection = preserveFrontierSelection(
+      next,
+      previous.selectedPermissions,
+    );
     const nextWithManualKeeps = {
-      ...next,
+      ...nextWithSelection,
       manualKeeps: retainUnobservedManualKeeps(
         previous,
-        next.selectedPermissions,
+        nextWithSelection.selectedPermissions,
       ),
     };
     if (

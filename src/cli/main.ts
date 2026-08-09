@@ -3,6 +3,7 @@ import { runCheck } from "./check.js";
 import { defaultCliContext, type CliContext, writeLine } from "./context.js";
 import { runDoctor } from "./doctor.js";
 import { ExitCode, type ExitCodeValue } from "./exit-codes.js";
+import { runFrontier } from "./frontier.js";
 import { runInit } from "./init.js";
 import { runKeep } from "./keep.js";
 import { runRecord } from "./record.js";
@@ -35,6 +36,9 @@ export async function runCli(
   }
   if (command === "keep") {
     return runKeep(commandArgs, context);
+  }
+  if (command === "frontier") {
+    return runFrontier(commandArgs, context);
   }
   if (command === "scenario") {
     return runScenario(commandArgs, context);
@@ -71,6 +75,10 @@ function helpText(): string {
     "Access exceptions",
     "  granttrace keep add|remove|list",
     "                         Manage documented permission exceptions",
+    "",
+    "Permission policy",
+    "  granttrace frontier list|select",
+    "                         Review or choose a complete frontier assignment",
     "",
     "Live verification",
     "  granttrace prove      Prove one accepted scenario with restricted access",

@@ -15,6 +15,8 @@ description: Commands, options, scenario naming, timeouts, and exit codes.
 | `granttrace scenario remove NAME`   | Remove one local recording                                |
 | `granttrace check`                  | Compare all recordings with the accepted contract         |
 | `granttrace check --accept`         | Atomically accept the reviewed contract                   |
+| `granttrace frontier list`          | List complete nondominated permission assignments         |
+| `granttrace frontier select NUMBER` | Explicitly choose one listed assignment                   |
 | `granttrace keep add/remove/list`   | Manage reasoned, unproven access                          |
 | `granttrace prove NAME -- COMMAND`  | Prove one accepted scenario live                          |
 | `granttrace analyze OBSERVATIONS`   | Inspect one lower-level NDJSON file                       |
@@ -73,6 +75,25 @@ scenario, route, attribution, and permission contraction for review. Removing
 the final recording can therefore produce a deterministic zero-scenario v2
 contract after `check --accept`; validated manual keeps remain until explicitly
 removed.
+
+An accepted nondefault frontier selection is preserved when it is still a
+complete member of the recomputed frontier. If evidence makes it invalid, the
+deterministic default is proposed through the usual exit-`6` review. Only an
+explicit interactive confirmation or `check --accept` persists that proposal.
+
+## `frontier`
+
+```text
+granttrace frontier list
+granttrace frontier select <number>
+```
+
+`list` is read-only and marks the current selection. `select` accepts only a
+numbered complete assignment already stored in `permissionFrontier`; partial
+assignments and arbitrary permission text are not accepted. It changes
+`selectedPermissions` atomically without changing the evidence or frontier.
+Review and commit the resulting `granttrace.lock.json` diff. A selection that
+would duplicate a manual keep is blocked rather than removing the keep.
 
 ## `keep`
 

@@ -27,6 +27,8 @@ import { verifyProofObservations } from "../../src/proof/contract-verification.j
 
 const issueRoute = "/repos/{owner}/{repo}/issues";
 const contentsRoute = "/repos/{owner}/{repo}/contents/{path}";
+const commentRoute =
+  "/repos/{owner}/{repo}/issues/{issue_number}/comments";
 
 describe("schema-v2 multi-scenario contracts", () => {
   let directory: string;
@@ -87,6 +89,31 @@ describe("schema-v2 multi-scenario contracts", () => {
     expect(projected.routes[0]?.scenarios).toEqual(["issues-only"]);
     expect(projected.selectedPermissions).toEqual({ issues: "read" });
     expect(projected.unknowns).toEqual([]);
+  });
+
+  it("projects a scenario through the explicitly selected frontier branch", () => {
+    const observation: Observation = {
+      schemaVersion: 1,
+      scenario: "comments",
+      method: "POST",
+      routeTemplate: commentRoute,
+      status: 201,
+      requirements: [
+        [{ permission: "issues", level: "write" }],
+        [{ permission: "pull_requests", level: "write" }],
+      ],
+      evidenceSource: "runtime_header",
+      finding: null,
+    };
+    const contract = {
+      ...buildContract([observation], githubPermissionCatalog),
+      selectedPermissions: { pull_requests: "write" as const },
+    };
+
+    expect(
+      contractForScenario(contract, "comments").selectedPermissions,
+    ).toEqual({ pull_requests: "write" });
+    expect(() => serializeContract(contract)).not.toThrow();
   });
 
   it("preserves per-scenario provenance for a shared route", () => {

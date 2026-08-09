@@ -152,9 +152,22 @@ Use `--no-review` only when a final aggregate `check` is guaranteed. Never put
 2. GrantTrace compares eligible runtime evidence with a versioned 49-route
    catalog reviewed against GitHub's REST documentation.
 3. It retains every nondominated sufficient permission assignment.
-4. A documented risk policy selects one stable assignment for the lock.
+4. A documented risk policy selects the default assignment for the lock.
 5. Later recordings produce permission, route, evidence, and attribution
    diffs against that accepted state.
+
+When the frontier contains more than one complete assignment, review it and
+choose a different policy explicitly if appropriate:
+
+```bash
+pnpm exec granttrace frontier list
+pnpm exec granttrace frontier select 2
+```
+
+The selection changes only `selectedPermissions` in the committed contract.
+Later checks preserve it while it remains in the recomputed frontier. If new
+evidence invalidates it, `check` proposes the existing deterministic default
+as a normal blocking diff; it never changes or accepts the contract silently.
 
 GitHub's mandatory `metadata:read` is reported separately from access selected
 by a scenario. Intentional unobserved access can be retained as a

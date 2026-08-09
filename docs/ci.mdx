@@ -56,6 +56,10 @@ automation. Exit `6` from the final check is the intended signal that a human
 must review permission or coverage drift locally and commit the resulting
 lockfile deliberately.
 
+This also applies when a previously selected permission-frontier candidate is
+no longer valid. CI reports the proposed deterministic fallback as a normal
+contract diff and never persists a replacement selection.
+
 Exit `7` means the evidence is unknown, unsupported, malformed, or
 contradictory. Fix the scenario or contribute an official-docs-backed catalog
 change; do not guess a permission and force the pipeline green.

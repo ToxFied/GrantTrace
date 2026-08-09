@@ -128,6 +128,53 @@ describe("proof orchestration", () => {
     }
   });
 
+  it("uses an explicitly selected frontier branch for live proof", async () => {
+    const selectedContract = {
+      ...contract,
+      selectedPermissions: { pull_requests: "write" as const },
+    };
+    const requests: InstallationTokenRequest[] = [];
+    const result = await executeProof({
+      config,
+      contract: selectedContract,
+      scenario: "disposable-comment",
+      cwd: "/tmp/proof-orchestrator",
+      command: "test-command-canary",
+      args: [],
+      baseEnvironment: {},
+      dependencies: {
+        tokenTransport: {
+          async createInstallationToken(request) {
+            requests.push(request);
+            return {
+              token: "ghs_RESTRICTED_TOKEN_CANARY",
+              expires_at: "2026-07-23T13:00:00.000Z",
+              permissions: {
+                metadata: "read",
+                pull_requests: "write",
+              },
+              repositories: [
+                {
+                  full_name: "fixture-owner/private-granttrace-fixture",
+                },
+              ],
+            };
+          },
+        },
+        runChild: async () => passingChild(),
+        now,
+      },
+    });
+
+    expect(result.success).toBe(true);
+    expect(requests.map((request) => request.permissions)).toEqual([
+      { pull_requests: "write" },
+    ]);
+    expect(result.report.selectedPermissions).toEqual({
+      pull_requests: "write",
+    });
+  });
+
   it("writes a safe configuration failure state before token minting", async () => {
     const result = await executeProof({
       config: null,

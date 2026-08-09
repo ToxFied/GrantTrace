@@ -71,14 +71,20 @@ Within a permission, `write` satisfies `read`. Different permission names are
 not interchangeable.
 
 GrantTrace retains every nondominated sufficient assignment in
-`permissionFrontier`. It selects one deterministic assignment by preferring:
+`permissionFrontier`. For a new contract, it selects one deterministic default
+assignment by preferring:
 
 1. fewer write permissions;
 2. lower total access weight;
 3. fewer distinct permissions; and
 4. lexical order.
 
-This is a stable review policy, not a universal definition of optimal access.
+This is a stable default review policy, not a universal definition of optimal
+access. `granttrace frontier list` displays every complete candidate, and
+`granttrace frontier select NUMBER` can explicitly persist another candidate
+as `selectedPermissions`. Checks retain that choice while it remains in the
+recomputed frontier. If it becomes invalid, the deterministic default appears
+as an ordinary blocking contract diff and still requires explicit acceptance.
 
 ## What gets committed
 
