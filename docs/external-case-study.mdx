@@ -1,11 +1,12 @@
 ---
 title: Independent integration
-description: A source-pinned, credential-free GrantTrace study of the open-source All Contributors Bot.
+description: A source-pinned GrantTrace study with credential-free mocked runtime execution of the open-source All Contributors Bot.
 ---
 
 ## Result
 
-GrantTrace was evaluated offline against source from the independently
+GrantTrace was evaluated against source and a credential-free mocked runtime
+from the independently
 maintained [All Contributors Bot](https://github.com/all-contributors/app/tree/00f6362ffcc927a2d05fec27f42c3d09e4b03adb),
 an MIT-licensed Probot GitHub App. The study pins upstream commit
 [`00f6362ffcc927a2d05fec27f42c3d09e4b03adb`](https://github.com/all-contributors/app/commit/00f6362ffcc927a2d05fec27f42c3d09e4b03adb)
@@ -15,9 +16,13 @@ The result is mixed in a useful way:
 
 - GrantTrace resolves the pinned source's standalone comment-reply route and
   preserves GitHub's `issues: write` **or** `pull_requests: write` choice.
-- For a source-derived “new branch and pull request” path, three unique routes
-  are covered and four are catalog gaps. GrantTrace blocks the full analysis
-  instead of presenting a partial permission result as sufficient.
+- The pinned App's real Probot handler completed its upstream-mocked happy path
+  and emitted ten Octokit requests across seven unique normalized routes while
+  all network connections were disabled. GrantTrace's real recorder captured
+  all ten requests.
+- Three unique runtime routes are covered and four are catalog gaps. GrantTrace
+  blocks the full analysis instead of presenting a partial permission result as
+  sufficient.
 - The resolvable PR-path subset does not add `issues: write`, because
   `pull_requests: write` is already needed to open the pull request and also
   satisfies the comment route. That is a concrete permission assumption to
@@ -44,7 +49,7 @@ The candidate was selected before interpreting the permission result:
 
 ## Evidence layers
 
-The case study deliberately separates three different claims.
+The case study deliberately separates four different claims.
 
 ### 1. Pinned upstream source inspection
 
@@ -89,37 +94,69 @@ Each fixture has one record per distinct route or catalog gap in its scenario.
 It tests GrantTrace's deduplicated contract behavior; it does not claim the App
 would make each call exactly once.
 
-### 3. Live and maintainer evidence not obtained
+### 3. Credential-free mocked runtime execution
 
-No upstream dependency installation, GitHub App registration, credentials,
-live repository mutation, or All Contributors test suite was used. No
-maintainer was contacted, and no feedback has been attributed to the project.
-The study therefore says nothing about unobserved branches, production
-configuration, or whether the maintainers would adopt the workflow.
+The runtime pilot checks out the exact commit, verifies the pinned
+`package-lock.json`, installs it with `npm ci --ignore-scripts`, and loads the
+upstream App and fixtures with upstream Probot 12.2.8. It adapts the pinned
+[upstream happy-path test](https://github.com/all-contributors/app/blob/00f6362ffcc927a2d05fec27f42c3d09e4b03adb/test/integration/issue_comment.test.js#L48-L134)
+by composing GrantTrace's Octokit request hook with `ProbotOctokit`. The App
+then receives the real `issue_comment.created` payload and executes its real
+application and Octokit request paths.
+
+`nock.disableNetConnect()` forbids every network connection. A
+credential-scrubbed child process receives no credential environment variables;
+Probot gets only the upstream test's literal dummy token `test`. The harness
+requires every expected mock to be consumed and compares the recorder output
+and normalized request trace to the checked-in assets:
+
+```bash
+pnpm install --frozen-lockfile --ignore-scripts
+pnpm case-study:runtime
+```
+
+`runtime.observations.ndjson` is the real GrantTrace recorder artifact.
+`runtime-emitted-requests.json` is a companion Octokit-hook artifact that keeps
+only method, normalized route template, and mocked response status after a
+request completes. This companion is necessary because GrantTrace intentionally
+drops the template for catalog gaps. Neither artifact retains concrete route
+values, request data, credentials, or response bodies.
+
+The mocked responses do not contain GitHub's
+`x-accepted-github-permissions` header. Covered routes therefore resolve from
+GrantTrace's pinned catalog, while uncovered routes remain blocked. This is
+runtime route evidence, not a simulation of live GitHub permission headers.
+
+### 4. Live and maintainer evidence not obtained
+
+No GitHub App registration, credentials, live GitHub request, or live repository
+mutation was used. No maintainer was contacted: feedback is unavailable and
+was not solicited. The study therefore says nothing about unobserved branches,
+production configuration, live GitHub response behavior, or whether the
+maintainers would adopt the workflow.
 
 ## Route inventory
 
-The “new branch and pull request” inventory follows the source calls used to
-read configured files, look up a contributor, create a branch, update files,
-open a pull request, and send the reply.
+The runtime “new branch and pull request” path read configured files, looked up
+a contributor, created a branch, updated two files, opened a pull request, and
+sent the reply.
 
-| Source call | Canonical REST route | GrantTrace catalog |
-| --- | --- | --- |
-| [`repos.getContent`](https://github.com/all-contributors/app/blob/00f6362ffcc927a2d05fec27f42c3d09e4b03adb/lib/modules/repository.js#L41-L49) | `GET /repos/{owner}/{repo}/contents/{path}` | Covered |
-| [`git.getRef`](https://github.com/all-contributors/app/blob/00f6362ffcc927a2d05fec27f42c3d09e4b03adb/lib/modules/repository.js#L91-L98) | `GET /repos/{owner}/{repo}/git/ref/{ref}` | Gap |
-| [`users.getByUsername`](https://github.com/all-contributors/app/blob/00f6362ffcc927a2d05fec27f42c3d09e4b03adb/lib/get-user-details.js#L17-L26) | `GET /users/{username}` | Gap |
-| [`git.createRef`](https://github.com/all-contributors/app/blob/00f6362ffcc927a2d05fec27f42c3d09e4b03adb/lib/modules/repository.js#L109-L118) | `POST /repos/{owner}/{repo}/git/refs` | Gap |
-| [`repos.createOrUpdateFileContents`](https://github.com/all-contributors/app/blob/00f6362ffcc927a2d05fec27f42c3d09e4b03adb/lib/modules/repository.js#L121-L155) | `PUT /repos/{owner}/{repo}/contents/{path}` | Gap |
-| [`pulls.create`](https://github.com/all-contributors/app/blob/00f6362ffcc927a2d05fec27f42c3d09e4b03adb/lib/modules/repository.js#L219-L230) | `POST /repos/{owner}/{repo}/pulls` | Covered |
-| [`issues.createComment`](https://github.com/all-contributors/app/blob/00f6362ffcc927a2d05fec27f42c3d09e4b03adb/lib/modules/comment-reply.js#L35) | `POST /repos/{owner}/{repo}/issues/{issue_number}/comments` | Covered |
+| Source call | Canonical REST route | Runtime calls and statuses | GrantTrace catalog |
+| --- | --- | --- | --- |
+| [`repos.getContent`](https://github.com/all-contributors/app/blob/00f6362ffcc927a2d05fec27f42c3d09e4b03adb/lib/modules/repository.js#L41-L49) | `GET /repos/{owner}/{repo}/contents/{path}` | 2 × 200 | Covered |
+| [`git.getRef`](https://github.com/all-contributors/app/blob/00f6362ffcc927a2d05fec27f42c3d09e4b03adb/lib/modules/repository.js#L91-L98) | `GET /repos/{owner}/{repo}/git/ref/{ref}` | 404, 200 | Gap |
+| [`users.getByUsername`](https://github.com/all-contributors/app/blob/00f6362ffcc927a2d05fec27f42c3d09e4b03adb/lib/get-user-details.js#L17-L26) | `GET /users/{username}` | 200 | Gap |
+| [`git.createRef`](https://github.com/all-contributors/app/blob/00f6362ffcc927a2d05fec27f42c3d09e4b03adb/lib/modules/repository.js#L109-L118) | `POST /repos/{owner}/{repo}/git/refs` | 201 | Gap |
+| [`repos.createOrUpdateFileContents`](https://github.com/all-contributors/app/blob/00f6362ffcc927a2d05fec27f42c3d09e4b03adb/lib/modules/repository.js#L121-L155) | `PUT /repos/{owner}/{repo}/contents/{path}` | 2 × 200 | Gap |
+| [`pulls.create`](https://github.com/all-contributors/app/blob/00f6362ffcc927a2d05fec27f42c3d09e4b03adb/lib/modules/repository.js#L219-L230) | `POST /repos/{owner}/{repo}/pulls` | 201 | Covered |
+| [`issues.createComment`](https://github.com/all-contributors/app/blob/00f6362ffcc927a2d05fec27f42c3d09e4b03adb/lib/modules/comment-reply.js#L35) | `POST /repos/{owner}/{repo}/issues/{issue_number}/comments` | 200 | Covered |
 
-The standalone reply scenario covers the last route again, so the manifest
-contains four covered route occurrences representing three unique routes.
-The four gaps collapse to three safe findings in the contract (`GET`, `POST`,
-and `PUT`) because GrantTrace does not retain the template in an unresolved
-observation. The source inventory retains only canonical parameterized
-templates so catalog work remains reviewable without storing concrete owners,
-repositories, usernames, refs, or paths.
+The runtime emitted ten calls across those seven unique templates. The four
+gaps collapse to three safe findings in the contract (`GET`, `POST`, and `PUT`)
+because GrantTrace does not retain the template in an unresolved observation.
+The companion runtime inventory retains only canonical parameterized templates
+so catalog work remains reviewable without storing concrete owners,
+repositories, usernames, refs, paths, or payload data.
 
 ## Permission result
 
@@ -135,8 +172,8 @@ OR
 pull_requests: write
 ```
 
-For the resolvable subset of the PR workflow, the solver retains one
-nondominated assignment:
+For the catalog-resolvable subset of both the source fixture and the executed
+runtime workflow, the solver retains one nondominated assignment:
 
 ```text
 contents: read
@@ -145,23 +182,39 @@ pull_requests: write
 
 In that subset, the comment route did not add `issues: write`: the existing
 pull-request grant satisfies it. This demonstrates why a permission frontier
-matters. However, analysis of the full source-derived scenario is blocked. In
-particular, the uncovered `PUT /contents/{path}` call is strong source evidence
-for `contents: write`, and the webhook handler can receive comments on issues
-as well as pull requests. It would be unsafe to turn the subset result into an
-App-level permission reduction.
+matters. However, analysis of the full executed scenario is blocked. In
+particular, two actually emitted `PUT /contents/{path}` calls are runtime
+evidence of the catalog gap around the App's contents writes, and the webhook
+handler can receive comments on issues as well as pull requests. It would be
+unsafe to turn the subset result into an App-level permission reduction.
 
 ## Setup time
 
-The reproducible commands cover only researcher-side source verification and
-fixture analysis, not maintainer onboarding. No stable timing is published:
-the verifier depends on network conditions, and the fixture analysis was not
-benchmarked on a controlled host.
+These are wall-clock measurements from the captured researcher run on Darwin
+27.0.0 arm64 with Node 26.0.0, npm 11.12.1, and pnpm 9.15.4. They are not a
+benchmark or maintainer-onboarding estimate:
 
-Time spent understanding and adapting the upstream source was not measured
-prospectively, so this study does not publish a made-up end-to-end setup time.
-Likewise, maintainer setup time remains unknown until a maintainer actually
-tries the integration.
+| Phase | Command | Seconds |
+| --- | --- | ---: |
+| GrantTrace frozen install | `pnpm install --frozen-lockfile --ignore-scripts` | 5.88 |
+| Fresh upstream clone | `git clone --no-checkout …` | 1.544 |
+| Exact upstream checkout | `git checkout --detach 00f6362…` | 0.021 |
+| Upstream frozen install | `npm ci --ignore-scripts` | 10.966 |
+| Sanitized mocked runtime child | internal `node --import=tsx … --execute` | 0.612 |
+| One-command clone/install/run/compare/cleanup | `pnpm case-study:runtime` equivalent | 14.30 |
+| Reuse installed checkout, full harness command | `pnpm case-study:runtime --upstream …` equivalent | 0.88 |
+
+The exact measured commands and temporary paths are retained in
+`runtime-case-study.json`. The one-command total includes orchestration,
+evidence comparison, and cleanup, so it is larger than the listed child phase.
+The local pnpm was 9.15.4 rather than the package manifest's declared 10.28.2;
+it accepted the frozen lockfile unchanged, but that version mismatch is part of
+the captured environment rather than an exact package-manager reproduction.
+The upstream frozen install reported 62 audit findings (9 low, 31 moderate, 20
+high, and 2 critical); no dependency update or audit fix was attempted because
+that would violate the pinned dependency execution. Time spent understanding
+and adapting the upstream source was not measured prospectively. Maintainer
+setup time remains unknown because feedback was not solicited.
 
 ## What should happen next
 
@@ -174,10 +227,10 @@ Maintainer feedback, if requested later with explicit authorization, should
 focus on observable questions:
 
 - Which existing upstream test best represents a comment on a pull request?
-- Can GrantTrace's Octokit plugin compose with the App's Probot version without
-  changing request behavior?
+- Which additional upstream scenarios should be executed before anyone reasons
+  about application-level permission reduction?
 - Does the permission frontier make the manifest review clearer?
 - Which blocked route would prevent trial adoption first?
 
-Until those answers exist, this page remains a source-pinned compatibility
-study—not a user testimonial.
+Until those answers exist, this page remains a source-pinned, mocked-runtime
+compatibility study—not a user testimonial.

@@ -1,0 +1,204 @@
+{
+  "schemaVersion": 1,
+  "fixtureKind": "credential-free-mocked-runtime",
+  "upstream": {
+    "name": "All Contributors Bot",
+    "repository": "https://github.com/all-contributors/app",
+    "commit": "00f6362ffcc927a2d05fec27f42c3d09e4b03adb",
+    "commitUrl": "https://github.com/all-contributors/app/commit/00f6362ffcc927a2d05fec27f42c3d09e4b03adb",
+    "license": "MIT",
+    "packageLockSha256": "0b05468b4debbc54eb1d88d0c4778d50f68a6e40d7ed398dbdc593960b10ca24"
+  },
+  "scenario": {
+    "name": "all-contributors-mocked-runtime",
+    "trigger": "issue_comment.created",
+    "upstreamTestSource": "https://github.com/all-contributors/app/blob/00f6362ffcc927a2d05fec27f42c3d09e4b03adb/test/integration/issue_comment.test.js#L48-L134",
+    "observations": "runtime.observations.ndjson",
+    "emittedRequests": "runtime-emitted-requests.json",
+    "requestCount": 10,
+    "uniqueRouteCount": 7,
+    "catalogCoveredUniqueRouteCount": 3,
+    "catalogGapUniqueRouteCount": 4
+  },
+  "execution": {
+    "capturedOn": "2026-08-09",
+    "liveGitHub": false,
+    "credentials": "none; the upstream Probot test constructor received the literal dummy value test",
+    "networkBoundary": "nock.disableNetConnect()",
+    "environment": {
+      "os": "Darwin 27.0.0 arm64",
+      "node": "v26.0.0",
+      "npm": "11.12.1",
+      "pnpm": "9.15.4"
+    },
+    "setupMeasurements": [
+      {
+        "command": "/usr/bin/time -p pnpm install --frozen-lockfile --ignore-scripts",
+        "cwd": "/private/tmp/granttrace-runtime.SoKEpV",
+        "elapsedSeconds": 5.88
+      },
+      {
+        "command": "git clone --no-checkout https://github.com/all-contributors/app.git /var/folders/9b/ygx3b4lj2630wqmxkcvzmmq80000gn/T/granttrace-all-contributors-runtime-HwwXUt/upstream",
+        "elapsedSeconds": 1.544
+      },
+      {
+        "command": "git checkout --detach 00f6362ffcc927a2d05fec27f42c3d09e4b03adb",
+        "cwd": "/var/folders/9b/ygx3b4lj2630wqmxkcvzmmq80000gn/T/granttrace-all-contributors-runtime-HwwXUt/upstream",
+        "elapsedSeconds": 0.021
+      },
+      {
+        "command": "npm ci --ignore-scripts",
+        "cwd": "/var/folders/9b/ygx3b4lj2630wqmxkcvzmmq80000gn/T/granttrace-all-contributors-runtime-HwwXUt/upstream",
+        "elapsedSeconds": 10.966
+      }
+    ],
+    "runtimeMeasurement": {
+      "command": "/usr/bin/time -p node --import=tsx scripts/run-all-contributors-runtime-pilot.mjs --upstream /private/tmp/granttrace-all-contributors.4ghYU1/upstream",
+      "cwd": "/private/tmp/granttrace-runtime.SoKEpV",
+      "elapsedSeconds": 0.88,
+      "sanitizedChildElapsedSeconds": 0.687
+    },
+    "endToEndMeasurement": {
+      "command": "/usr/bin/time -p node --import=tsx scripts/run-all-contributors-runtime-pilot.mjs",
+      "cwd": "/private/tmp/granttrace-runtime.SoKEpV",
+      "elapsedSeconds": 14.3,
+      "sanitizedChildElapsedSeconds": 0.612
+    },
+    "upstreamInstallAuditSummary": {
+      "total": 62,
+      "low": 9,
+      "moderate": 31,
+      "high": 20,
+      "critical": 2,
+      "remediationAttempted": false
+    }
+  },
+  "declaredPermissions": {
+    "contents": "write",
+    "issues": "write",
+    "metadata": "read",
+    "pull_requests": "write"
+  },
+  "resolvableSubset": {
+    "complete": false,
+    "selectedPermissions": {
+      "contents": "read",
+      "pull_requests": "write"
+    },
+    "permissionFrontier": [
+      {
+        "contents": "read",
+        "pull_requests": "write"
+      }
+    ],
+    "evidence": "pinned catalog only; mocked responses had no x-accepted-github-permissions header",
+    "unknownMethods": [
+      "GET",
+      "POST",
+      "PUT"
+    ]
+  },
+  "routeCoverage": [
+    {
+      "method": "GET",
+      "template": "/repos/{owner}/{repo}/git/ref/{ref}",
+      "calls": 2,
+      "statuses": [
+        404,
+        200
+      ],
+      "catalogSupport": "gap",
+      "inferredPermissions": null
+    },
+    {
+      "method": "GET",
+      "template": "/repos/{owner}/{repo}/contents/{path}",
+      "calls": 2,
+      "statuses": [
+        200,
+        200
+      ],
+      "catalogSupport": "covered",
+      "inferredPermissions": "contents: read"
+    },
+    {
+      "method": "GET",
+      "template": "/users/{username}",
+      "calls": 1,
+      "statuses": [
+        200
+      ],
+      "catalogSupport": "gap",
+      "inferredPermissions": null
+    },
+    {
+      "method": "POST",
+      "template": "/repos/{owner}/{repo}/git/refs",
+      "calls": 1,
+      "statuses": [
+        201
+      ],
+      "catalogSupport": "gap",
+      "inferredPermissions": null
+    },
+    {
+      "method": "PUT",
+      "template": "/repos/{owner}/{repo}/contents/{path}",
+      "calls": 2,
+      "statuses": [
+        200,
+        200
+      ],
+      "catalogSupport": "gap",
+      "inferredPermissions": null
+    },
+    {
+      "method": "POST",
+      "template": "/repos/{owner}/{repo}/pulls",
+      "calls": 1,
+      "statuses": [
+        201
+      ],
+      "catalogSupport": "covered",
+      "inferredPermissions": "pull_requests: write"
+    },
+    {
+      "method": "POST",
+      "template": "/repos/{owner}/{repo}/issues/{issue_number}/comments",
+      "calls": 1,
+      "statuses": [
+        200
+      ],
+      "catalogSupport": "covered",
+      "inferredPermissions": "issues: write OR pull_requests: write"
+    }
+  ],
+  "evidencedCatalogGap": {
+    "count": 4,
+    "routes": [
+      "GET /repos/{owner}/{repo}/git/ref/{ref}",
+      "GET /users/{username}",
+      "POST /repos/{owner}/{repo}/git/refs",
+      "PUT /repos/{owner}/{repo}/contents/{path}"
+    ],
+    "effect": "GrantTrace blocks a complete permission conclusion for the executed scenario."
+  },
+  "permissionAssumption": {
+    "scope": "covered subset of this executed scenario only",
+    "finding": "issues: write is not selected independently because pull_requests: write also satisfies the emitted issue-comment route",
+    "appLevelReductionSupported": false
+  },
+  "maintainerFeedback": {
+    "solicited": false,
+    "status": "unavailable"
+  },
+  "limitations": [
+    "This was credential-free mocked runtime execution, not live GitHub behavior.",
+    "The upstream nock responses do not contain x-accepted-github-permissions headers.",
+    "Four runtime-emitted routes are absent from GrantTrace's pinned catalog, so the permission result is incomplete.",
+    "One upstream happy path does not establish coverage of every application branch or webhook payload.",
+    "GrantTrace dependencies were installed with pnpm 9.15.4 rather than the packageManager-declared pnpm 10.28.2; the frozen lockfile was accepted unchanged.",
+    "The frozen upstream install reported 62 audit findings; no dependency remediation was attempted.",
+    "No maintainer feedback was solicited or obtained."
+  ]
+}

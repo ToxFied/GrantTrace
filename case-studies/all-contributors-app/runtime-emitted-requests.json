@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "captureKind": "credential-free-mocked-octokit-runtime",
+  "upstreamCommit": "00f6362ffcc927a2d05fec27f42c3d09e4b03adb",
+  "scenario": "all-contributors-mocked-runtime",
+  "liveGitHub": false,
+  "networkBoundary": "nock.disableNetConnect()",
+  "requests": [
+    {
+      "method": "GET",
+      "routeTemplate": "/repos/{owner}/{repo}/git/ref/{ref}",
+      "status": 404
+    },
+    {
+      "method": "GET",
+      "routeTemplate": "/repos/{owner}/{repo}/contents/{path}",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "routeTemplate": "/users/{username}",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "routeTemplate": "/repos/{owner}/{repo}/contents/{path}",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "routeTemplate": "/repos/{owner}/{repo}/git/ref/{ref}",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "routeTemplate": "/repos/{owner}/{repo}/git/refs",
+      "status": 201
+    },
+    {
+      "method": "PUT",
+      "routeTemplate": "/repos/{owner}/{repo}/contents/{path}",
+      "status": 200
+    },
+    {
+      "method": "PUT",
+      "routeTemplate": "/repos/{owner}/{repo}/contents/{path}",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "routeTemplate": "/repos/{owner}/{repo}/pulls",
+      "status": 201
+    },
+    {
+      "method": "POST",
+      "routeTemplate": "/repos/{owner}/{repo}/issues/{issue_number}/comments",
+      "status": 200
+    }
+  ]
+}

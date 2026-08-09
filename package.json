@@ -68,6 +68,7 @@
     "docs:validate": "node scripts/validate-docs.mjs",
     "granttrace": "tsx src/cli/bin.ts",
     "catalog:review": "node scripts/review-catalog.mjs",
+    "case-study:runtime": "node --import=tsx scripts/run-all-contributors-runtime-pilot.mjs",
     "ci:validate": "node scripts/validate-ci.mjs",
     "contract:reproduce": "node scripts/reproduce-contract.mjs",
     "leakage:scan": "node scripts/leakage-scan.mjs",
