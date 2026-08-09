@@ -1,0 +1,179 @@
+---
+title: Independent integration
+description: A source-pinned, credential-free GrantTrace study of the open-source All Contributors Bot.
+---
+
+## Result
+
+GrantTrace was evaluated against the real, independently maintained
+[All Contributors Bot](https://github.com/all-contributors/app/tree/00f6362ffcc927a2d05fec27f42c3d09e4b03adb),
+an MIT-licensed Probot GitHub App. The study pins upstream commit
+[`00f6362ffcc927a2d05fec27f42c3d09e4b03adb`](https://github.com/all-contributors/app/commit/00f6362ffcc927a2d05fec27f42c3d09e4b03adb)
+and verifies SHA-256 hashes for every inspected upstream file.
+
+The result is mixed in a useful way:
+
+- GrantTrace fully resolves the App's standalone comment-reply behavior and
+  preserves GitHub's `issues: write` **or** `pull_requests: write` choice.
+- For a source-derived “new branch and pull request” path, three unique routes
+  are covered and four are catalog gaps. GrantTrace blocks the full analysis
+  instead of presenting a partial permission result as sufficient.
+- The resolvable PR-path subset does not add `issues: write`, because
+  `pull_requests: write` is already needed to open the pull request and also
+  satisfies the comment route. That is a concrete permission assumption to
+  review, not evidence that the App can drop the grant globally.
+
+This is an independent evaluation, not an All Contributors endorsement or an
+adoption claim.
+
+## Why this App
+
+The candidate was selected before interpreting the permission result:
+
+- it is a real public GitHub App outside the GrantTrace project;
+- the pinned source has an explicit
+  [GitHub App manifest](https://github.com/all-contributors/app/blob/00f6362ffcc927a2d05fec27f42c3d09e4b03adb/app.yml#L50-L85),
+  a clear Octokit call surface, and an
+  [MIT license](https://github.com/all-contributors/app/blob/00f6362ffcc927a2d05fec27f42c3d09e4b03adb/LICENSE);
+- its
+  [`issue_comment.created` handler](https://github.com/all-contributors/app/blob/00f6362ffcc927a2d05fec27f42c3d09e4b03adb/app.js#L11-L35)
+  leads to both a small independently testable reply and a multi-route pull
+  request workflow; and
+- it exercises covered routes and genuine catalog gaps, making the study more
+  informative than a fixture chosen only because every route already passes.
+
+## Evidence layers
+
+The case study deliberately separates three different claims.
+
+### 1. Pinned upstream source inspection
+
+`case-studies/all-contributors-app/case-study.json` records the repository,
+commit, license, declared permissions, source-linked route inventory, and
+whole-file hashes. The network verifier downloads files from the immutable
+commit and checks those hashes:
+
+```bash
+node scripts/verify-external-case-study.mjs
+```
+
+This establishes which source was inspected. It does not establish that the
+code path ran.
+
+### 2. Credential-free executable replay
+
+Two strict NDJSON fixtures replay the canonical, source-derived route evidence
+through GrantTrace's real parser, evidence resolver, and permission solver:
+
+```bash
+pnpm granttrace analyze \
+  case-studies/all-contributors-app/reply-only.observations.ndjson
+
+# Expected exit: 7 (evidence blocked by catalog gaps)
+pnpm granttrace analyze \
+  case-studies/all-contributors-app/new-branch-pr.observations.ndjson
+```
+
+The fixtures intentionally use `status: null` and catalog-only resolution.
+They do not invent a GitHub response, token, repository, or successful live
+run. Offline integration assertions lock the expected frontier, covered route
+set, blocking findings, and source manifest:
+
+```bash
+pnpm vitest run test/integration/external-case-study.test.ts
+```
+
+### 3. Live and maintainer evidence not obtained
+
+No upstream dependency installation, GitHub App registration, credentials,
+live repository mutation, or All Contributors test suite was used. No
+maintainer was contacted, and no feedback has been attributed to the project.
+The replay therefore says nothing about unobserved branches, production
+configuration, or whether the maintainers would adopt the workflow.
+
+## Route inventory
+
+The “new branch and pull request” inventory follows the source calls used to
+read configured files, look up a contributor, create a branch, update files,
+open a pull request, and send the reply.
+
+| Source call | Canonical REST route | GrantTrace catalog |
+| --- | --- | --- |
+| [`repos.getContent`](https://github.com/all-contributors/app/blob/00f6362ffcc927a2d05fec27f42c3d09e4b03adb/lib/modules/repository.js#L41-L49) | `GET /repos/{owner}/{repo}/contents/{path}` | Covered |
+| [`git.getRef`](https://github.com/all-contributors/app/blob/00f6362ffcc927a2d05fec27f42c3d09e4b03adb/lib/modules/repository.js#L91-L98) | `GET /repos/{owner}/{repo}/git/ref/{ref}` | Gap |
+| [`users.getByUsername`](https://github.com/all-contributors/app/blob/00f6362ffcc927a2d05fec27f42c3d09e4b03adb/lib/get-user-details.js#L17-L26) | `GET /users/{username}` | Gap |
+| [`git.createRef`](https://github.com/all-contributors/app/blob/00f6362ffcc927a2d05fec27f42c3d09e4b03adb/lib/modules/repository.js#L109-L118) | `POST /repos/{owner}/{repo}/git/refs` | Gap |
+| [`repos.createOrUpdateFileContents`](https://github.com/all-contributors/app/blob/00f6362ffcc927a2d05fec27f42c3d09e4b03adb/lib/modules/repository.js#L121-L155) | `PUT /repos/{owner}/{repo}/contents/{path}` | Gap |
+| [`pulls.create`](https://github.com/all-contributors/app/blob/00f6362ffcc927a2d05fec27f42c3d09e4b03adb/lib/modules/repository.js#L219-L230) | `POST /repos/{owner}/{repo}/pulls` | Covered |
+| [`issues.createComment`](https://github.com/all-contributors/app/blob/00f6362ffcc927a2d05fec27f42c3d09e4b03adb/lib/modules/comment-reply.js#L35) | `POST /repos/{owner}/{repo}/issues/{issue_number}/comments` | Covered |
+
+The standalone reply scenario covers the last route again, so the manifest
+contains four covered route occurrences representing three unique routes.
+The four gaps collapse to three safe findings in the contract (`GET`, `POST`,
+and `PUT`) because GrantTrace does not retain the template for an unresolved
+runtime route. The source inventory retains only canonical parameterized
+templates so catalog work remains reviewable without storing concrete owners,
+repositories, usernames, refs, or paths.
+
+## Permission result
+
+The pinned App manifest declares
+[`contents: write`, `issues: write`, `metadata: read`, and
+`pull_requests: write`](https://github.com/all-contributors/app/blob/00f6362ffcc927a2d05fec27f42c3d09e4b03adb/app.yml#L63-L85).
+
+The standalone reply produces this frontier:
+
+```text
+issues: write
+OR
+pull_requests: write
+```
+
+For the resolvable subset of the PR workflow, the solver retains one
+nondominated assignment:
+
+```text
+contents: read
+pull_requests: write
+```
+
+The comment did not add `issues: write`: the existing pull-request grant
+satisfies that route. This demonstrates why a permission frontier matters.
+However, the full scenario is blocked. In particular, the uncovered
+`PUT /contents/{path}` call is strong source evidence for `contents: write`,
+and the webhook handler can receive comments on issues as well as pull
+requests. It would be unsafe to turn the subset result into an App-level
+permission reduction.
+
+## Setup time
+
+The reproducible commands report only researcher-side verification and replay
+cost, not maintainer onboarding. A single observed run on 2026-08-09 used
+Darwin arm64 and Node.js v26.0.0. The pinned-source verification completed in
+2.08 seconds. That single wall-clock observation is an operational note, not a
+benchmark. The offline replay was not timed in the isolated study worktree
+because its dependencies were intentionally not installed.
+
+Time spent understanding and adapting the upstream source was not measured
+prospectively, so this study does not publish a made-up end-to-end setup time.
+Likewise, maintainer setup time remains unknown until a maintainer actually
+tries the integration.
+
+## What should happen next
+
+The four source-backed gaps give catalog expansion a concrete adopter-shaped
+order: contents writes and Git reference creation enable the core mutation
+path; the global user lookup needs a separate product decision because
+GrantTrace currently limits its claim to repository-scoped permissions.
+
+Maintainer feedback, if requested later with explicit authorization, should
+focus on observable questions:
+
+- Which existing upstream test best represents a comment on a pull request?
+- Can GrantTrace's Octokit plugin compose with the App's Probot version without
+  changing request behavior?
+- Does the permission frontier make the manifest review clearer?
+- Which blocked route would prevent trial adoption first?
+
+Until those answers exist, this page remains a source-pinned compatibility
+study—not a user testimonial.

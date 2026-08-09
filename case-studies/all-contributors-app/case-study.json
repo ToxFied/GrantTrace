@@ -1,0 +1,132 @@
+{
+  "schemaVersion": 1,
+  "fixtureKind": "source-derived-replay",
+  "upstream": {
+    "name": "All Contributors Bot",
+    "repository": "https://github.com/all-contributors/app",
+    "commit": "00f6362ffcc927a2d05fec27f42c3d09e4b03adb",
+    "commitUrl": "https://github.com/all-contributors/app/commit/00f6362ffcc927a2d05fec27f42c3d09e4b03adb",
+    "license": "MIT",
+    "inspectedOn": "2026-08-09",
+    "files": [
+      {
+        "path": "LICENSE",
+        "sha256": "7ce89d7349b596813ad8767dff2de405f8171cc19bea708c0dc135cde4756c9a"
+      },
+      {
+        "path": "app.js",
+        "sha256": "d8d9d49a5e8ef7df97f25cd7d36bb9cf2ed4d3a77b63fda4bbac5fd882123cfb"
+      },
+      {
+        "path": "app.yml",
+        "sha256": "fcfcb156fb4e9dd11a616e7ef581cb90dc3165e7a7522114aa51988d97d333ca"
+      },
+      {
+        "path": "lib/add-contributor.js",
+        "sha256": "74aa75b0e15cfb7d1e55a935bff3e5316dbc73f6fa4b532bc3fa16bb863936fe"
+      },
+      {
+        "path": "lib/get-user-details.js",
+        "sha256": "e56088c1569dc9c89c77498b4c9c2ed55cce8c44220798efc86dbd3e68fe3124"
+      },
+      {
+        "path": "lib/modules/comment-reply.js",
+        "sha256": "2d4cf54b876ef0ef38b993122bb740d47c43f08b103fcdacb8cb1f754d66ee07"
+      },
+      {
+        "path": "lib/modules/repository.js",
+        "sha256": "6587d4ea9c15defe5a102c6df139673cd812007b91f843986464e3e34e3487c9"
+      },
+      {
+        "path": "lib/process-issue-comment.js",
+        "sha256": "442d16d2753de242b5caa74c4022118df924670ef9fbfb1266386e906b7ab0b6"
+      }
+    ]
+  },
+  "declaredPermissions": {
+    "contents": "write",
+    "issues": "write",
+    "metadata": "read",
+    "pull_requests": "write"
+  },
+  "scenarios": [
+    {
+      "name": "all-contributors-comment-reply",
+      "fixture": "reply-only.observations.ndjson",
+      "description": "Send the queued bot reply for an issue_comment.created command.",
+      "routes": [
+        {
+          "method": "POST",
+          "template": "/repos/{owner}/{repo}/issues/{issue_number}/comments",
+          "catalogSupport": "covered",
+          "sourceCall": "issues.createComment",
+          "sourceUrl": "https://github.com/all-contributors/app/blob/00f6362ffcc927a2d05fec27f42c3d09e4b03adb/lib/modules/comment-reply.js#L35",
+          "documentation": "https://docs.github.com/en/rest/issues/comments?apiVersion=2026-03-10#create-an-issue-comment"
+        }
+      ]
+    },
+    {
+      "name": "all-contributors-new-branch-pr",
+      "fixture": "new-branch-pr.observations.ndjson",
+      "description": "Source-derived new-branch path that reads configured files, creates a branch and files, opens a pull request, and replies to the command.",
+      "routes": [
+        {
+          "method": "GET",
+          "template": "/repos/{owner}/{repo}/contents/{path}",
+          "catalogSupport": "covered",
+          "sourceCall": "repos.getContent",
+          "sourceUrl": "https://github.com/all-contributors/app/blob/00f6362ffcc927a2d05fec27f42c3d09e4b03adb/lib/modules/repository.js#L41-L49",
+          "documentation": "https://docs.github.com/en/rest/repos/contents?apiVersion=2026-03-10#get-repository-content"
+        },
+        {
+          "method": "GET",
+          "template": "/repos/{owner}/{repo}/git/ref/{ref}",
+          "catalogSupport": "gap",
+          "sourceCall": "git.getRef",
+          "sourceUrl": "https://github.com/all-contributors/app/blob/00f6362ffcc927a2d05fec27f42c3d09e4b03adb/lib/modules/repository.js#L91-L98",
+          "documentation": "https://docs.github.com/en/rest/git/refs?apiVersion=2026-03-10#get-a-reference"
+        },
+        {
+          "method": "GET",
+          "template": "/users/{username}",
+          "catalogSupport": "gap",
+          "sourceCall": "users.getByUsername",
+          "sourceUrl": "https://github.com/all-contributors/app/blob/00f6362ffcc927a2d05fec27f42c3d09e4b03adb/lib/get-user-details.js#L17-L26",
+          "documentation": "https://docs.github.com/en/rest/users/users?apiVersion=2026-03-10#get-a-user"
+        },
+        {
+          "method": "POST",
+          "template": "/repos/{owner}/{repo}/git/refs",
+          "catalogSupport": "gap",
+          "sourceCall": "git.createRef",
+          "sourceUrl": "https://github.com/all-contributors/app/blob/00f6362ffcc927a2d05fec27f42c3d09e4b03adb/lib/modules/repository.js#L109-L118",
+          "documentation": "https://docs.github.com/en/rest/git/refs?apiVersion=2026-03-10#create-a-reference"
+        },
+        {
+          "method": "PUT",
+          "template": "/repos/{owner}/{repo}/contents/{path}",
+          "catalogSupport": "gap",
+          "sourceCall": "repos.createOrUpdateFileContents",
+          "sourceUrl": "https://github.com/all-contributors/app/blob/00f6362ffcc927a2d05fec27f42c3d09e4b03adb/lib/modules/repository.js#L121-L155",
+          "documentation": "https://docs.github.com/en/rest/repos/contents?apiVersion=2026-03-10#create-or-update-file-contents"
+        },
+        {
+          "method": "POST",
+          "template": "/repos/{owner}/{repo}/pulls",
+          "catalogSupport": "covered",
+          "sourceCall": "pulls.create",
+          "sourceUrl": "https://github.com/all-contributors/app/blob/00f6362ffcc927a2d05fec27f42c3d09e4b03adb/lib/modules/repository.js#L219-L230",
+          "documentation": "https://docs.github.com/en/rest/pulls/pulls?apiVersion=2026-03-10#create-a-pull-request"
+        },
+        {
+          "method": "POST",
+          "template": "/repos/{owner}/{repo}/issues/{issue_number}/comments",
+          "catalogSupport": "covered",
+          "sourceCall": "issues.createComment",
+          "sourceUrl": "https://github.com/all-contributors/app/blob/00f6362ffcc927a2d05fec27f42c3d09e4b03adb/lib/modules/comment-reply.js#L35",
+          "documentation": "https://docs.github.com/en/rest/issues/comments?apiVersion=2026-03-10#create-an-issue-comment"
+        }
+      ]
+    }
+  ]
+}

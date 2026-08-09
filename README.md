@@ -10,6 +10,7 @@
   · <a href="#see-it-work">Demo</a>
   · <a href="#quickstart">Quickstart</a>
   · <a href="https://toxfied.github.io/GrantTrace/docs/case-study/">Case study</a>
+  · <a href="https://toxfied.github.io/GrantTrace/docs/external-case-study/">External integration</a>
   · <a href="https://github.com/ToxFied/GrantTrace/blob/main/SECURITY.md">Security</a>
 </p>
 
@@ -235,6 +236,7 @@ short-lived installation token it can use or print.
 | [Getting started](https://toxfied.github.io/GrantTrace/docs/getting-started/)   | First contract from install to commit         |
 | [How it works](https://toxfied.github.io/GrantTrace/docs/how-it-works/)         | Evidence, solving, and claim boundary         |
 | [Engineering case study](https://toxfied.github.io/GrantTrace/docs/case-study/) | Architecture and design tradeoffs             |
+| [Independent integration](https://toxfied.github.io/GrantTrace/docs/external-case-study/) | Source-pinned external App evidence    |
 | [CI](https://toxfied.github.io/GrantTrace/docs/ci/)                             | Reproducing scenarios without auto-acceptance |
 | [Live proof](https://toxfied.github.io/GrantTrace/docs/live-proof/)             | Optional restricted-token verification        |
 | [Protocol](https://toxfied.github.io/GrantTrace/docs/protocol/)                 | Normative contract semantics                  |

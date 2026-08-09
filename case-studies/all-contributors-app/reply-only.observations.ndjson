@@ -1,0 +1,1 @@
+{"schemaVersion":1,"scenario":"all-contributors-comment-reply","method":"POST","routeTemplate":"/repos/{owner}/{repo}/issues/{issue_number}/comments","status":null,"requirements":null,"evidenceSource":"none","finding":"missing_evidence"}
