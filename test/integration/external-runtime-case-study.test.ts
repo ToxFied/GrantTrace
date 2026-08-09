@@ -41,9 +41,23 @@ type RuntimeManifest = {
     liveGitHub: boolean;
     credentials: string;
     networkBoundary: string;
-    setupMeasurements: Array<{ command: string; elapsedSeconds: number }>;
-    runtimeMeasurement: { command: string; elapsedSeconds: number };
-    endToEndMeasurement: { command: string; elapsedSeconds: number };
+    setupMeasurements: Array<{
+      command: string;
+      cwd?: string;
+      elapsedSeconds: number;
+    }>;
+    runtimeMeasurement: {
+      command: string;
+      cwd: string;
+      elapsedSeconds: number;
+      sanitizedChildElapsedSeconds: number;
+    };
+    endToEndMeasurement: {
+      command: string;
+      cwd: string;
+      elapsedSeconds: number;
+      sanitizedChildElapsedSeconds: number;
+    };
     upstreamInstallAuditSummary: {
       total: number;
       low: number;
@@ -88,11 +102,18 @@ const fixtureDirectory = join(
   "case-studies",
   "all-contributors-app",
 );
+const runtimeManifestPath = join(fixtureDirectory, "runtime-case-study.json");
+const runtimeHarnessPath = join(
+  process.cwd(),
+  "scripts",
+  "run-all-contributors-runtime-pilot.mjs",
+);
 const pinnedCommit = "00f6362ffcc927a2d05fec27f42c3d09e4b03adb";
 
 describe("All Contributors Bot credential-free runtime pilot", () => {
   it("records pinned mocked execution provenance and measured setup", async () => {
-    const manifest = await loadJson<RuntimeManifest>("runtime-case-study.json");
+    const manifestText = await readFile(runtimeManifestPath, "utf8");
+    const manifest = JSON.parse(manifestText) as RuntimeManifest;
 
     expect(manifest).toMatchObject({
       schemaVersion: 1,
@@ -124,6 +145,23 @@ describe("All Contributors Bot credential-free runtime pilot", () => {
     });
     expect(manifest.upstream.packageLockSha256).toMatch(/^[a-f0-9]{64}$/u);
     expect(manifest.execution.credentials).toContain("dummy");
+    expect(manifestText).not.toMatch(
+      /(?:\/private\/tmp(?:\/|\b)|\/var\/folders(?:\/|\b))/u,
+    );
+    expect(manifest.execution.setupMeasurements.map(({ cwd }) => cwd)).toEqual([
+      "<granttrace-checkout>",
+      undefined,
+      "<temporary-root>/upstream",
+      "<temporary-root>/upstream",
+    ]);
+    expect(manifest.execution.runtimeMeasurement).toMatchObject({
+      command:
+        "/usr/bin/time -p node --import=tsx scripts/run-all-contributors-runtime-pilot.mjs --upstream <pinned-upstream-checkout>",
+      cwd: "<granttrace-checkout>",
+    });
+    expect(manifest.execution.endToEndMeasurement.cwd).toBe(
+      "<granttrace-checkout>",
+    );
     expect(manifest.execution.upstreamInstallAuditSummary).toEqual({
       total: 62,
       low: 9,
@@ -148,6 +186,26 @@ describe("All Contributors Bot credential-free runtime pilot", () => {
       scope: "covered subset of this executed scenario only",
       appLevelReductionSupported: false,
     });
+  });
+
+  it("keeps checksum preflight and mocked networking fail-closed", async () => {
+    const harness = await readFile(runtimeHarnessPath, "utf8");
+    const preflight = harness.indexOf(
+      "await assertPinnedCheckout(upstreamDirectory);",
+    );
+    const install = harness.indexOf(
+      'await runMeasured("npm", ["ci", "--ignore-scripts"]',
+    );
+    const disableNetwork = harness.indexOf("nock.disableNetConnect();");
+    const loadApp = harness.indexOf(
+      'const app = require(join(upstreamDirectory, "app.js"));',
+    );
+
+    expect(preflight).toBeGreaterThanOrEqual(0);
+    expect(preflight).toBeLessThan(install);
+    expect(disableNetwork).toBeGreaterThanOrEqual(0);
+    expect(disableNetwork).toBeLessThan(loadApp);
+    expect(harness).not.toContain("nock.enableNetConnect");
   });
 
   it("keeps exact emitted route coverage aligned with the recorder artifact", async () => {
@@ -280,6 +338,16 @@ describe("All Contributors Bot credential-free runtime pilot", () => {
     expect(contract.routes.every((route) =>
       !route.evidence.includes("runtime_header"),
     )).toBe(true);
+    expect(
+      observations.every(
+        (observation) =>
+          observation.requirements === null &&
+          observation.evidenceSource === "none",
+      ),
+    ).toBe(true);
+    expect(manifest.resolvableSubset.evidence).toBe(
+      "pinned catalog only; mocked responses had no x-accepted-github-permissions header",
+    );
     expect(contract.unknowns.map((unknown) => unknown.method)).toEqual(
       manifest.resolvableSubset.unknownMethods,
     );

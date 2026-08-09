@@ -1,6 +1,4 @@
 import { createHash } from "node:crypto";
-import { isDeepStrictEqual } from "node:util";
-import { createRequire } from "node:module";
 import {
   chmod,
   lstat,
@@ -10,10 +8,12 @@ import {
   rm,
   writeFile,
 } from "node:fs/promises";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
 import { performance } from "node:perf_hooks";
 import { fileURLToPath } from "node:url";
+import { isDeepStrictEqual } from "node:util";
 
 import { buildContract } from "../src/contract/build.ts";
 import { loadObservations } from "../src/contract/observation-file.ts";
@@ -71,6 +71,7 @@ async function runPilot(options) {
           cwd: upstreamDirectory,
         }),
       );
+      await assertPinnedCheckout(upstreamDirectory);
       setup.push(
         await runMeasured("npm", ["ci", "--ignore-scripts"], {
           cwd: upstreamDirectory,
@@ -284,7 +285,8 @@ async function executeRuntime({
     );
   } finally {
     nock.cleanAll();
-    nock.enableNetConnect();
+    // This runs in an isolated child. Keep network access disabled until that
+    // process exits so late App work cannot escape the mocked boundary.
   }
 }
 

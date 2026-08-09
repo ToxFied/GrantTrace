@@ -53,10 +53,11 @@ pnpm vitest run test/integration/external-case-study.test.ts
 ```
 
 Reproduce the real credential-free mocked runtime from a fresh disposable
-clone. This verifies the exact commit and package-lock checksum, installs the
-upstream lockfile with lifecycle scripts disabled, runs the Probot handler in a
-credential-scrubbed child process, compares both runtime artifacts byte for
-byte, and deletes the temporary clone:
+clone. This verifies the exact commit and package-lock checksum before the
+install, installs the upstream lockfile with lifecycle scripts disabled,
+re-verifies the checkout, runs the Probot handler in a credential-scrubbed
+child process whose network boundary remains disabled until exit, compares
+both runtime artifacts byte for byte, and deletes the temporary clone:
 
 ```bash
 pnpm install --frozen-lockfile --ignore-scripts

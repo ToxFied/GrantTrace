@@ -34,33 +34,33 @@
     "setupMeasurements": [
       {
         "command": "/usr/bin/time -p pnpm install --frozen-lockfile --ignore-scripts",
-        "cwd": "/private/tmp/granttrace-runtime.SoKEpV",
+        "cwd": "<granttrace-checkout>",
         "elapsedSeconds": 5.88
       },
       {
-        "command": "git clone --no-checkout https://github.com/all-contributors/app.git /var/folders/9b/ygx3b4lj2630wqmxkcvzmmq80000gn/T/granttrace-all-contributors-runtime-HwwXUt/upstream",
+        "command": "git clone --no-checkout https://github.com/all-contributors/app.git <temporary-root>/upstream",
         "elapsedSeconds": 1.544
       },
       {
         "command": "git checkout --detach 00f6362ffcc927a2d05fec27f42c3d09e4b03adb",
-        "cwd": "/var/folders/9b/ygx3b4lj2630wqmxkcvzmmq80000gn/T/granttrace-all-contributors-runtime-HwwXUt/upstream",
+        "cwd": "<temporary-root>/upstream",
         "elapsedSeconds": 0.021
       },
       {
         "command": "npm ci --ignore-scripts",
-        "cwd": "/var/folders/9b/ygx3b4lj2630wqmxkcvzmmq80000gn/T/granttrace-all-contributors-runtime-HwwXUt/upstream",
+        "cwd": "<temporary-root>/upstream",
         "elapsedSeconds": 10.966
       }
     ],
     "runtimeMeasurement": {
-      "command": "/usr/bin/time -p node --import=tsx scripts/run-all-contributors-runtime-pilot.mjs --upstream /private/tmp/granttrace-all-contributors.4ghYU1/upstream",
-      "cwd": "/private/tmp/granttrace-runtime.SoKEpV",
+      "command": "/usr/bin/time -p node --import=tsx scripts/run-all-contributors-runtime-pilot.mjs --upstream <pinned-upstream-checkout>",
+      "cwd": "<granttrace-checkout>",
       "elapsedSeconds": 0.88,
       "sanitizedChildElapsedSeconds": 0.687
     },
     "endToEndMeasurement": {
       "command": "/usr/bin/time -p node --import=tsx scripts/run-all-contributors-runtime-pilot.mjs",
-      "cwd": "/private/tmp/granttrace-runtime.SoKEpV",
+      "cwd": "<granttrace-checkout>",
       "elapsedSeconds": 14.3,
       "sanitizedChildElapsedSeconds": 0.612
     },

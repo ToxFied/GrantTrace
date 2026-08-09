@@ -204,9 +204,12 @@ benchmark or maintainer-onboarding estimate:
 | One-command clone/install/run/compare/cleanup | `pnpm case-study:runtime` equivalent | 14.30 |
 | Reuse installed checkout, full harness command | `pnpm case-study:runtime --upstream …` equivalent | 0.88 |
 
-The exact measured commands and temporary paths are retained in
-`runtime-case-study.json`. The one-command total includes orchestration,
-evidence comparison, and cleanup, so it is larger than the listed child phase.
+The exact measured command shapes and elapsed seconds are retained in
+`runtime-case-study.json`; machine-specific paths are replaced with stable
+`<granttrace-checkout>`, `<temporary-root>`, and
+`<pinned-upstream-checkout>` placeholders. The one-command total includes
+orchestration, evidence comparison, and cleanup, so it is larger than the
+listed child phase.
 The local pnpm was 9.15.4 rather than the package manifest's declared 10.28.2;
 it accepted the frozen lockfile unchanged, but that version mismatch is part of
 the captured environment rather than an exact package-manager reproduction.
