@@ -1,18 +1,35 @@
 ---
 title: Quickstart
-description: Create, review, and commit your first permission contract.
+description: Install GrantTrace, record one GitHub behavior, and commit your first permission contract.
 ---
 
-## Requirements
+Don't know what the fuck you're doing? You're in the right place. GrantTrace
+does one job: **it watches your app talk to GitHub and writes down the
+permissions it actually used.** Give it one command. It gives you a receipt.
+
+## Before you start
 
 - Node.js 22 or newer
-- A Node.js project with a repeatable test or integration scenario
+- a Node.js project with a `package.json` file
+- one test or script that makes your app perform a real GitHub action
+
+No test command yet? Stop here. GrantTrace watches behavior. It does not invent
+it. Give your app a repeatable test or script first, then come back.
 
 <Steps>
 
 <Step>
 
-### Install
+### Find the right folder
+
+Open a terminal in your app's folder. If you can see `package.json`, you're
+probably home.
+
+</Step>
+
+<Step>
+
+### Install GrantTrace
 
 ```bash title="Terminal"
 npm install --save-dev granttrace@beta
@@ -24,63 +41,44 @@ If your project uses pnpm:
 pnpm add --save-dev granttrace@beta
 ```
 
-<Callout title="One-time step">
-  GrantTrace is now published on npm. You install it directly from the registry;
-  you do not need to clone GrantTrace, download a package file, or copy its
-  source into your project.
-</Callout>
-
 </Step>
 
 <Step>
 
-### Record a scenario
+### Record one real scenario
 
 ```bash title="Terminal"
-npx granttrace record issue-triage -- \
-  npm test -- issue-triage
+npx granttrace record issue-triage -- npm test -- issue-triage
 ```
 
-`issue-triage` is an example name. Replace the command after `--` with the
-existing command that exercises one real behavior of your GitHub App. GrantTrace
-runs that command and watches it; GrantTrace does not create the test for you.
-For pnpm projects, use `pnpm exec granttrace` and your normal pnpm test command
-instead.
+That command has three useful pieces:
 
-No source edit or separate initialization is required for the standard Node.js
-path. GrantTrace injects a preload into the child process and observes supported
-GitHub REST calls through Node's global `fetch`. Standard Octokit clients use
-that path automatically. Automatic capture is restricted to requests targeting
-exactly `https://api.github.com`; off-origin responses are ignored even if they
-include a permission-like header.
+- `issue-triage` is a short name you make up for the behavior being tested.
+- The `--` is the fence. GrantTrace is on the left.
+- Your normal test command is on the right. Replace
+  `npm test -- issue-triage` with yours.
 
-The command after `--` is passed as an argument array without a shell. Output
-streams to your terminal. Recording the same scenario name again atomically
-replaces its previous local observation file. On the first recording,
-GrantTrace creates private `.granttrace/` state and adds it to `.gitignore`
-before the test process can start.
-
-`granttrace init` remains available when you want to prepare the project
-explicitly. `granttrace doctor` is optional diagnostics, not an onboarding
-step.
+GrantTrace runs the command, watches its GitHub REST requests, and prints what
+it saw. For pnpm projects, use `pnpm exec granttrace` and your normal pnpm test
+command instead.
 
 </Step>
 
 <Step>
 
-### Review the diff
+### Review and keep the receipt
 
-The same `record` command prints the permission, route, evidence, and
-attribution diff. In an interactive terminal it asks whether to accept that
-exact change. The default answer is no; acceptance always requires a person.
+The same command prints the permission, route, evidence, and attribution diff,
+then asks whether you want to accept that exact change. Read it. If it matches
+the behavior you just ran, type **y**. The default answer is no. This is the one
+bit you should not autopilot.
 
-In CI or another noninteractive terminal, GrantTrace never prompts or accepts.
-A changed contract exits `6`. Review it locally, or use
-`granttrace check` followed by `granttrace check --accept` when you want the
-review and acceptance as separate commands.
+GrantTrace creates `granttrace.lock.json`. Commit it. That file is the useful
+bit: a reviewable record of the permissions this behavior used. The private
+scratch files in `.granttrace/` stay local; GrantTrace adds that directory to
+`.gitignore` for you.
 
-Commit `granttrace.lock.json`. Keep `.granttrace/` local and ignored. That is
-the full normal onboarding flow:
+That's the full normal onboarding flow:
 
 ```text
 install → record → review → commit
@@ -89,6 +87,39 @@ install → record → review → commit
 </Step>
 
 </Steps>
+
+<details className="my-8 border-y border-fd-border py-4">
+  <summary className="cursor-pointer font-medium">How recording works</summary>
+  <div className="mt-4">
+    <p>
+      No source edit or separate initialization is required for the standard
+      Node.js path. GrantTrace injects a preload into the child process and
+      observes supported GitHub REST calls through Node's global <code>fetch</code>.
+      Standard Octokit clients use that path automatically.
+    </p>
+    <p>
+      Automatic capture is restricted to requests targeting exactly
+      <code>https://api.github.com</code>. Off-origin responses are ignored even
+      if they include a permission-like header. The command after <code>--</code>
+      is passed as an argument array without a shell, and output streams to your
+      terminal.
+    </p>
+    <p>
+      Recording the same scenario name again atomically replaces its previous
+      local observation file. On the first recording, GrantTrace creates private
+      <code>.granttrace/</code> state before the test process can start.
+      <code>granttrace init</code> remains available for explicit setup, while
+      <code>granttrace doctor</code> is optional diagnostics.
+    </p>
+    <p>
+      In CI or another noninteractive terminal, GrantTrace never prompts or
+      accepts. A changed contract exits <code>6</code>. Review it locally, or use
+      <code>granttrace check</code> followed by
+      <code>granttrace check --accept</code> when you want review and acceptance
+      as separate commands.
+    </p>
+  </div>
+</details>
 
 ## Add more scenarios
 
@@ -106,6 +137,11 @@ Removing the final recording is also a reviewable contraction. After
 permissions, and unknowns. Validated manual keeps are retained until you remove
 them explicitly; zero observed coverage never turns a keep into proven
 necessity.
+
+## One honest limit
+
+GrantTrace only knows what your command touched. Untested paths are still
+untested. No magic. No bullshit.
 
 ## Next steps
 
