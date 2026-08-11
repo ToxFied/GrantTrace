@@ -1,0 +1,86 @@
+---
+title: I don't know what the fuck I'm doing
+description: Install GrantTrace, wrap one real test, and keep the result.
+---
+
+You're in the right place. GrantTrace does one job: **it watches your app talk
+to GitHub and writes down the permissions it actually used.** Give it one
+command. It gives you a receipt.
+
+## Before you do anything
+
+You need:
+
+- Node.js 22 or newer
+- a `package.json` file
+- one test or script that makes your app perform a real GitHub action
+
+No test command yet? Stop here. GrantTrace watches behavior. It does not invent
+it. Give your app a repeatable test or script first, then come back.
+
+## Three steps. That's it.
+
+<Steps>
+
+<Step>
+
+### Find the right folder
+
+Open a terminal in your app's folder. If you can see `package.json`, you're
+probably home.
+
+</Step>
+
+<Step>
+
+### Install the thing
+
+```bash title="Terminal"
+npm install --save-dev granttrace@beta
+```
+
+Once. Done. If you use pnpm, run
+`pnpm add --save-dev granttrace@beta` instead.
+
+</Step>
+
+<Step>
+
+### Wrap one real test
+
+```bash title="Terminal"
+npx granttrace record issue-triage -- npm test -- issue-triage
+```
+
+That command has three useful pieces:
+
+- `issue-triage` is a short name you make up for the behavior being tested.
+- The `--` is the fence. GrantTrace is on the left.
+- Your normal test command is on the right. Replace
+  `npm test -- issue-triage` with yours.
+
+GrantTrace runs the command, watches its GitHub REST requests, and prints what
+it saw. It then asks whether you want to accept the result. Read it. If it
+matches the thing you just ran, type **y**. This is the one bit you should not
+autopilot.
+
+</Step>
+
+</Steps>
+
+## Keep the receipt
+
+GrantTrace creates `granttrace.lock.json`. Commit it. That file is the useful
+bit: a reviewable record of the permissions this behavior used.
+
+The private scratch files in `.granttrace/` stay local. GrantTrace adds that
+directory to `.gitignore` for you.
+
+## One honest limit
+
+GrantTrace only knows what your command touched. Untested paths are still
+untested. No magic. No bullshit.
+
+When you want the details, continue to the [full quickstart](/docs/getting-started).
+If the command records nothing, go straight to
+[troubleshooting](/docs/troubleshooting).
