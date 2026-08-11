@@ -52,10 +52,9 @@ application added access, removed coverage, changed evidence, or moved a route
 between scenarios. Permission drift becomes a code-review decision instead of
 a settings-page guess.
 
-> [!IMPORTANT]
-> GrantTrace proves a narrow claim: the permissions demonstrated by the named,
-> recorded scenarios. It does not certify untested paths or whole-application
-> least privilege.
+**Scope:** GrantTrace proves only the permissions demonstrated by the named,
+recorded scenarios. It does not certify untested paths or whole-application
+least privilege.
 
 ## See it work
 
