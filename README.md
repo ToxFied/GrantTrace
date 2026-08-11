@@ -11,17 +11,31 @@
   · <a href="#quickstart">Quickstart</a>
   · <a href="https://toxfied.github.io/GrantTrace/docs/case-study/">Case study</a>
   · <a href="https://toxfied.github.io/GrantTrace/docs/external-case-study/">Independent compatibility study</a>
+  · <a href="https://github.com/ToxFied/GrantTrace/blob/main/SUPPORT.md">Support</a>
   · <a href="https://github.com/ToxFied/GrantTrace/blob/main/SECURITY.md">Security</a>
 </p>
 
 <p align="center">
   <a href="https://www.npmjs.com/package/granttrace"><img src="https://img.shields.io/npm/v/granttrace?label=npm" alt="npm version"></a>
+  <a href="https://github.com/ToxFied/GrantTrace/actions/workflows/ci.yml"><img src="https://github.com/ToxFied/GrantTrace/actions/workflows/ci.yml/badge.svg?branch=main" alt="Offline verification status"></a>
+  <a href="https://github.com/ToxFied/GrantTrace/actions/workflows/security.yml"><img src="https://github.com/ToxFied/GrantTrace/actions/workflows/security.yml/badge.svg?branch=main" alt="Security analysis status"></a>
   <code>Node.js 22+</code> <code>Beta</code> <code>MIT</code>
 </p>
 
 **GrantTrace records which GitHub permissions each tested behavior actually
 uses, saves the evidence in your repository, and flags unexpected permission
 changes in code review.**
+
+## Project status
+
+GrantTrace is an actively maintained public beta. See the
+[releases](https://github.com/ToxFied/GrantTrace/releases) and
+[changelog](CHANGELOG.md) for published changes. Before a stable release,
+CLI behavior, contract schemas, and supported route coverage may change; pin
+the package version and review the changelog when upgrading.
+
+For usage help and issue guidance, read [SUPPORT.md](SUPPORT.md). Report
+suspected vulnerabilities privately through [SECURITY.md](SECURITY.md).
 
 GitHub shows what your app can access. Run a named test scenario and GrantTrace
 shows which behavior justifies that access. It observes supported GitHub REST
