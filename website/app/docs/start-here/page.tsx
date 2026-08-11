@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
@@ -16,7 +17,7 @@ export default function StartHereRedirect() {
   return (
     <main className="mx-auto max-w-3xl px-6 py-16">
       <p>
-        This guide moved to <a href={quickstartPath}>Quickstart</a>.
+        This guide moved to <Link href={quickstartPath}>Quickstart</Link>.
       </p>
     </main>
   );
