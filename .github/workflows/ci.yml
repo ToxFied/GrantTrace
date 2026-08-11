@@ -2,6 +2,7 @@ name: Offline verification
 
 on:
   push:
+    branches: [main]
   pull_request:
 
 permissions:
