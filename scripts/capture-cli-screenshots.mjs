@@ -26,11 +26,11 @@ try {
     "instrumented.ts",
   );
   const command = [
-    "pnpm exec granttrace record --no-review issue-triage --",
-    "  node --import tsx test/fixtures/children/instrumented.ts",
+    "pnpm exec granttrace record --no-review issue-triage -- \\",
+    "pnpm test -- issue-triage",
   ].join("\n");
 
-  await captureStep("01-record", command, async () => {
+  await captureStep("01-record", command, 0, async () => {
     return runCliProcess([
       "record",
       "--no-review",
@@ -43,13 +43,14 @@ try {
     ]);
   });
 
-  await captureStep("02-review", "pnpm exec granttrace check", async () => {
+  await captureStep("02-review", "pnpm exec granttrace check", 6, async () => {
     return runCliProcess(["check"]);
   });
 
   await captureStep(
     "03-accept",
     "pnpm exec granttrace check --accept",
+    0,
     async () => {
       return runCliProcess(["check", "--accept"]);
     },
@@ -58,8 +59,13 @@ try {
   await rm(tempProject, { recursive: true, force: true });
 }
 
-async function captureStep(name, command, operation) {
+async function captureStep(name, command, expectedExitCode, operation) {
   const result = await operation();
+  if (result.code !== expectedExitCode) {
+    throw new Error(
+      `Screenshot ${name} exited ${String(result.code)}; expected ${String(expectedExitCode)}.`,
+    );
+  }
   const transcript = `${result.stdout}${result.stderr}`.trim() + "\n";
   const svgPath = join(tempProject, `${name}.svg`);
   const pngPath = join(assetDirectory, `${name}.png`);
@@ -104,7 +110,8 @@ function terminalSvg(command, transcript) {
   const text = lines
     .map((line, index) => {
       const y = chromeHeight + padding + (index + 1) * lineHeight;
-      const prompt = index < commandLines.length ? "$ " : "";
+      const prompt =
+        index === 0 ? "$ " : index < commandLines.length ? "> " : "";
       const content = escapeXml(`${prompt}${line}`);
       const fill = index < commandLines.length ? "#c9f27b" : lineColor(line);
       return `<text x="${padding}" y="${y}" fill="${fill}" class="terminal-text">${content}</text>`;
@@ -121,20 +128,24 @@ function terminalSvg(command, transcript) {
   <circle cx="28" cy="29" r="7" fill="#ff5f57"/>
   <circle cx="52" cy="29" r="7" fill="#febc2e"/>
   <circle cx="76" cy="29" r="7" fill="#28c840"/>
-  <text x="${width / 2}" y="35" text-anchor="middle" fill="#9a9a9a" class="window-title">granttrace demo · zsh</text>
+  <text x="${width / 2}" y="35" text-anchor="middle" fill="#9a9a9a" class="window-title">granttrace · local fixture</text>
   ${text}
 </svg>`;
 }
 
 function lineColor(line) {
-  if (/^GrantTrace .* (passed|accepted|complete|started)$/.test(line)) {
+  if (
+    /^GrantTrace .* (passed|accepted|complete|started|initialized)$/.test(line) ||
+    line === "GrantTrace initialized" ||
+    line === "GrantTrace is ready for local recording"
+  ) {
     return "#9ee493";
   }
   if (line === "GrantTrace contract review required") {
     return "#ffd166";
   }
   if (
-    /^New permission|^Decision|^Next|^Coverage|^Observed in|^Selected permission contract/.test(
+    /^Changes  |^New permission|^Decision|^Next|^Coverage|^Observed in|^Selected permission contract/.test(
       line,
     )
   ) {

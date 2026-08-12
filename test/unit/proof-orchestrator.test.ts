@@ -355,6 +355,46 @@ describe("proof orchestration", () => {
     });
   });
 
+  it("fails closed when a passing child never received a GitHub response", async () => {
+    const failedBeforeResponse: Observation = {
+      ...commentObservation,
+      status: null,
+      requirements: null,
+      evidenceSource: "none",
+      finding: "missing_evidence",
+    };
+    const result = await executeProof({
+      config,
+      contract,
+      scenario: "disposable-comment",
+      cwd: "/tmp/proof-orchestrator",
+      command: "unused",
+      args: [],
+      baseEnvironment: {},
+      dependencies: {
+        tokenTransport: tokenFixture([]),
+        runChild: async () => ({
+          ...passingChild(),
+          observations: [failedBeforeResponse],
+        }),
+        now,
+      },
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.report.contractMatched).toBe(false);
+    expect(result.report.positiveProof).toEqual({
+      status: "failed",
+      failure: "contract_mismatch",
+    });
+    expect(result.report.proofStrength).toBe("not_established");
+    expect(
+      result.report.negativeControls.every(
+        (control) => control.status === "not_run",
+      ),
+    ).toBe(true);
+  });
+
   it("reports child session cleanup independently from a passing operation", async () => {
     const result = await executeProof({
       config,

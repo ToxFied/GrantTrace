@@ -1,11 +1,11 @@
 {
   "schemaVersion": 3,
-  "toolVersion": "0.1.0-beta.1",
+  "toolVersion": "0.1.0-beta.2",
   "apiVersion": "2026-03-10",
   "catalog": {
     "source": "github-docs",
-    "version": "2026-03-10.20260723.1",
-    "checksum": "sha256:bff9744ff9658e3f2e01d65441ab2415be25a1553855c786af5d6ec68a2f716d"
+    "version": "2026-03-10.20260812.1",
+    "checksum": "sha256:daaae7b3f52900e715e3236beacadb4d791af38943e8dacce73b979ab8592712"
   },
   "scenarios": [
     {

@@ -78,26 +78,57 @@ export function styleCliOutput(value: string): string {
       if (line === "") {
         return line;
       }
-      if (/^GrantTrace .* (passed|accepted|complete|started)$/.test(line)) {
+      if (
+        /^GrantTrace .* (passed|accepted|complete|started|initialized)$/u.test(
+          line,
+        ) ||
+        line === "GrantTrace initialized" ||
+        line === "GrantTrace is ready for local recording"
+      ) {
         return `${bold}${green}${line}${reset}`;
       }
-      if (/^GrantTrace .* (failed|blocked|interrupted|timed out)$/.test(line)) {
+      if (
+        /^GrantTrace .* (failed|blocked|interrupted|timed out|not found)$/u.test(
+          line,
+        )
+      ) {
         return `${bold}${red}${line}${reset}`;
       }
-      if (line === "GrantTrace contract review required") {
+      if (
+        line === "GrantTrace contract review required" ||
+        line === "Not accepted" ||
+        line === "Analysis blocked"
+      ) {
         return `${bold}${yellow}${line}${reset}`;
       }
       if (
         [
+          "Changes",
           "Decision",
           "Next",
           "Coverage",
           "Observed in",
+          "Did you mean",
+          "New permission",
+          "Permission escalation",
+          "No longer observed",
+          "Observed access reduced",
+          "Scenario added",
+          "Scenario removed",
+          "Route added",
+          "Route removed",
+          "Scenario attribution added",
+          "Scenario attribution removed",
+          "Scenario evidence provenance changed",
+          "Route evidence changed",
           "Selected permission contract",
           "Observed permission contract",
           "Mandatory GitHub baseline (not selected or manually kept)",
         ].includes(line)
       ) {
+        return `${bold}${cyan}${line}${reset}`;
+      }
+      if (line.startsWith("Changes  ")) {
         return `${bold}${cyan}${line}${reset}`;
       }
       if (/^  [\w-]+: (read|write)$/.test(line)) {

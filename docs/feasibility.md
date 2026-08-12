@@ -5,7 +5,7 @@ description: External evidence behind GrantTrace's protocol constraints.
 
 # Platform evidence
 
-Reviewed on **2026-07-23** against GitHub REST API version `2026-03-10`.
+Reviewed on **2026-08-12** against GitHub REST API version `2026-03-10`.
 
 This record captures the external platform evidence that shapes GrantTrace's
 protocol. It is not a coverage inventory; see the [REST

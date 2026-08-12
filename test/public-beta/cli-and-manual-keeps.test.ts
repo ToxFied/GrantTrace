@@ -29,6 +29,7 @@ describe("public-beta CLI surface", () => {
     expect(help.stdout()).toContain("granttrace keep add|remove|list");
     expect(help.stdout()).toContain("granttrace frontier list|select");
     expect(help.stdout()).toContain("granttrace scenario");
+    expect(help.stdout()).toContain("granttrace help <command>");
     expect(help.stdout()).toContain("Untested behavior is outside the claim");
     expect(help.stdout()).not.toMatch(/\u001b\[[0-9;]*m/u);
 
@@ -36,18 +37,34 @@ describe("public-beta CLI surface", () => {
     expect(await runCli(["--version"], version.context)).toBe(0);
     expect(version.stdout()).toBe(`${TOOL_VERSION}\n`);
     expect(version.stderr()).toBe("");
+
+    const versionAlias = captureContext("/", { NO_COLOR: "1" });
+    expect(await runCli(["version"], versionAlias.context)).toBe(0);
+    expect(versionAlias.stdout()).toBe(`${TOOL_VERSION}\n`);
+
+    const commandHelp = captureContext("/", { NO_COLOR: "1" });
+    expect(await runCli(["help", "record"], commandHelp.context)).toBe(0);
+    expect(commandHelp.stdout()).toContain("Record one named test scenario");
+    expect(commandHelp.stderr()).toBe("");
   });
 
   it("returns a stable usage exit for an unknown command", async () => {
     const output = captureContext("/", { NO_COLOR: "1" });
 
     expect(await runCli(["unknown-command"], output.context)).toBe(2);
-    expect(output.stderr()).toContain("Unknown command.");
+    expect(output.stderr()).toContain("GrantTrace command not found");
     expect(output.stderr()).not.toContain("unknown-command");
-    expect(output.stderr()).toContain(
-      "Run granttrace <command> --help for command-specific usage",
-    );
+    expect(output.stderr()).toContain("granttrace --help");
     expect(output.stderr()).not.toMatch(/\u001b\[[0-9;]*m/u);
+  });
+
+  it("suggests a close command without reflecting unsafe input", async () => {
+    const output = captureContext("/", { NO_COLOR: "1" });
+
+    expect(await runCli(["recrod"], output.context)).toBe(2);
+    expect(output.stderr()).toContain("Did you mean");
+    expect(output.stderr()).toContain("granttrace record");
+    expect(output.stderr()).not.toContain("recrod");
   });
 });
 

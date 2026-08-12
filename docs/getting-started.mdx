@@ -3,9 +3,9 @@ title: Quickstart
 description: Install GrantTrace, record one GitHub behavior, and commit your first permission contract.
 ---
 
-Don't know what the fuck you're doing? You're in the right place. GrantTrace
-does one job: **it watches your app talk to GitHub and writes down the
-permissions it actually used.** Give it one command. It gives you a receipt.
+GrantTrace does one job: **it watches a repeatable GitHub behavior and records
+the permissions that behavior actually used.** Give it one command. It gives
+you a reviewable receipt.
 
 ## Before you start
 
@@ -62,9 +62,11 @@ GrantTrace runs the command, watches its GitHub REST requests, and prints what
 it saw. For pnpm projects, use `pnpm exec granttrace` and your normal pnpm test
 command instead.
 
-Here is the same flow in a real terminal. The screenshots are generated from
-the repository's hermetic fixture, so they contain no credentials or live
-GitHub data.
+Here is the same flow in a real terminal. To keep each decision visible, the
+screenshots split recording, review, and acceptance into separate commands.
+The normal interactive `record` command can perform the review immediately.
+The images are generated from the repository's hermetic fixture, so they
+contain no credentials or live GitHub data.
 
 <DocsImage className="w-full rounded-xl border border-fd-border" src="/cli/01-record.png" alt="Terminal showing GrantTrace recording the issue-triage scenario" />
 
@@ -74,10 +76,10 @@ GitHub data.
 
 ### Review and keep the receipt
 
-The same command prints the permission, route, evidence, and attribution diff,
-then asks whether you want to accept that exact change. Read it. If it matches
-the behavior you just ran, type **y**. The default answer is no. This is the one
-bit you should not autopilot.
+By default, `record` prints the permission, route, evidence, and attribution
+diff, then asks whether you want to accept that exact change. Read it. If it
+matches the behavior you just ran, type **y**. The default answer is no. This
+is the one decision you should not autopilot.
 
 GrantTrace creates `granttrace.lock.json`. Commit it. That file is the useful
 bit: a reviewable record of the permissions this behavior used. The private
@@ -157,8 +159,8 @@ necessity.
 
 ## One honest limit
 
-GrantTrace only knows what your command touched. Untested paths are still
-untested. No magic. No bullshit.
+GrantTrace only knows what your command touched. Untested paths remain outside
+the contract's claim.
 
 ## Next steps
 

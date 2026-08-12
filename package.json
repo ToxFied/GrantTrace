@@ -1,6 +1,6 @@
 {
   "name": "granttrace",
-  "version": "0.1.0-beta.1",
+  "version": "0.1.0-beta.2",
   "description": "Track which GitHub App permissions each tested behavior actually uses",
   "type": "module",
   "types": "./dist/index.d.ts",
@@ -74,6 +74,7 @@
     "contract:reproduce": "node scripts/reproduce-contract.mjs",
     "leakage:scan": "node scripts/leakage-scan.mjs",
     "lint": "biome lint src test examples scripts vitest.config.ts",
+    "package:artifact": "node scripts/create-package-artifact.mjs",
     "package:smoke": "node scripts/package-smoke.mjs",
     "prepack": "pnpm clean:dist && pnpm build",
     "test": "vitest run",

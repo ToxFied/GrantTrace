@@ -20,8 +20,12 @@ description: Commands, options, scenario naming, timeouts, and exit codes.
 | `granttrace keep add/remove/list`   | Manage reasoned, unproven access                          |
 | `granttrace prove NAME -- COMMAND`  | Prove one accepted scenario live                          |
 | `granttrace analyze OBSERVATIONS`   | Inspect one lower-level NDJSON file                       |
+| `granttrace help COMMAND`           | Show help for one command                                 |
+| `granttrace --version`              | Print the installed GrantTrace version                    |
 
-Run `granttrace <command> --help` for its complete usage.
+Run `granttrace <command> --help` or `granttrace help <command>` for complete
+usage. Close command-name typos produce one safe suggestion without reflecting
+the original argument back to the terminal.
 
 ## `record`
 

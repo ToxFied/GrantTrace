@@ -12,13 +12,13 @@ const commentRoute =
   "/repos/{owner}/{repo}/issues/{issue_number}/comments";
 
 describe("public-beta GitHub REST catalog", () => {
-  it("pins a reviewable 49-route identity to the selected API version", () => {
-    expect(GITHUB_REST_CATALOG_ENTRIES).toHaveLength(49);
+  it("pins a reviewable 53-route identity to the selected API version", () => {
+    expect(GITHUB_REST_CATALOG_ENTRIES).toHaveLength(53);
     expect(githubPermissionCatalog.identity).toEqual({
       source: "github-docs",
-      version: "2026-03-10.20260723.1",
+      version: "2026-03-10.20260812.1",
       checksum:
-        "sha256:bff9744ff9658e3f2e01d65441ab2415be25a1553855c786af5d6ec68a2f716d",
+        "sha256:daaae7b3f52900e715e3236beacadb4d791af38943e8dacce73b979ab8592712",
     });
 
     const routeKeys = GITHUB_REST_CATALOG_ENTRIES.map(
@@ -41,7 +41,7 @@ describe("public-beta GitHub REST catalog", () => {
       ),
     );
 
-    expect(routeKeys.size).toBe(49);
+    expect(routeKeys.size).toBe(53);
     for (const route of [
       "GET /repos/{owner}/{repo}",
       "POST /repos/{owner}/{repo}/issues",
@@ -49,6 +49,10 @@ describe("public-beta GitHub REST catalog", () => {
       "POST /repos/{owner}/{repo}/pulls",
       "POST /repos/{owner}/{repo}/pulls/{pull_number}/reviews",
       "GET /repos/{owner}/{repo}/contents/{path}",
+      "PUT /repos/{owner}/{repo}/contents/{path}",
+      "PUT /repos/{owner}/{repo}/contents/.github/workflows/{path}",
+      "GET /repos/{owner}/{repo}/git/ref/{ref}",
+      "GET /users/{username}",
       "POST /repos/{owner}/{repo}/actions/workflows/{workflow_id}/dispatches",
       "POST /repos/{owner}/{repo}/check-runs",
       "POST /repos/{owner}/{repo}/statuses/{sha}",
@@ -56,6 +60,45 @@ describe("public-beta GitHub REST catalog", () => {
     ]) {
       expect(routeKeys.has(route), route).toBe(true);
     }
+  });
+
+  it("models no-additional-permission and path-dependent workflow writes", () => {
+    expect(
+      githubPermissionCatalog.lookup({
+        method: "GET",
+        template: "/users/{username}",
+      }),
+    ).toEqual([[]]);
+    expect(
+      githubPermissionCatalog.lookup({
+        method: "PUT",
+        template: "/repos/{owner}/{repo}/contents/{path}",
+      }),
+    ).toEqual([[{ permission: "contents", level: "write" }]]);
+    expect(
+      githubPermissionCatalog.lookup({
+        method: "PUT",
+        template:
+          "/repos/{owner}/{repo}/contents/.github/workflows/{path}",
+      }),
+    ).toEqual([[
+      { permission: "contents", level: "write" },
+      { permission: "workflows", level: "write" },
+    ]]);
+
+    const contract = buildContract(
+      [
+        observation({
+          scenario: "public-profile",
+          method: "GET",
+          routeTemplate: "/users/{username}",
+          requirements: [[]],
+        }),
+      ],
+      githubPermissionCatalog,
+    );
+    expect(contract.selectedPermissions).toEqual({});
+    expect(contract.permissionFrontier).toEqual([{}]);
   });
 
   it("preserves the documented issue-or-pull-request alternatives", () => {

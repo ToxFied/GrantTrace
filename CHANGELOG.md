@@ -8,15 +8,21 @@ beta.
 
 ## [Unreleased]
 
+## [0.1.0-beta.2] - 2026-08-12
+
 ### Added
 
 - An explicit `frontier list/select` workflow for choosing and retaining any
   complete nondominated permission assignment in the committed contract.
 - Stable, versioned JSON and PR-ready Markdown output for `granttrace check`,
   plus explicit safe append support for GitHub Actions step summaries.
+- Reviewed catalog support for Git refs, public user profiles, ordinary content
+  writes, and workflow-file writes with their additional permission.
 
 ### Changed
 
+- Release verification now creates one npm tarball and reuses that exact
+  artifact for package smoke, leakage scanning, and provenance publishing.
 - Clarified the npm package summary and quickstart for both pnpm and npm users.
 - Live-proof reports and CLI output now state whether restricted scope was
   reproduced, permission-name necessity was partially tested, permission-name
@@ -39,6 +45,10 @@ beta.
 - Offline contract reproduction and package smoke tests now leave CI safety
   enabled except for the single disposable child that intentionally accepts a
   temporary contract.
+- Live proof can no longer succeed when a recorded GitHub request failed before
+  receiving an HTTP response.
+- Percent-encoded paths fail closed instead of bypassing path-specific workflow
+  permission matching.
 
 ## [0.1.0-beta.1] - 2026-07-25
 
@@ -70,5 +80,6 @@ This is the first public beta release.
 - Strict local-state, credential-provider, package, portability, leakage, and
   deterministic-reproduction checks.
 
-[Unreleased]: https://github.com/ToxFied/GrantTrace/commits/main
+[Unreleased]: https://github.com/ToxFied/GrantTrace/compare/v0.1.0-beta.2...HEAD
+[0.1.0-beta.2]: https://github.com/ToxFied/GrantTrace/releases/tag/v0.1.0-beta.2
 [0.1.0-beta.1]: https://github.com/ToxFied/GrantTrace/releases/tag/v0.1.0-beta.1

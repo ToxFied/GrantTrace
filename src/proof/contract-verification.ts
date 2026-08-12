@@ -55,6 +55,9 @@ export function verifyProofObservations(
   observations: Observation[],
 ): GrantTraceContract {
   validateAcceptedProofContract(contract, scenario);
+  if (observations.some((observation) => observation.status === null)) {
+    throw new ProofContractMismatchError();
+  }
   const expected = contractForScenario(contract, scenario);
   const observed = buildContract(observations, githubPermissionCatalog);
   const observedWithSelection = preserveFrontierSelection(

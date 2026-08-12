@@ -5,7 +5,11 @@ import { fileURLToPath } from "node:url";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { buildContract } from "../../src/contract/build.js";
+import type { Observation } from "../../src/contract/observation.js";
+import { fixtureCatalog } from "../../src/evidence/catalog.js";
 import { runProofChild } from "../../src/proof/child-runner.js";
+import { verifyProofObservations } from "../../src/proof/contract-verification.js";
 import { SensitiveValue } from "../../src/security/sensitive-value.js";
 
 const projectRoot = dirname(
@@ -83,6 +87,39 @@ describe("restricted proof child runner", () => {
     expect(result.exitCode).toBe(9);
     expect(result.observations).toHaveLength(4);
     expect(result.sessionCleanup).toBe("pass");
+  });
+
+  it("rejects live evidence from a request that failed before its response", async () => {
+    const result = await runFixture("failed-before-response.ts");
+
+    expect(result.outcome).toBe("pass");
+    expect(result.exitCode).toBe(0);
+    expect(result.observations).toMatchObject([
+      {
+        status: null,
+        finding: "missing_evidence",
+      },
+    ]);
+
+    const successfulObservation: Observation = {
+      ...result.observations[0]!,
+      status: 201,
+      requirements: [
+        [{ permission: "issues", level: "write" }],
+        [{ permission: "pull_requests", level: "write" }],
+      ],
+      evidenceSource: "runtime_header",
+      finding: null,
+    };
+    const contract = buildContract([successfulObservation], fixtureCatalog);
+
+    expect(() =>
+      verifyProofObservations(
+        contract,
+        "triage-integration",
+        result.observations,
+      ),
+    ).toThrow("did not reproduce the accepted contract");
   });
 
   it("fails proof coverage when the plugin is absent or sees no traffic", async () => {

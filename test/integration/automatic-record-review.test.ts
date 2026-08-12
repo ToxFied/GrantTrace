@@ -78,9 +78,11 @@ describe("record and review with the explicit Octokit adapter", () => {
 
     expect(code).toBe(0);
     expect(stdout).toContain("GrantTrace initialized");
+    expect(stdout).toContain("GrantTrace recording started");
     expect(stdout).toContain("GrantTrace record complete");
     expect(stdout).toContain("GrantTrace contract accepted");
     expect(stderr).toContain("GrantTrace contract review required");
+    expect(stderr).toContain("Changes  1 permission · 1 scenario · 1 route");
     expect(stderr).toContain("issues: write");
     expect(stderr).toContain("Decision");
     expect(question).toBe("Accept this permission contract? [y/N] ");

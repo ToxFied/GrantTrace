@@ -37,6 +37,88 @@ describe("runtime GitHub REST route resolution", () => {
     });
   });
 
+  it("supports multi-segment refs without retaining their values", () => {
+    const result = resolveRuntimeRoute(
+      "GET",
+      "https://api.github.com/repos/private-owner/private-repo/git/ref/heads/private-branch",
+    );
+
+    expect(result).toEqual({
+      kind: "resolved",
+      route: {
+        method: "GET",
+        template: "/repos/{owner}/{repo}/git/ref/{ref}",
+      },
+    });
+    expect(JSON.stringify(result)).not.toContain("private");
+  });
+
+  it("selects workflow-specific writes after bounded URL decoding", () => {
+    expect(
+      resolveRuntimeRoute(
+        "PUT",
+        "https://api.github.com/repos/owner/repo/contents/src/index.ts",
+      ),
+    ).toEqual({
+      kind: "resolved",
+      route: {
+        method: "PUT",
+        template: "/repos/{owner}/{repo}/contents/{path}",
+      },
+    });
+    expect(
+      resolveRuntimeRoute(
+        "PUT",
+        "https://api.github.com/repos/owner/repo/contents/.github/workflows/ci.yml",
+      ),
+    ).toEqual({
+      kind: "resolved",
+      route: {
+        method: "PUT",
+        template:
+          "/repos/{owner}/{repo}/contents/.github/workflows/{path}",
+      },
+    });
+    expect(
+      resolveRuntimeRoute(
+        "PUT",
+        "https://api.github.com/repos/owner/repo/contents/.github%2Fworkflows%2Fci.yml",
+      ),
+    ).toEqual({
+      kind: "resolved",
+      route: {
+        method: "PUT",
+        template:
+          "/repos/{owner}/{repo}/contents/.github/workflows/{path}",
+      },
+    });
+    expect(
+      resolveRuntimeRoute(
+        "PUT",
+        "https://api.github.com/repos/owner/repo/contents/.github%252Fworkflows%252Fci.yml",
+      ),
+    ).toEqual({
+      kind: "unresolved",
+      method: "PUT",
+      reason: "unresolved_route",
+    });
+  });
+
+  it("resolves Octokit's encoded multi-segment refs", () => {
+    expect(
+      resolveRuntimeRoute(
+        "GET",
+        "https://api.github.com/repos/owner/repo/git/ref/heads%2Ffeature%2Fx",
+      ),
+    ).toEqual({
+      kind: "resolved",
+      route: {
+        method: "GET",
+        template: "/repos/{owner}/{repo}/git/ref/{ref}",
+      },
+    });
+  });
+
   it("prefers a literal endpoint over an equally shaped placeholder", () => {
     expect(
       resolveRuntimeRoute(

@@ -1,5 +1,7 @@
 GrantTrace contract review required
 
+Changes  1 permission · 1 scenario · 1 route
+
 New permission
   issues: write
 

@@ -11,6 +11,18 @@ import { runProve } from "./prove.js";
 import { runScenario } from "./scenario.js";
 import { TOOL_VERSION } from "../version.js";
 
+const COMMANDS = [
+  "analyze",
+  "check",
+  "doctor",
+  "frontier",
+  "init",
+  "keep",
+  "prove",
+  "record",
+  "scenario",
+] as const;
+
 export async function runCli(
   args: string[],
   context: CliContext = defaultCliContext(),
@@ -43,7 +55,19 @@ export async function runCli(
   if (command === "scenario") {
     return runScenario(commandArgs, context);
   }
-  if (command === "--version" || command === "-v") {
+  if (command === "help") {
+    const [helpCommand, ...unexpected] = commandArgs;
+    if (helpCommand === undefined) {
+      writeLine(context.stdout, helpText());
+      return ExitCode.success;
+    }
+    if (unexpected.length > 0) {
+      writeLine(context.stderr, "Usage: granttrace help [command]");
+      return ExitCode.usage;
+    }
+    return runCli([helpCommand, "--help"], context);
+  }
+  if (command === "--version" || command === "-v" || command === "version") {
     writeLine(context.stdout, TOOL_VERSION);
     return ExitCode.success;
   }
@@ -52,9 +76,20 @@ export async function runCli(
     return ExitCode.success;
   }
 
-  writeLine(context.stderr, "Unknown command.");
-  writeLine(context.stderr, "");
-  writeLine(context.stderr, helpText());
+  const suggestion = suggestCommand(command);
+  writeLine(
+    context.stderr,
+    [
+      "GrantTrace command not found",
+      "",
+      ...(suggestion === null
+        ? []
+        : ["Did you mean", `  granttrace ${suggestion}`, ""]),
+      "Next",
+      "  granttrace --help",
+      "",
+    ].join("\n"),
+  );
   return ExitCode.usage;
 }
 
@@ -86,6 +121,10 @@ function helpText(): string {
     "Advanced",
     "  granttrace analyze    Analyze one NDJSON file without writing",
     "",
+    "Help",
+    "  granttrace help <command>",
+    "  granttrace --version",
+    "",
     "Start",
     "  granttrace record <name> -- <test-command>",
     "",
@@ -97,4 +136,46 @@ function helpText(): string {
     "Run granttrace <command> --help for command-specific usage.",
     "",
   ].join("\n");
+}
+
+function suggestCommand(input: string): (typeof COMMANDS)[number] | null {
+  if (input.length > 64 || !/^[a-z-]+$/u.test(input)) {
+    return null;
+  }
+
+  const ranked = COMMANDS.map((command) => ({
+    command,
+    distance: editDistance(input, command),
+  })).sort(
+    (left, right) =>
+      left.distance - right.distance || left.command.localeCompare(right.command),
+  );
+  const closest = ranked[0];
+  const maximumDistance = input.length <= 4 ? 1 : 2;
+  return closest !== undefined && closest.distance <= maximumDistance
+    ? closest.command
+    : null;
+}
+
+function editDistance(left: string, right: string): number {
+  let previous = Array.from({ length: right.length + 1 }, (_, index) => index);
+
+  for (let leftIndex = 0; leftIndex < left.length; leftIndex += 1) {
+    const current = [leftIndex + 1];
+    for (let rightIndex = 0; rightIndex < right.length; rightIndex += 1) {
+      const substitution =
+        (previous[rightIndex] ?? 0) +
+        (left[leftIndex] === right[rightIndex] ? 0 : 1);
+      current.push(
+        Math.min(
+          (current[rightIndex] ?? leftIndex + 1) + 1,
+          (previous[rightIndex + 1] ?? rightIndex + 1) + 1,
+          substitution,
+        ),
+      );
+    }
+    previous = current;
+  }
+
+  return previous[right.length] ?? right.length;
 }

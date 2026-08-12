@@ -85,7 +85,7 @@ exclude ambiguous conditional requirements. Do not use the flattened
 
 ## Package inspection
 
-Apart from npm's required `package.json`, `pnpm pack` must contain only
+Apart from npm's required `package.json`, the package tarball must contain only
 production `dist`, `LICENSE`, and `README.md`. Never include tests, local
 observations, proof reports, credentials, fixture identities, caches, or
 development residue.
@@ -95,6 +95,11 @@ manifest with that archive, and installs the same package into both an npm
 consumer and a strict isolated, non-hoisting pnpm consumer. It checks public
 exports and types plus the installed CLI and offline record/check workflow. CI
 repeats the smoke test on Linux, macOS, and Windows.
+
+The protected release workflow runs `pnpm package:artifact` once, then passes
+`.release/granttrace.tgz` explicitly to package smoke, leakage scan, and npm
+publish. Those release gates must consume that exact artifact; the no-argument
+commands remain the local fresh-pack checks.
 
 Do not publish npm packages, create releases/tags, deploy, change repository
 visibility, expose secrets, or run a live fixture proof as part of a normal
