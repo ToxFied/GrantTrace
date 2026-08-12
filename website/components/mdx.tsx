@@ -2,7 +2,7 @@ import defaultMdxComponents from "fumadocs-ui/mdx";
 import { Step, Steps } from "fumadocs-ui/components/steps";
 import type { MDXComponents } from "mdx/types";
 import type { ComponentProps } from "react";
-import { docsRoute } from "@/lib/shared";
+import { deploymentBasePath, docsRoute } from "@/lib/shared";
 
 function normalizeDocsHref(href: string | undefined) {
   if (!href || /^(?:[a-z][a-z\d+.-]*:|\/\/|\/|#)/i.test(href)) {
@@ -23,9 +23,29 @@ export function DocsLink(props: ComponentProps<"a">) {
   return <Link {...props} href={normalizeDocsHref(props.href)} />;
 }
 
+function normalizeAssetSrc(src: ComponentProps<"img">["src"]) {
+  if (
+    typeof src !== "string" ||
+    !src.startsWith("/") ||
+    src.startsWith("//") ||
+    deploymentBasePath.length === 0 ||
+    src === deploymentBasePath ||
+    src.startsWith(`${deploymentBasePath}/`)
+  ) {
+    return src;
+  }
+
+  return `${deploymentBasePath}${src}`;
+}
+
+export function DocsImage(props: ComponentProps<"img">) {
+  return <img {...props} src={normalizeAssetSrc(props.src)} />;
+}
+
 export function getMDXComponents(components?: MDXComponents) {
   return {
     ...defaultMdxComponents,
+    DocsImage,
     Step,
     Steps,
     ...components,

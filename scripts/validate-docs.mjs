@@ -1,5 +1,5 @@
 import { readFile, readdir, stat } from "node:fs/promises";
-import { extname, join, relative } from "node:path";
+import { extname, join, posix, relative } from "node:path";
 
 import { projectRoot } from "./lib/project.mjs";
 
@@ -22,6 +22,9 @@ for (const path of files) {
   if (extension === ".html") {
     for (const match of content.matchAll(/\bhref="([^"]+)"/gu)) {
       validateLink(match[1], displayPath);
+    }
+    for (const match of content.matchAll(/<img\b[^>]*\bsrc="([^"]+)"/giu)) {
+      validateImage(match[1], displayPath);
     }
   }
 
@@ -105,6 +108,36 @@ function validateLink(link, source) {
         : `${relativeTarget.replace(/\/?$/u, "/")}index.html`;
   if (!relativeFiles.has(target)) {
     errors.push(`${source} links to missing exported target ${link}.`);
+  }
+}
+
+function validateImage(image, source) {
+  if (/^(?:[a-z][a-z\d+.-]*:|\/\/|#)/iu.test(image)) {
+    return;
+  }
+
+  const withoutQuery = image.split(/[?#]/u, 1)[0];
+  if (withoutQuery === undefined) {
+    return;
+  }
+
+  let target;
+  if (withoutQuery.startsWith("/")) {
+    if (!withoutQuery.startsWith(`${deploymentBasePath}/`)) {
+      errors.push(
+        `${source} loads image ${image} without the ${deploymentBasePath} Pages base path.`,
+      );
+      return;
+    }
+    target = withoutQuery
+      .slice(deploymentBasePath.length)
+      .replace(/^\/+/u, "");
+  } else {
+    target = posix.normalize(posix.join(posix.dirname(source), withoutQuery));
+  }
+
+  if (!relativeFiles.has(target)) {
+    errors.push(`${source} loads missing exported image ${image}.`);
   }
 }
 
