@@ -1,7 +1,7 @@
 import { createInterface } from "node:readline/promises";
 
-import type { ProofExecutionDependencies } from "../proof/orchestrator.js";
 import type { LiveFixtureConfig } from "../proof/live-config.js";
+import type { ProofExecutionDependencies } from "../proof/orchestrator.js";
 import type { LocalOperationLock } from "../security/local-state.js";
 
 export type CliContext = {
@@ -26,14 +26,18 @@ export type CliContext = {
 };
 
 export function defaultCliContext(): CliContext {
+  const color =
+    process.stdin.isTTY &&
+    process.stdout.isTTY &&
+    process.env["NO_COLOR"] === undefined;
   const context: CliContext = {
     cwd: process.cwd(),
     environment: process.env,
-    stdout: process.stdout,
-    stderr: process.stderr,
+    stdout: styledWriter(process.stdout, color),
+    stderr: styledWriter(process.stderr, color),
   };
   if (process.stdin.isTTY && process.stdout.isTTY) {
-    context.confirm = confirmInTerminal;
+    context.confirm = (question) => confirmInTerminal(question, color);
   }
   return context;
 }
@@ -45,13 +49,80 @@ export function writeLine(
   stream.write(value.endsWith("\n") ? value : `${value}\n`);
 }
 
-async function confirmInTerminal(question: string): Promise<boolean> {
+function styledWriter(
+  stream: NodeJS.WriteStream,
+  enabled: boolean,
+): Pick<NodeJS.WriteStream, "write"> {
+  return {
+    write(value: string | Uint8Array): boolean {
+      if (!enabled || typeof value !== "string") {
+        return stream.write(value);
+      }
+      return stream.write(styleCliOutput(value));
+    },
+  };
+}
+
+function styleCliOutput(value: string): string {
+  const reset = "\u001b[0m";
+  const bold = "\u001b[1m";
+  const cyan = "\u001b[36m";
+  const green = "\u001b[32m";
+  const red = "\u001b[31m";
+  const yellow = "\u001b[33m";
+
+  return value
+    .split("\n")
+    .map((line) => {
+      if (line === "") {
+        return line;
+      }
+      if (/^GrantTrace .* (passed|accepted|complete|started)$/.test(line)) {
+        return `${bold}${green}${line}${reset}`;
+      }
+      if (/^GrantTrace .* (failed|blocked|interrupted|timed out)$/.test(line)) {
+        return `${bold}${red}${line}${reset}`;
+      }
+      if (line === "GrantTrace contract review required") {
+        return `${bold}${yellow}${line}${reset}`;
+      }
+      if (
+        [
+          "Decision",
+          "Next",
+          "Coverage",
+          "Observed in",
+          "Selected permission contract",
+          "Observed permission contract",
+          "Mandatory GitHub baseline (not selected or manually kept)",
+        ].includes(line)
+      ) {
+        return `${bold}${cyan}${line}${reset}`;
+      }
+      if (/^  [\w-]+: (read|write)$/.test(line)) {
+        return `${green}${line}${reset}`;
+      }
+      if (line.startsWith("  granttrace ")) {
+        return `${bold}${line}${reset}`;
+      }
+      return line;
+    })
+    .join("\n");
+}
+
+async function confirmInTerminal(
+  question: string,
+  color: boolean,
+): Promise<boolean> {
   const prompt = createInterface({
     input: process.stdin,
     output: process.stdout,
   });
   try {
-    const answer = (await prompt.question(question)).trim().toLowerCase();
+    const styledQuestion = color
+      ? `\u001b[1m\u001b[36m${question}\u001b[0m`
+      : question;
+    const answer = (await prompt.question(styledQuestion)).trim().toLowerCase();
     return answer === "y" || answer === "yes";
   } finally {
     prompt.close();

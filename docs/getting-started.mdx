@@ -62,6 +62,12 @@ GrantTrace runs the command, watches its GitHub REST requests, and prints what
 it saw. For pnpm projects, use `pnpm exec granttrace` and your normal pnpm test
 command instead.
 
+Here is the same flow in a real terminal. The screenshots are generated from
+the repository's hermetic fixture, so they contain no credentials or live
+GitHub data.
+
+<img className="w-full rounded-xl border border-fd-border" src="/cli/01-record.png" alt="Terminal showing GrantTrace recording the issue-triage scenario" />
+
 </Step>
 
 <Step>
@@ -83,6 +89,17 @@ That's the full normal onboarding flow:
 ```text
 install → record → review → commit
 ```
+
+The review and acceptance steps are separate, visible decisions:
+
+<div className="grid gap-6 md:grid-cols-2">
+  <img className="w-full rounded-xl border border-fd-border" src="/cli/02-review.png" alt="Terminal showing the GrantTrace permission review" />
+  <img className="w-full rounded-xl border border-fd-border" src="/cli/03-accept.png" alt="Terminal showing the accepted GrantTrace contract" />
+</div>
+
+Regenerate these images after changing the CLI with `pnpm docs:capture-cli`.
+The capture script uses the real CLI and the local fixture, then renders the
+captured transcript as a terminal-window PNG.
 
 </Step>
 

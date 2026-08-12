@@ -63,6 +63,7 @@
     "build": "tsc -p tsconfig.build.json && node scripts/prepare-dist.mjs",
     "clean:dist": "node scripts/clean-dist.mjs",
     "docs:build": "pnpm --dir website build",
+    "docs:capture-cli": "tsx scripts/capture-cli-screenshots.mjs",
     "docs:dev": "pnpm --dir website dev",
     "docs:typecheck": "pnpm --dir website typecheck",
     "docs:validate": "node scripts/validate-docs.mjs",

@@ -186,5 +186,7 @@ empty locks, symlinks, unsafe modes, and unexpected files are never removed.
 |   `8` | Live proof, negative-control, or cleanup failure                       |
 | `130` | Child interrupted by a terminal signal                                 |
 
-The default CLI output is stable plain text without ANSI color. JSON and
-Markdown check output are also deterministic and contain no ANSI styling.
+Interactive TTY output uses restrained ANSI color for status, headings, and
+permission levels. Piped output, CI, JSON, and Markdown remain deterministic
+plain text without ANSI styling. Set `NO_COLOR=1` to force plain terminal
+output.
