@@ -63,7 +63,8 @@ function styledWriter(
   };
 }
 
-function styleCliOutput(value: string): string {
+/** Applies restrained ANSI styling only to stable human-readable CLI lines. */
+export function styleCliOutput(value: string): string {
   const reset = "\u001b[0m";
   const bold = "\u001b[1m";
   const cyan = "\u001b[36m";
