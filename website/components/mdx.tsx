@@ -1,4 +1,5 @@
 import defaultMdxComponents from "fumadocs-ui/mdx";
+import { ImageZoom } from "fumadocs-ui/components/image-zoom";
 import { Step, Steps } from "fumadocs-ui/components/steps";
 import type { MDXComponents } from "mdx/types";
 import type { ComponentProps } from "react";
@@ -39,7 +40,22 @@ function normalizeAssetSrc(src: ComponentProps<"img">["src"]) {
 }
 
 export function DocsImage(props: ComponentProps<"img">) {
-  return <img {...props} src={normalizeAssetSrc(props.src)} />;
+  const src = normalizeAssetSrc(props.src);
+
+  if (typeof src !== "string") {
+    return <img {...props} src={src} />;
+  }
+
+  return (
+    <span className="docs-image-zoom">
+      <ImageZoom
+        alt={props.alt}
+        src={src}
+      >
+        <img {...props} src={src} />
+      </ImageZoom>
+    </span>
+  );
 }
 
 export function getMDXComponents(components?: MDXComponents) {

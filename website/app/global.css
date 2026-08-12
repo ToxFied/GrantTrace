@@ -208,6 +208,108 @@ html > body[data-scroll-locked] {
   font-weight: 540;
 }
 
+.docs-image-zoom {
+  display: block;
+}
+
+.docs-image-zoom [data-rmiz-btn-zoom] {
+  position: absolute;
+  inset-block-start: 0.625rem;
+  inset-inline-end: 0.625rem;
+  display: grid;
+  width: 1.875rem;
+  height: 1.875rem;
+  place-items: center;
+  padding: 0;
+  border: 1px solid hsl(0 0% 100% / 24%);
+  border-radius: 0.4375rem;
+  background: hsl(0 0% 0% / 76%);
+  color: #fff;
+  cursor: zoom-in;
+  opacity: 0;
+  pointer-events: auto;
+  transform: translateY(-0.1875rem);
+  transition:
+    opacity 160ms ease,
+    transform 160ms ease,
+    background-color 160ms ease;
+}
+
+.docs-image-zoom:hover [data-rmiz-btn-zoom],
+.docs-image-zoom:focus-within [data-rmiz-btn-zoom] {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.docs-image-zoom [data-rmiz-btn-zoom]:hover {
+  background: hsl(0 0% 0% / 92%);
+}
+
+.docs-image-zoom [data-rmiz-btn-zoom]:focus-visible,
+[data-rmiz-modal] [data-rmiz-btn-unzoom]:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+.docs-image-zoom [data-rmiz-btn-zoom] svg {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
+[data-rmiz-modal] [data-rmiz-modal-overlay="visible"] {
+  background: #000;
+}
+
+[data-rmiz-modal] [data-rmiz-modal-img] {
+  border: 1px solid hsl(0 0% 100% / 18%);
+  border-radius: 0.75rem;
+}
+
+[data-rmiz-modal] [data-rmiz-btn-unzoom] {
+  position: fixed;
+  inset-block-start: max(1rem, env(safe-area-inset-top));
+  inset-inline-end: max(1rem, env(safe-area-inset-right));
+  z-index: 1;
+  display: grid;
+  width: 2.375rem;
+  height: 2.375rem;
+  place-items: center;
+  padding: 0;
+  border: 1px solid hsl(0 0% 100% / 24%);
+  border-radius: 0.5rem;
+  background: hsl(0 0% 0% / 76%);
+  color: #fff;
+  cursor: pointer;
+}
+
+[data-rmiz-modal] [data-rmiz-btn-unzoom] svg {
+  display: none;
+}
+
+[data-rmiz-modal] [data-rmiz-btn-unzoom]::before,
+[data-rmiz-modal] [data-rmiz-btn-unzoom]::after {
+  position: absolute;
+  width: 0.875rem;
+  height: 1px;
+  background: currentColor;
+  content: "";
+}
+
+[data-rmiz-modal] [data-rmiz-btn-unzoom]::before {
+  transform: rotate(45deg);
+}
+
+[data-rmiz-modal] [data-rmiz-btn-unzoom]::after {
+  transform: rotate(-45deg);
+}
+
+@media (hover: none) {
+  .docs-image-zoom [data-rmiz-btn-zoom] {
+    opacity: 1;
+    transform: none;
+  }
+}
+
 @media (max-width: 767px) {
   [data-search],
   [aria-label="Open Sidebar"],
