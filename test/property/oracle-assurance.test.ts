@@ -28,7 +28,7 @@ const permissionArbitrary = fc.constantFrom(...PERMISSIONS);
 const levelArbitrary = fc.constantFrom(...LEVELS);
 const conjunctionArbitrary = fc
   .uniqueArray(permissionArbitrary, {
-    minLength: 1,
+    minLength: 0,
     maxLength: 3,
   })
   .chain((permissions) =>
@@ -475,22 +475,26 @@ function referenceTemplateScore(
   template: string,
   concretePath: string,
 ): { literals: number; catchAlls: number } | null {
+  const decodedPath = referenceDecodePath(concretePath);
   if (
-    concretePath.length === 0 ||
-    concretePath.length > 4_096 ||
-    concretePath.includes("\\")
+    decodedPath === null ||
+    decodedPath.length === 0 ||
+    decodedPath.length > 4_096 ||
+    decodedPath.includes("\\") ||
+    decodedPath.includes("%") ||
+    /[\u0000-\u001f\u007f]/u.test(decodedPath)
   ) {
     return null;
   }
 
   const expected = pathSegments(template);
-  const actual = pathSegments(concretePath);
+  const actual = pathSegments(decodedPath);
   let actualIndex = 0;
   let literals = 0;
   let catchAlls = 0;
 
   for (const [expectedIndex, segment] of expected.entries()) {
-    if (segment === "{path}") {
+    if (segment === "{path}" || segment === "{ref}") {
       if (
         expectedIndex !== expected.length - 1 ||
         actualIndex >= actual.length
@@ -518,6 +522,17 @@ function referenceTemplateScore(
   }
 
   return actualIndex === actual.length ? { literals, catchAlls } : null;
+}
+
+function referenceDecodePath(path: string): string | null {
+  if (path.length > 8_192) {
+    return null;
+  }
+  try {
+    return decodeURIComponent(path);
+  } catch {
+    return null;
+  }
 }
 
 function pathSegments(path: string): string[] {

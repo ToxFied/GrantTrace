@@ -3,7 +3,7 @@ import { join } from "node:path";
 
 import { projectRoot, readPackageManifest } from "./lib/project.mjs";
 
-await readPackageManifest();
+const packageManifest = await readPackageManifest();
 
 const workflowDirectory = join(projectRoot, ".github", "workflows");
 const workflowEntries = await readdir(workflowDirectory, {
@@ -362,41 +362,152 @@ function validateDocumentationWorkflow(content) {
 }
 
 function validateReleaseWorkflow(content) {
+  if (Buffer.byteLength(content, "utf8") > 64 * 1024) {
+    errors.push(
+      "Package publication workflow exceeds the reviewable size limit.",
+    );
+    return;
+  }
   const releaseActive = content
     .split(/\r?\n/u)
     .map((line) => line.replace(/\s+#.*$/u, ""))
     .join("\n");
-  for (const [pattern, message] of [
-    [
-      /^\s{2}workflow_dispatch:\s*$/mu,
-      "Package publication must require manual workflow dispatch.",
-    ],
-    [
-      /^\s{2}contents:\s*read\s*$/mu,
-      "Package publication needs contents: read.",
-    ],
-    [
-      /^\s{2}id-token:\s*write\s*$/mu,
-      "Package publication needs id-token: write for provenance.",
-    ],
-    [
-      /^\s+environment:\s*\n\s+name:\s*npm\s*$/mu,
-      "Package publication must use the protected npm environment.",
-    ],
-    [
-      /^\s+run:\s*npm publish --provenance --access public --tag beta\s*$/mu,
-      "Package publication must use npm provenance and the beta tag.",
-    ],
-  ]) {
-    if (!pattern.test(releaseActive)) {
-      errors.push(message);
-    }
+  const releaseLines = releaseActive.split("\n");
+  if (
+    releaseLines.filter((line) => line === "on:").length !== 1 ||
+    topLevelBlock(releaseLines, "on:").join("\n") !==
+    "  workflow_dispatch:"
+  ) {
+    errors.push(
+      "Package publication must require only manual workflow dispatch.",
+    );
+  }
+  if (
+    releaseLines.filter((line) => line === "permissions:").length !== 1 ||
+    topLevelBlock(releaseLines, "permissions:").join("\n") !==
+    ["  contents: read", "  id-token: write"].join("\n")
+  ) {
+    errors.push(
+      "Package publication permissions must be exactly contents: read and id-token: write.",
+    );
+  }
+
+  const jobsStart = releaseLines.findIndex((line) => line === "jobs:");
+  const jobIds =
+    jobsStart < 0
+      ? []
+      : releaseLines
+          .slice(jobsStart + 1)
+          .map((line) => /^  ([a-z][a-z0-9-]*):\s*$/u.exec(line)?.[1])
+          .filter((value) => value !== undefined);
+  if (jobIds.length !== 1 || jobIds[0] !== "publish") {
+    errors.push("Package publication must contain only the publish job.");
+  }
+  const runsOnLines = releaseLines.filter((line) =>
+    /^\s{4}runs-on:/u.test(line),
+  );
+  const timeoutLines = releaseLines.filter((line) =>
+    /^\s{4}timeout-minutes:/u.test(line),
+  );
+  if (
+    runsOnLines.length !== 1 ||
+    !/^\s{4}runs-on:\s*ubuntu-latest\s*$/u.test(runsOnLines[0] ?? "") ||
+    timeoutLines.length !== 1 ||
+    !/^\s{4}timeout-minutes:\s*20\s*$/u.test(timeoutLines[0] ?? "")
+  ) {
+    errors.push("Package publication must use one 20-minute Ubuntu job.");
+  }
+  if (
+    releaseLines.filter((line) => /^\s{4}environment:/u.test(line)).length !==
+      1 ||
+    releaseLines.filter((line) => /^\s{6}name:/u.test(line)).length !== 1 ||
+    !releaseLines.some((line) => /^\s{6}name:\s*npm\s*$/u.test(line))
+  ) {
+    errors.push("Package publication must use the protected npm environment.");
+  }
+  if (
+    /^[ \t]+(?:container|continue-on-error|defaults|env|if|permissions|services|shell|working-directory):/mu.test(
+      releaseActive,
+    ) ||
+    releaseActive.includes("${{")
+  ) {
+    errors.push(
+      "Package publication must not conditionally skip or alter reviewed release commands.",
+    );
   }
   validatePinnedWorkflowActions(
     content,
     ["actions/checkout", "actions/setup-node"],
     "Package publication",
   );
+
+  const checkoutIndex = releaseLines.findIndex((line) =>
+    /^\s+uses:\s*actions\/checkout@/u.test(line),
+  );
+  const nodeIndex = releaseLines.findIndex((line) =>
+    /^\s+uses:\s*actions\/setup-node@/u.test(line),
+  );
+  if (
+    checkoutIndex < 0 ||
+    workflowStepBlock(releaseLines, checkoutIndex)
+      .slice(1)
+      .filter((line) => line.trim().length > 0)
+      .join("\n") !==
+      ["        with:", "          persist-credentials: false"].join("\n")
+  ) {
+    errors.push("Package publication checkout must not persist credentials.");
+  }
+  const nodeOptions = workflowStepBlock(releaseLines, nodeIndex)
+    .slice(1)
+    .filter((line) => line.trim().length > 0)
+    .join("\n");
+  if (
+    nodeIndex < 0 ||
+    nodeOptions !== ["        with:", '          node-version: "24"'].join("\n")
+  ) {
+    errors.push("Package publication must use uncached Node 24.");
+  }
+
+  const expectedCommands = [
+    "corepack enable",
+    "pnpm install --frozen-lockfile",
+    "pnpm verify",
+    "pnpm package:artifact",
+    "pnpm package:smoke --artifact .release/granttrace.tgz",
+    "pnpm leakage:scan --artifact .release/granttrace.tgz",
+    "npm publish .release/granttrace.tgz --provenance --access public --tag beta",
+  ];
+  const commands = releaseLines
+    .map((line) => /^\s+run:\s*(.+?)\s*$/u.exec(line)?.[1])
+    .filter((value) => value !== undefined);
+  if (
+    commands.length !== expectedCommands.length ||
+    commands.some((command, index) => command !== expectedCommands[index])
+  ) {
+    errors.push(
+      "Package publication must create one reviewed tarball and reuse it for smoke, leakage, and publish.",
+    );
+  }
+  const expectedScripts = {
+    "leakage:scan": "node scripts/leakage-scan.mjs",
+    "package:artifact": "node scripts/create-package-artifact.mjs",
+    "package:smoke": "node scripts/package-smoke.mjs",
+  };
+  for (const [name, command] of Object.entries(expectedScripts)) {
+    if (packageManifest.scripts?.[name] !== command) {
+      errors.push(`Package publication must use the reviewed ${name} script.`);
+    }
+  }
+  const publishConfigKeys = Object.keys(packageManifest.publishConfig ?? {})
+    .sort()
+    .join("\n");
+  if (
+    publishConfigKeys !== "access\ntag" ||
+    packageManifest.publishConfig?.access !== "public" ||
+    packageManifest.publishConfig?.tag !== "beta"
+  ) {
+    errors.push("Package publication metadata must retain public beta defaults.");
+  }
 }
 
 function validateSecurityWorkflow(content) {
@@ -457,6 +568,43 @@ function validatePinnedWorkflowActions(content, expected, label) {
       errors.push(`${label} contains an unpinned or unexpected Action.`);
     }
   }
+}
+
+function topLevelBlock(sourceLines, header) {
+  const start = sourceLines.findIndex((line) => line === header);
+  if (start < 0) {
+    return [];
+  }
+  const block = [];
+  for (let index = start + 1; index < sourceLines.length; index += 1) {
+    const line = sourceLines[index];
+    if (line === undefined) {
+      break;
+    }
+    if (line.trim().length === 0) {
+      continue;
+    }
+    if (!line.startsWith(" ")) {
+      break;
+    }
+    block.push(line);
+  }
+  return block;
+}
+
+function workflowStepBlock(sourceLines, start) {
+  if (start < 0) {
+    return [];
+  }
+  const block = [sourceLines[start]];
+  for (let index = start + 1; index < sourceLines.length; index += 1) {
+    const line = sourceLines[index];
+    if (line === undefined || /^\s{6}-\s+/u.test(line)) {
+      break;
+    }
+    block.push(line);
+  }
+  return block;
 }
 
 function stepBlock(start) {

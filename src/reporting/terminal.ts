@@ -105,7 +105,12 @@ export function renderContractDiff(
     nextAction?: "prompt" | "noninteractive" | "standalone";
   } = {},
 ): string {
-  const lines = ["GrantTrace contract review required", ""];
+  const lines = [
+    "GrantTrace contract review required",
+    "",
+    renderDiffSummary(diff),
+    "",
+  ];
 
   for (const migration of options.migrations ?? []) {
     if (migration === "schema_v1_to_v3") {
@@ -319,6 +324,71 @@ function appendRoutes(
   lines.push("");
 }
 
+function renderDiffSummary(diff: ContractDiff): string {
+  const changes = [
+    {
+      count:
+        diff.additions.length +
+        diff.escalations.length +
+        diff.removals.length +
+        diff.reductions.length,
+      singular: "permission",
+      plural: "permissions",
+    },
+    {
+      count: diff.scenarioAdditions.length + diff.scenarioRemovals.length,
+      singular: "scenario",
+      plural: "scenarios",
+    },
+    {
+      count: diff.routeAdditions.length + diff.routeRemovals.length,
+      singular: "route",
+      plural: "routes",
+    },
+    {
+      count:
+        diff.attributionAdditions.length + diff.attributionRemovals.length,
+      singular: "attribution",
+      plural: "attributions",
+    },
+    {
+      count:
+        diff.scenarioEvidenceChanges.length +
+        diff.routeRequirementChanges.length,
+      singular: "evidence change",
+      plural: "evidence changes",
+    },
+    {
+      count:
+        diff.manualKeepAdditions.length +
+        diff.manualKeepRemovals.length +
+        diff.manualKeepChanges.length,
+      singular: "manual keep",
+      plural: "manual keeps",
+    },
+    {
+      count: [
+        diff.toolVersionChanged,
+        diff.apiVersionChanged,
+        diff.catalogChanged,
+      ].filter(Boolean).length,
+      singular: "metadata change",
+      plural: "metadata changes",
+    },
+  ]
+    .filter((change) => change.count > 0)
+    .map(
+      (change) =>
+        `${change.count} ${
+          change.count === 1 ? change.singular : change.plural
+        }`,
+    );
+
+  return changes.length === 0
+    ? "Changes  Contract evidence"
+    : `Changes  ${changes.join(" · ")}`;
+}
+
 function appendSelectedPermissions(
   lines: string[],
   contract: GrantTraceContract,
@@ -366,7 +436,7 @@ function appendManualKeeps(
 
   lines.push("Manual keeps");
   for (const [permission, keep] of keeps) {
-    lines.push(`  ${permission}: ${keep.level} — ${keep.reason}`);
+    lines.push(`  ${permission}: ${keep.level} · ${keep.reason}`);
   }
   lines.push("");
 }

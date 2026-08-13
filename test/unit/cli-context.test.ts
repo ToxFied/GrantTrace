@@ -16,11 +16,18 @@ describe("interactive CLI styling", () => {
       "GrantTrace contract accepted",
       "GrantTrace record complete",
       "GrantTrace recording started",
+      "GrantTrace initialized",
+      "GrantTrace is ready for local recording",
       "GrantTrace check failed",
       "GrantTrace record blocked",
       "GrantTrace record interrupted",
       "GrantTrace record timed out",
+      "GrantTrace command not found",
       "GrantTrace contract review required",
+      "Changes  1 permission · 1 scenario · 1 route",
+      "New permission",
+      "Route added",
+      "Did you mean",
       "Decision",
       "Next",
       "Coverage",
@@ -37,11 +44,18 @@ describe("interactive CLI styling", () => {
     const styled = styleCliOutput(plain);
 
     expect(styled).toContain(`${bold}${green}GrantTrace check passed${reset}`);
+    expect(styled).toContain(`${bold}${green}GrantTrace initialized${reset}`);
     expect(styled).toContain(`${bold}${red}GrantTrace check failed${reset}`);
+    expect(styled).toContain(
+      `${bold}${red}GrantTrace command not found${reset}`,
+    );
     expect(styled).toContain(
       `${bold}${yellow}GrantTrace contract review required${reset}`,
     );
     expect(styled).toContain(`${bold}${cyan}Decision${reset}`);
+    expect(styled).toContain(
+      `${bold}${cyan}Changes  1 permission · 1 scenario · 1 route${reset}`,
+    );
     expect(styled).toContain(`${green}  issues: write${reset}`);
     expect(styled).toContain(`${bold}  granttrace check --accept${reset}`);
     expect(styled).toContain("Unstyled detail");

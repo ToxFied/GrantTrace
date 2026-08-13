@@ -210,7 +210,7 @@ export async function runRecord(
     writeLine(
       context.stdout,
       [
-        "Recording started",
+        "GrantTrace recording started",
         `  Scenario  ${scenario}`,
         `  Timeout   ${formatDuration(parsed.timeoutMs)}`,
         "",

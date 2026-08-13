@@ -18,9 +18,9 @@ export const PermissionTermSchema = z.strictObject({
   level: PermissionLevelSchema,
 });
 
-export const PermissionConjunctionSchema = z
-  .array(PermissionTermSchema)
-  .min(1);
+// An empty conjunction is boolean true: the route needs no additional
+// GitHub App permission beyond GitHub's installation baseline.
+export const PermissionConjunctionSchema = z.array(PermissionTermSchema);
 
 export const PermissionDNFSchema = z.array(PermissionConjunctionSchema).min(1);
 

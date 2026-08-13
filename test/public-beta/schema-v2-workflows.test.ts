@@ -170,6 +170,24 @@ describe("schema-v3 multi-scenario contracts and released-schema migration", () 
     expect(() =>
       verifyProofObservations(contract, "catalog-backed", [catalogFallback]),
     ).not.toThrow();
+    const failedBeforeResponse = {
+      ...catalogFallback,
+      status: null,
+    };
+    expect(() =>
+      verifyProofObservations(contract, "catalog-backed", [
+        failedBeforeResponse,
+      ]),
+    ).toThrow("did not reproduce the accepted contract");
+    expect(
+      serializeContract(
+        buildContract([failedBeforeResponse], githubPermissionCatalog),
+      ),
+    ).toBe(
+      serializeContract(
+        buildContract([catalogFallback], githubPermissionCatalog),
+      ),
+    );
     expect(
       serializeContract(
         buildContract(

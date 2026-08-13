@@ -16,6 +16,10 @@ import {
 
 import { parseNpmPackOutput } from "./lib/npm-pack.mjs";
 import {
+  parsePackageArtifacts,
+  resolvePackageArtifact,
+} from "./lib/package-artifact.mjs";
+import {
   invocationArgs,
   npmInvocation,
 } from "./lib/package-manager.mjs";
@@ -53,6 +57,7 @@ const secretRules = [
 await readPackageManifest();
 const findings = [];
 const canaries = fixtureCanaries();
+const suppliedArtifacts = parsePackageArtifacts(process.argv.slice(2));
 
 const tracked = await run("git", ["ls-files", "-z"], {
   cwd: projectRoot,
@@ -83,6 +88,7 @@ for (const relativePath of tracked.stdout.split("\0").filter(Boolean)) {
     findings.push({ path: relativePath, rule: "path-escape" });
     continue;
   }
+  await scanContent(relativePath, Buffer.from(relativePath), findings, canaries);
   await scanContent(
     relativePath,
     await readFileBounded(absolutePath),
@@ -94,8 +100,10 @@ for (const relativePath of tracked.stdout.split("\0").filter(Boolean)) {
 const temporaryRoot = await mkdtemp(join(tmpdir(), "granttrace-leakage-"));
 try {
   const tarballPaths =
-    process.argv.length > 2
-      ? process.argv.slice(2).map((path) => resolve(process.cwd(), path))
+    suppliedArtifacts.length > 0
+      ? await Promise.all(
+          suppliedArtifacts.map((path) => resolvePackageArtifact(path)),
+        )
       : [await createFreshTarball(temporaryRoot)];
 
   for (const tarballPath of tarballPaths) {
@@ -110,15 +118,22 @@ try {
         continue;
       }
       const relativePath = entry.path.slice("package/".length);
+      const findingPath = `${basename(tarballPath)}:${relativePath}`;
+      await scanContent(
+        findingPath,
+        Buffer.from(relativePath),
+        findings,
+        canaries,
+      );
       if (isSensitivePackagePath(relativePath)) {
         findings.push({
-          path: `${basename(tarballPath)}:${relativePath}`,
+          path: findingPath,
           rule: "package-residue",
         });
         continue;
       }
       await scanContent(
-        `${basename(tarballPath)}:${relativePath}`,
+        findingPath,
         entry.content,
         findings,
         canaries,

@@ -23,7 +23,7 @@ The result is mixed in a useful way:
   and emitted ten Octokit requests across seven unique normalized routes. Nock
   rejected unmatched Node HTTP(S) requests on the observed Octokit path, and
   GrantTrace's real recorder captured all ten requests.
-- Three unique runtime routes are covered and four are catalog gaps. GrantTrace
+- Six unique runtime routes are covered and one is a catalog gap. GrantTrace
   blocks the full analysis instead of presenting a partial permission result as
   sufficient.
 - The resolvable PR-path subset does not add `issues: write`, because
@@ -164,18 +164,18 @@ sent the reply.
 | Source call | Canonical REST route | Runtime calls and statuses | GrantTrace catalog |
 | --- | --- | --- | --- |
 | [`repos.getContent`](https://github.com/all-contributors/app/blob/00f6362ffcc927a2d05fec27f42c3d09e4b03adb/lib/modules/repository.js#L41-L49) | `GET /repos/{owner}/{repo}/contents/{path}` | 2 × 200 | Covered |
-| [`git.getRef`](https://github.com/all-contributors/app/blob/00f6362ffcc927a2d05fec27f42c3d09e4b03adb/lib/modules/repository.js#L91-L98) | `GET /repos/{owner}/{repo}/git/ref/{ref}` | 404, 200 | Gap |
-| [`users.getByUsername`](https://github.com/all-contributors/app/blob/00f6362ffcc927a2d05fec27f42c3d09e4b03adb/lib/get-user-details.js#L17-L26) | `GET /users/{username}` | 200 | Gap |
+| [`git.getRef`](https://github.com/all-contributors/app/blob/00f6362ffcc927a2d05fec27f42c3d09e4b03adb/lib/modules/repository.js#L91-L98) | `GET /repos/{owner}/{repo}/git/ref/{ref}` | 404, 200 | Covered |
+| [`users.getByUsername`](https://github.com/all-contributors/app/blob/00f6362ffcc927a2d05fec27f42c3d09e4b03adb/lib/get-user-details.js#L17-L26) | `GET /users/{username}` | 200 | Covered |
 | [`git.createRef`](https://github.com/all-contributors/app/blob/00f6362ffcc927a2d05fec27f42c3d09e4b03adb/lib/modules/repository.js#L109-L118) | `POST /repos/{owner}/{repo}/git/refs` | 201 | Gap |
-| [`repos.createOrUpdateFileContents`](https://github.com/all-contributors/app/blob/00f6362ffcc927a2d05fec27f42c3d09e4b03adb/lib/modules/repository.js#L121-L155) | `PUT /repos/{owner}/{repo}/contents/{path}` | 2 × 200 | Gap |
+| [`repos.createOrUpdateFileContents`](https://github.com/all-contributors/app/blob/00f6362ffcc927a2d05fec27f42c3d09e4b03adb/lib/modules/repository.js#L121-L155) | `PUT /repos/{owner}/{repo}/contents/{path}` | 2 × 200 | Covered |
 | [`pulls.create`](https://github.com/all-contributors/app/blob/00f6362ffcc927a2d05fec27f42c3d09e4b03adb/lib/modules/repository.js#L219-L230) | `POST /repos/{owner}/{repo}/pulls` | 201 | Covered |
 | [`issues.createComment`](https://github.com/all-contributors/app/blob/00f6362ffcc927a2d05fec27f42c3d09e4b03adb/lib/modules/comment-reply.js#L35) | `POST /repos/{owner}/{repo}/issues/{issue_number}/comments` | 200 | Covered |
 
-The runtime emitted ten calls across those seven unique templates. The four
-gaps collapse to three safe findings in the contract (`GET`, `POST`, and `PUT`)
-because GrantTrace does not retain the template in an unresolved observation.
-The companion runtime inventory retains only canonical parameterized templates
-so catalog work remains reviewable without storing concrete owners,
+The runtime emitted ten calls across those seven unique templates. Six resolve
+through the pinned catalog; ref creation remains fail-closed because GitHub's
+documented permission alternatives do not establish a precise request
+predicate. The companion runtime inventory retains only canonical parameterized
+templates so catalog work remains reviewable without storing concrete owners,
 repositories, usernames, refs, paths, or payload data.
 
 ## Permission result
@@ -196,17 +196,16 @@ For the catalog-resolvable subset of both the source fixture and the executed
 runtime workflow, the solver retains one nondominated assignment:
 
 ```text
-contents: read
+contents: write
 pull_requests: write
 ```
 
 In that subset, the comment route did not add `issues: write`: the existing
 pull-request grant satisfies it. This demonstrates why a permission frontier
-matters. However, analysis of the full executed scenario is blocked. In
-particular, two actually emitted `PUT /contents/{path}` calls are runtime
-evidence of the catalog gap around the App's contents writes, and the webhook
-handler can receive comments on issues as well as pull requests. It would be
-unsafe to turn the subset result into an App-level permission reduction.
+matters. Analysis of the full executed scenario remains blocked by ref
+creation, and the webhook handler can receive comments on issues as well as
+pull requests. It would be unsafe to turn the subset result into an App-level
+permission reduction.
 
 ## Setup time
 
@@ -241,10 +240,8 @@ setup time remains unknown because feedback was not solicited.
 
 ## What should happen next
 
-The four source-backed gaps give catalog expansion a concrete workflow-based
-order: contents writes and Git reference creation enable the core mutation
-path; the global user lookup needs a separate product decision because
-GrantTrace currently limits its claim to repository-scoped permissions.
+Three previously blocked source-backed routes now resolve without storing
+identity-bearing values. Ref creation remains deliberately fail-closed.
 
 Maintainer feedback, if requested later with explicit authorization, should
 focus on observable questions:

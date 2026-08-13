@@ -12,6 +12,10 @@ import { join } from "node:path";
 
 import { parseNpmPackOutput } from "./lib/npm-pack.mjs";
 import {
+  parseSinglePackageArtifact,
+  resolvePackageArtifact,
+} from "./lib/package-artifact.mjs";
+import {
   invocationArgs,
   npmInvocation,
   pnpmInvocation,
@@ -27,6 +31,7 @@ import { readTarGzip } from "./lib/tar.mjs";
 const smokeUndiciVersion = "7.16.0";
 const manifest = await readPackageManifest();
 validateManifest(manifest);
+const suppliedArtifact = parseSinglePackageArtifact(process.argv.slice(2));
 
 const temporaryRoot = await mkdtemp(join(tmpdir(), "granttrace-package-"));
 const packDirectory = join(temporaryRoot, "packed");
@@ -56,26 +61,38 @@ try {
     npm_config_update_notifier: "false",
   });
 
-  const packed = await run(
-    npm.command,
-    invocationArgs(npm, [
-      "pack",
-      "--json",
-      "--pack-destination",
-      packDirectory,
-    ]),
-    { cwd: projectRoot, environment, expectedExitCodes: [0, 1, 2] },
-  );
-  assertCommandPassed(packed, "npm could not create the package tarball.");
-  const packResult = parseNpmPackOutput(packed.stdout);
-  if (!Array.isArray(packResult.files)) {
-    throw new Error("npm pack did not return its file manifest.");
+  let tarballPath;
+  let packedFiles;
+  if (suppliedArtifact === undefined) {
+    const packed = await run(
+      npm.command,
+      invocationArgs(npm, [
+        "pack",
+        "--json",
+        "--pack-destination",
+        packDirectory,
+      ]),
+      { cwd: projectRoot, environment, expectedExitCodes: [0, 1, 2] },
+    );
+    assertCommandPassed(packed, "npm could not create the package tarball.");
+    const packResult = parseNpmPackOutput(packed.stdout);
+    if (!Array.isArray(packResult.files)) {
+      throw new Error("npm pack did not return its file manifest.");
+    }
+    tarballPath = join(packDirectory, packResult.filename);
+    packedFiles = packResult.files;
+  } else {
+    tarballPath = await resolvePackageArtifact(suppliedArtifact);
   }
-  validatePackedFiles(packResult.files);
 
-  const tarballPath = join(packDirectory, packResult.filename);
   const archiveEntries = readTarGzip(await readFile(tarballPath));
-  validateArchiveEntries(archiveEntries, packResult.files);
+  packedFiles ??= archiveEntries.map((entry) => ({
+    path: entry.path.slice("package/".length),
+    mode: entry.mode,
+  }));
+  validatePackedFiles(packedFiles);
+  validateArchiveEntries(archiveEntries, packedFiles);
+  validateArchivedManifest(archiveEntries, manifest);
 
   await writeFile(
     join(installDirectory, "package.json"),
@@ -262,7 +279,7 @@ try {
     tarballPath,
   });
   console.log(
-    `Package smoke test passed with npm and strict pnpm consumers for ${manifest.name}@${manifest.version} (${String(packResult.files.length)} files).`,
+    `Package smoke test passed with npm and strict pnpm consumers for ${manifest.name}@${manifest.version} (${String(packedFiles.length)} files).`,
   );
 } finally {
   await rm(temporaryRoot, { recursive: true, force: true });
@@ -348,6 +365,24 @@ function validateArchiveEntries(entries, npmFiles) {
     [...archivePaths].some((path) => !npmPaths.has(path))
   ) {
     throw new Error("npm metadata and the tarball file list disagree.");
+  }
+}
+
+function validateArchivedManifest(entries, sourceManifest) {
+  const entry = entries.find(
+    (candidate) => candidate.path === "package/package.json",
+  );
+  let archivedManifest;
+  try {
+    archivedManifest = JSON.parse(entry?.content.toString("utf8") ?? "");
+  } catch {
+    throw new Error("The tarball package manifest is invalid.");
+  }
+  if (
+    archivedManifest.name !== sourceManifest.name ||
+    archivedManifest.version !== sourceManifest.version
+  ) {
+    throw new Error("The tarball package identity differs from the source.");
   }
 }
 

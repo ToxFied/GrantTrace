@@ -104,21 +104,25 @@ function matchTemplate(
   template: string,
   concretePath: string,
 ): Pick<RouteCandidate, "literalSegments" | "pathParameters"> | null {
+  const decodedPath = decodeConcretePath(concretePath);
   if (
-    concretePath.length === 0 ||
-    concretePath.length > 4_096 ||
-    concretePath.includes("\\")
+    decodedPath === null ||
+    decodedPath.length === 0 ||
+    decodedPath.length > 4_096 ||
+    decodedPath.includes("\\") ||
+    decodedPath.includes("%") ||
+    /[\u0000-\u001f\u007f]/u.test(decodedPath)
   ) {
     return null;
   }
   const templateSegments = segments(template);
-  const concreteSegments = segments(concretePath);
+  const concreteSegments = segments(decodedPath);
   let concreteIndex = 0;
   let literalSegments = 0;
   let pathParameters = 0;
 
   for (const [templateIndex, templateSegment] of templateSegments.entries()) {
-    if (templateSegment === "{path}") {
+    if (isTrailingPathParameter(templateSegment)) {
       if (
         templateIndex !== templateSegments.length - 1 ||
         concreteIndex >= concreteSegments.length
@@ -148,6 +152,21 @@ function matchTemplate(
   return concreteIndex === concreteSegments.length
     ? { literalSegments, pathParameters }
     : null;
+}
+
+function decodeConcretePath(path: string): string | null {
+  if (path.length > 8_192) {
+    return null;
+  }
+  try {
+    return decodeURIComponent(path);
+  } catch {
+    return null;
+  }
+}
+
+function isTrailingPathParameter(segment: string): boolean {
+  return segment === "{path}" || segment === "{ref}";
 }
 
 function segments(path: string): string[] {
