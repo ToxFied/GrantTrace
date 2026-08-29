@@ -1,5 +1,8 @@
 node_modules/
 dist/
+# Agent instructions are local to the development environment.
+[Aa][Gg][Ee][Nn][Tt].md
+[Aa][Gg][Ee][Nn][Tt][Ss].md
 .granttrace/
 .env
 .env.*
