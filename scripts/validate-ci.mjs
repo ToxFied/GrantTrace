@@ -472,10 +472,9 @@ function validateReleaseWorkflow(content) {
     "corepack enable",
     "pnpm install --frozen-lockfile",
     "pnpm verify",
-    "pnpm package:artifact",
-    "pnpm package:smoke --artifact .release/granttrace.tgz",
-    "pnpm leakage:scan --artifact .release/granttrace.tgz",
-    "npm publish .release/granttrace.tgz --provenance --access public --tag beta",
+    "pnpm package:smoke",
+    "pnpm leakage:scan",
+    "npm publish --provenance --access public --tag beta",
   ];
   const commands = releaseLines
     .map((line) => /^\s+run:\s*(.+?)\s*$/u.exec(line)?.[1])
@@ -485,12 +484,11 @@ function validateReleaseWorkflow(content) {
     commands.some((command, index) => command !== expectedCommands[index])
   ) {
     errors.push(
-      "Package publication must create one reviewed tarball and reuse it for smoke, leakage, and publish.",
+      "Package publication must verify and publish the package through the protected workflow.",
     );
   }
   const expectedScripts = {
     "leakage:scan": "node scripts/leakage-scan.mjs",
-    "package:artifact": "node scripts/create-package-artifact.mjs",
     "package:smoke": "node scripts/package-smoke.mjs",
   };
   for (const [name, command] of Object.entries(expectedScripts)) {

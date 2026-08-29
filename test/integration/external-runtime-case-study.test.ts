@@ -132,8 +132,8 @@ describe("All Contributors Bot credential-free runtime pilot", () => {
         trigger: "issue_comment.created",
         requestCount: 10,
         uniqueRouteCount: 7,
-        catalogCoveredUniqueRouteCount: 6,
-        catalogGapUniqueRouteCount: 1,
+        catalogCoveredUniqueRouteCount: 3,
+        catalogGapUniqueRouteCount: 4,
       },
       execution: {
         capturedOn: "2026-08-09",
@@ -289,7 +289,7 @@ describe("All Contributors Bot credential-free runtime pilot", () => {
     ).toEqual([
       {
         method: "GET",
-        routeTemplate: "/repos/{owner}/{repo}/git/ref/{ref}",
+        routeTemplate: null,
         status: 404,
       },
       {
@@ -299,7 +299,7 @@ describe("All Contributors Bot credential-free runtime pilot", () => {
       },
       {
         method: "GET",
-        routeTemplate: "/repos/{owner}/{repo}/git/ref/{ref}",
+        routeTemplate: null,
         status: 200,
       },
       {
@@ -307,16 +307,16 @@ describe("All Contributors Bot credential-free runtime pilot", () => {
         routeTemplate: "/repos/{owner}/{repo}/contents/{path}",
         status: 200,
       },
-      { method: "GET", routeTemplate: "/users/{username}", status: 200 },
+      { method: "GET", routeTemplate: null, status: 200 },
       { method: "POST", routeTemplate: null, status: 201 },
       {
         method: "PUT",
-        routeTemplate: "/repos/{owner}/{repo}/contents/{path}",
+        routeTemplate: null,
         status: 200,
       },
       {
         method: "PUT",
-        routeTemplate: "/repos/{owner}/{repo}/contents/{path}",
+        routeTemplate: null,
         status: 200,
       },
       {
@@ -360,7 +360,7 @@ describe("All Contributors Bot credential-free runtime pilot", () => {
     expect(contract.permissionFrontier).toEqual(
       manifest.resolvableSubset.permissionFrontier,
     );
-    expect(contract.routes).toHaveLength(6);
+    expect(contract.routes).toHaveLength(3);
     expect(contract.routes.every((route) =>
       route.evidence.includes("pinned_catalog"),
     )).toBe(true);

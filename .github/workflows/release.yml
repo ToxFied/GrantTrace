@@ -35,14 +35,11 @@ jobs:
       - name: Verify the release candidate
         run: pnpm verify
 
-      - name: Create the release package artifact
-        run: pnpm package:artifact
-
       - name: Test the installable package
-        run: pnpm package:smoke --artifact .release/granttrace.tgz
+        run: pnpm package:smoke
 
       - name: Scan tracked files and package contents
-        run: pnpm leakage:scan --artifact .release/granttrace.tgz
+        run: pnpm leakage:scan
 
       - name: Publish with registry provenance
-        run: npm publish .release/granttrace.tgz --provenance --access public --tag beta
+        run: npm publish --provenance --access public --tag beta

@@ -12,10 +12,6 @@ import { join } from "node:path";
 
 import { parseNpmPackOutput } from "./lib/npm-pack.mjs";
 import {
-  parseSinglePackageArtifact,
-  resolvePackageArtifact,
-} from "./lib/package-artifact.mjs";
-import {
   invocationArgs,
   npmInvocation,
   pnpmInvocation,
@@ -31,8 +27,6 @@ import { readTarGzip } from "./lib/tar.mjs";
 const smokeUndiciVersion = "7.16.0";
 const manifest = await readPackageManifest();
 validateManifest(manifest);
-const suppliedArtifact = parseSinglePackageArtifact(process.argv.slice(2));
-
 const temporaryRoot = await mkdtemp(join(tmpdir(), "granttrace-package-"));
 const packDirectory = join(temporaryRoot, "packed");
 const installDirectory = join(temporaryRoot, "consumer");
@@ -61,35 +55,25 @@ try {
     npm_config_update_notifier: "false",
   });
 
-  let tarballPath;
-  let packedFiles;
-  if (suppliedArtifact === undefined) {
-    const packed = await run(
-      npm.command,
-      invocationArgs(npm, [
-        "pack",
-        "--json",
-        "--pack-destination",
-        packDirectory,
-      ]),
-      { cwd: projectRoot, environment, expectedExitCodes: [0, 1, 2] },
-    );
-    assertCommandPassed(packed, "npm could not create the package tarball.");
-    const packResult = parseNpmPackOutput(packed.stdout);
-    if (!Array.isArray(packResult.files)) {
-      throw new Error("npm pack did not return its file manifest.");
-    }
-    tarballPath = join(packDirectory, packResult.filename);
-    packedFiles = packResult.files;
-  } else {
-    tarballPath = await resolvePackageArtifact(suppliedArtifact);
+  const packed = await run(
+    npm.command,
+    invocationArgs(npm, [
+      "pack",
+      "--json",
+      "--pack-destination",
+      packDirectory,
+    ]),
+    { cwd: projectRoot, environment, expectedExitCodes: [0, 1, 2] },
+  );
+  assertCommandPassed(packed, "npm could not create the package tarball.");
+  const packResult = parseNpmPackOutput(packed.stdout);
+  if (!Array.isArray(packResult.files)) {
+    throw new Error("npm pack did not return its file manifest.");
   }
+  const tarballPath = join(packDirectory, packResult.filename);
+  const packedFiles = packResult.files;
 
   const archiveEntries = readTarGzip(await readFile(tarballPath));
-  packedFiles ??= archiveEntries.map((entry) => ({
-    path: entry.path.slice("package/".length),
-    mode: entry.mode,
-  }));
   validatePackedFiles(packedFiles);
   validateArchiveEntries(archiveEntries, packedFiles);
   validateArchivedManifest(archiveEntries, manifest);

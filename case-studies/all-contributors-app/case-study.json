@@ -97,7 +97,7 @@
         {
           "method": "GET",
           "template": "/repos/{owner}/{repo}/git/ref/{ref}",
-          "catalogSupport": "covered",
+          "catalogSupport": "gap",
           "sourceCall": "git.getRef",
           "sourceUrl": "https://github.com/all-contributors/app/blob/00f6362ffcc927a2d05fec27f42c3d09e4b03adb/lib/modules/repository.js#L91-L98",
           "documentation": "https://docs.github.com/en/rest/git/refs?apiVersion=2026-03-10#get-a-reference"
@@ -105,7 +105,7 @@
         {
           "method": "GET",
           "template": "/users/{username}",
-          "catalogSupport": "covered",
+          "catalogSupport": "gap",
           "sourceCall": "users.getByUsername",
           "sourceUrl": "https://github.com/all-contributors/app/blob/00f6362ffcc927a2d05fec27f42c3d09e4b03adb/lib/get-user-details.js#L17-L26",
           "documentation": "https://docs.github.com/en/rest/users/users?apiVersion=2026-03-10#get-a-user"
@@ -121,7 +121,7 @@
         {
           "method": "PUT",
           "template": "/repos/{owner}/{repo}/contents/{path}",
-          "catalogSupport": "covered",
+          "catalogSupport": "gap",
           "sourceCall": "repos.createOrUpdateFileContents",
           "sourceUrl": "https://github.com/all-contributors/app/blob/00f6362ffcc927a2d05fec27f42c3d09e4b03adb/lib/modules/repository.js#L121-L155",
           "documentation": "https://docs.github.com/en/rest/repos/contents?apiVersion=2026-03-10#create-or-update-file-contents"

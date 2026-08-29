@@ -16,10 +16,6 @@ import {
 
 import { parseNpmPackOutput } from "./lib/npm-pack.mjs";
 import {
-  parsePackageArtifacts,
-  resolvePackageArtifact,
-} from "./lib/package-artifact.mjs";
-import {
   invocationArgs,
   npmInvocation,
 } from "./lib/package-manager.mjs";
@@ -57,8 +53,6 @@ const secretRules = [
 await readPackageManifest();
 const findings = [];
 const canaries = fixtureCanaries();
-const suppliedArtifacts = parsePackageArtifacts(process.argv.slice(2));
-
 const tracked = await run("git", ["ls-files", "-z"], {
   cwd: projectRoot,
   environment: portableEnvironment(),
@@ -99,12 +93,7 @@ for (const relativePath of tracked.stdout.split("\0").filter(Boolean)) {
 
 const temporaryRoot = await mkdtemp(join(tmpdir(), "granttrace-leakage-"));
 try {
-  const tarballPaths =
-    suppliedArtifacts.length > 0
-      ? await Promise.all(
-          suppliedArtifacts.map((path) => resolvePackageArtifact(path)),
-        )
-      : [await createFreshTarball(temporaryRoot)];
+  const tarballPaths = [await createFreshTarball(temporaryRoot)];
 
   for (const tarballPath of tarballPaths) {
     const archive = await readFileBounded(tarballPath, 25 * 1024 * 1024);
