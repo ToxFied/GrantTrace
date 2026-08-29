@@ -1,7 +1,7 @@
 {"schemaVersion":1,"scenario":"all-contributors-new-branch-pr","method":"GET","routeTemplate":"/repos/{owner}/{repo}/contents/{path}","status":null,"requirements":null,"evidenceSource":"none","finding":"missing_evidence"}
-{"schemaVersion":1,"scenario":"all-contributors-new-branch-pr","method":"GET","routeTemplate":"/repos/{owner}/{repo}/git/ref/{ref}","status":null,"requirements":null,"evidenceSource":"none","finding":"missing_evidence"}
-{"schemaVersion":1,"scenario":"all-contributors-new-branch-pr","method":"GET","routeTemplate":"/users/{username}","status":null,"requirements":null,"evidenceSource":"none","finding":"missing_evidence"}
+{"schemaVersion":1,"scenario":"all-contributors-new-branch-pr","method":"GET","routeTemplate":null,"status":null,"requirements":null,"evidenceSource":"none","finding":"unresolved_route"}
+{"schemaVersion":1,"scenario":"all-contributors-new-branch-pr","method":"GET","routeTemplate":null,"status":null,"requirements":null,"evidenceSource":"none","finding":"unresolved_route"}
 {"schemaVersion":1,"scenario":"all-contributors-new-branch-pr","method":"POST","routeTemplate":null,"status":null,"requirements":null,"evidenceSource":"none","finding":"unresolved_route"}
 {"schemaVersion":1,"scenario":"all-contributors-new-branch-pr","method":"POST","routeTemplate":"/repos/{owner}/{repo}/issues/{issue_number}/comments","status":null,"requirements":null,"evidenceSource":"none","finding":"missing_evidence"}
 {"schemaVersion":1,"scenario":"all-contributors-new-branch-pr","method":"POST","routeTemplate":"/repos/{owner}/{repo}/pulls","status":null,"requirements":null,"evidenceSource":"none","finding":"missing_evidence"}
-{"schemaVersion":1,"scenario":"all-contributors-new-branch-pr","method":"PUT","routeTemplate":"/repos/{owner}/{repo}/contents/{path}","status":null,"requirements":null,"evidenceSource":"none","finding":"missing_evidence"}
+{"schemaVersion":1,"scenario":"all-contributors-new-branch-pr","method":"PUT","routeTemplate":null,"status":null,"requirements":null,"evidenceSource":"none","finding":"unresolved_route"}

@@ -164,19 +164,20 @@ sent the reply.
 | Source call | Canonical REST route | Runtime calls and statuses | GrantTrace catalog |
 | --- | --- | --- | --- |
 | [`repos.getContent`](https://github.com/all-contributors/app/blob/00f6362ffcc927a2d05fec27f42c3d09e4b03adb/lib/modules/repository.js#L41-L49) | `GET /repos/{owner}/{repo}/contents/{path}` | 2 × 200 | Covered |
-| [`git.getRef`](https://github.com/all-contributors/app/blob/00f6362ffcc927a2d05fec27f42c3d09e4b03adb/lib/modules/repository.js#L91-L98) | `GET /repos/{owner}/{repo}/git/ref/{ref}` | 404, 200 | Covered |
-| [`users.getByUsername`](https://github.com/all-contributors/app/blob/00f6362ffcc927a2d05fec27f42c3d09e4b03adb/lib/get-user-details.js#L17-L26) | `GET /users/{username}` | 200 | Covered |
+| [`git.getRef`](https://github.com/all-contributors/app/blob/00f6362ffcc927a2d05fec27f42c3d09e4b03adb/lib/modules/repository.js#L91-L98) | `GET /repos/{owner}/{repo}/git/ref/{ref}` | 404, 200 | Gap |
+| [`users.getByUsername`](https://github.com/all-contributors/app/blob/00f6362ffcc927a2d05fec27f42c3d09e4b03adb/lib/get-user-details.js#L17-L26) | `GET /users/{username}` | 200 | Gap |
 | [`git.createRef`](https://github.com/all-contributors/app/blob/00f6362ffcc927a2d05fec27f42c3d09e4b03adb/lib/modules/repository.js#L109-L118) | `POST /repos/{owner}/{repo}/git/refs` | 201 | Gap |
-| [`repos.createOrUpdateFileContents`](https://github.com/all-contributors/app/blob/00f6362ffcc927a2d05fec27f42c3d09e4b03adb/lib/modules/repository.js#L121-L155) | `PUT /repos/{owner}/{repo}/contents/{path}` | 2 × 200 | Covered |
+| [`repos.createOrUpdateFileContents`](https://github.com/all-contributors/app/blob/00f6362ffcc927a2d05fec27f42c3d09e4b03adb/lib/modules/repository.js#L121-L155) | `PUT /repos/{owner}/{repo}/contents/{path}` | 2 × 200 | Gap |
 | [`pulls.create`](https://github.com/all-contributors/app/blob/00f6362ffcc927a2d05fec27f42c3d09e4b03adb/lib/modules/repository.js#L219-L230) | `POST /repos/{owner}/{repo}/pulls` | 201 | Covered |
 | [`issues.createComment`](https://github.com/all-contributors/app/blob/00f6362ffcc927a2d05fec27f42c3d09e4b03adb/lib/modules/comment-reply.js#L35) | `POST /repos/{owner}/{repo}/issues/{issue_number}/comments` | 200 | Covered |
 
-The runtime emitted ten calls across those seven unique templates. Six resolve
-through the pinned catalog; ref creation remains fail-closed because GitHub's
-documented permission alternatives do not establish a precise request
-predicate. The companion runtime inventory retains only canonical parameterized
-templates so catalog work remains reviewable without storing concrete owners,
-repositories, usernames, refs, paths, or payload data.
+The runtime emitted ten calls across those seven unique templates. Three resolve
+through the pinned catalog; ref reads, user lookup, content writes, and ref
+creation remain fail-closed because their documented permission requirements
+cannot be represented safely from route identity alone. The companion runtime
+inventory retains only canonical parameterized templates so catalog work remains
+reviewable without storing concrete owners, repositories, usernames, refs, paths,
+or payload data.
 
 ## Permission result
 
@@ -196,7 +197,7 @@ For the catalog-resolvable subset of both the source fixture and the executed
 runtime workflow, the solver retains one nondominated assignment:
 
 ```text
-contents: write
+contents: read
 pull_requests: write
 ```
 

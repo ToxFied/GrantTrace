@@ -26,7 +26,7 @@ part of the result, not footnotes.
   intercept arbitrary network traffic.
 - Re-recording a scenario replaces its prior local evidence. It does not
   combine multiple historical executions or measure test coverage.
-- The pinned catalog covers 53 route templates, not the whole GitHub REST API.
+- The pinned catalog covers 49 route templates, not the whole GitHub REST API.
   Unknown templates fail closed. Exact coverage is in
   [REST catalog](/docs/catalog).
 

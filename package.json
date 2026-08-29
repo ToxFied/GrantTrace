@@ -74,7 +74,6 @@
     "contract:reproduce": "node scripts/reproduce-contract.mjs",
     "leakage:scan": "node scripts/leakage-scan.mjs",
     "lint": "biome lint src test examples scripts vitest.config.ts",
-    "package:artifact": "node scripts/create-package-artifact.mjs",
     "package:smoke": "node scripts/package-smoke.mjs",
     "prepack": "pnpm clean:dist && pnpm build",
     "test": "vitest run",

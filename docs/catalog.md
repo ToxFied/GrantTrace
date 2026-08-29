@@ -1,11 +1,11 @@
 ---
 title: REST coverage
-description: See the 53 pinned GitHub REST routes GrantTrace can resolve.
+description: See the 49 pinned GitHub REST routes GrantTrace can resolve.
 ---
 
-GrantTrace ships a curated offline catalog of **53** GitHub REST route
+GrantTrace ships a curated offline catalog of **49** GitHub REST route
 templates for API version `2026-03-10`, reviewed against official GitHub
-documentation on 2026-08-12.
+documentation on 2026-07-23.
 
 Every entry records canonical permission DNF and an official GitHub
 documentation URL. The catalog is sorted and hashed; its source, version, and
@@ -23,11 +23,10 @@ GitHub's AND/OR alternatives and its published data is stale.
 | Repository metadata | 5 | `GET /repos/{owner}/{repo}`; contributors; languages; tags; topics | `metadata:read` |
 | Issues and comments | 9 | list/create/get issues; repository, item, and per-issue comment reads; update/delete/create comment | `issues:read/write`; comment routes allow `issues` **or** `pull_requests` |
 | Pull requests and reviews | 9 | list/create/update pull requests; list/create review comments; list/create/get/submit reviews | `pull_requests:read/write` |
-| Repository contents and Git refs | 9 | read/write contents; workflow-file write specialization; README; list/get commits; tree; get refs; branches | `contents:read/write`; workflow-file writes also require `workflows:write` |
+| Repository contents | 6 | contents; README; list/get commits; tree; branches | `contents:read` |
 | Actions and workflows | 6 | list/get workflows; dispatch; list/get/rerun workflow runs | `actions:read/write` |
 | Checks and statuses | 8 | create/get/update check runs; get check suite; list check runs; combined/list/create statuses | `checks:read/write` or `statuses:read/write` |
 | Releases | 6 | list/latest/by-tag/get; list assets; delete release | `contents:read/write` |
-| Users | 1 | get a public user | no additional GitHub App permission (`true`) |
 
 The exact canonical templates are:
 
@@ -59,13 +58,10 @@ GET    /repos/{owner}/{repo}/pulls/{pull_number}/reviews/{review_id}
 POST   /repos/{owner}/{repo}/pulls/{pull_number}/reviews/{review_id}/events
 
 GET    /repos/{owner}/{repo}/contents/{path}
-PUT    /repos/{owner}/{repo}/contents/{path}
-PUT    /repos/{owner}/{repo}/contents/.github/workflows/{path}
 GET    /repos/{owner}/{repo}/readme
 GET    /repos/{owner}/{repo}/commits
 GET    /repos/{owner}/{repo}/commits/{ref}
 GET    /repos/{owner}/{repo}/git/trees/{tree_sha}
-GET    /repos/{owner}/{repo}/git/ref/{ref}
 GET    /repos/{owner}/{repo}/branches
 
 GET    /repos/{owner}/{repo}/actions/workflows
@@ -90,19 +86,7 @@ GET    /repos/{owner}/{repo}/releases/tags/{tag}
 GET    /repos/{owner}/{repo}/releases/{release_id}
 GET    /repos/{owner}/{repo}/releases/{release_id}/assets
 DELETE /repos/{owner}/{repo}/releases/{release_id}
-
-GET    /users/{username}
 ```
-
-`GET /users/{username}` is represented as `[[]]`: a DNF containing one empty
-conjunction, which is boolean true. This records GitHub's “no additional
-permissions” model without inventing a permission name.
-
-The workflow content templates are privacy-safe canonical specializations.
-Runtime matching prefers their additional literal segments over the general
-`{path}` template, so only paths below `.github/workflows/` add the documented
-`workflows:write` requirement. Contracts retain the specialized template, never
-the concrete owner, repository, ref, username, or file path.
 
 ## Conditional exclusions
 
@@ -115,18 +99,16 @@ AND/OR model.
 The current catalog deliberately excludes these otherwise common routes:
 
 ```text
+PUT   /repos/{owner}/{repo}/contents/{path}
 DELETE /repos/{owner}/{repo}/contents/{path}
-POST  /repos/{owner}/{repo}/git/refs
 POST  /repos/{owner}/{repo}/releases
 PATCH /repos/{owner}/{repo}/releases/{release_id}
 ```
 
-Content writes are included because runtime specificity preserves GitHub's
-explicit path-dependent rule without persisting the path: ordinary files need
-`contents:write`, while `.github/workflows/` files require the conjunction of
-`contents:write` and `workflows:write`. Content deletion and ref creation stay
-fail-closed because their documented permission alternatives do not establish
-an equally precise request predicate.
+GitHub documents ordinary `contents:write` access plus conditional
+`workflows:write` when the operation affects `.github/workflows`. A
+route-only DNF would collapse that request-dependent condition and overstate
+what `contents:write` alone proves, so GrantTrace fails these routes closed.
 
 Other exclusions include:
 

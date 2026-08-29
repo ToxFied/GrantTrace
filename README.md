@@ -66,15 +66,13 @@ pnpm exec granttrace record issue-triage -- \
 ```text
 GrantTrace contract review required
 
-Changes  1 permission · 1 scenario · 1 route
-
 New permission
   issues: write
 
 Observed in
   Route      POST /repos/{owner}/{repo}/issues/{issue_number}/comments
   Scenarios  issue-triage
-  Evidence   Runtime response header, Pinned permission catalog
+  Evidence   Pinned permission catalog
 ```
 
 Review the diff, accept it locally, and commit `granttrace.lock.json`.
@@ -175,7 +173,7 @@ a permission name.
 ## How the contract is built
 
 1. The managed child records safe route templates, never concrete URLs.
-2. GrantTrace compares eligible runtime evidence with a versioned 53-route
+2. GrantTrace compares eligible runtime evidence with a versioned 49-route
    catalog reviewed against GitHub's REST documentation.
 3. It retains every nondominated sufficient permission assignment.
 4. A documented risk policy selects the default assignment for the lock.
@@ -230,7 +228,7 @@ Read [safe live setup](https://toxfied.github.io/GrantTrace/docs/live-setup/) be
 ## Boundaries
 
 GrantTrace currently supports GitHub.com REST API `2026-03-10` and a curated
-53-route catalog. It does not support GraphQL, GitHub Enterprise Server,
+49-route catalog. It does not support GraphQL, GitHub Enterprise Server,
 Actions `GITHUB_TOKEN`, OAuth Apps, personal access tokens, Git transport,
 webhook inference, or static whole-program analysis.
 
