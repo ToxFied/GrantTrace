@@ -85,7 +85,7 @@
     "verify": "pnpm typecheck && pnpm lint && pnpm test:coverage && pnpm build && pnpm contract:reproduce && pnpm ci:validate"
   },
   "dependencies": {
-    "@octokit/core": "7.0.6",
+    "@octokit/core": "7.0.8",
     "zod": "4.4.3"
   },
   "devDependencies": {
