@@ -21,4 +21,24 @@ describe("managed child cleanup", () => {
       Object.defineProperty(process, "platform", platform);
     }
   });
+
+  it("tries to terminate Windows descendants on timeout and still fails closed", async () => {
+    const platform = Object.getOwnPropertyDescriptor(process, "platform");
+    if (!platform) throw new Error("process.platform is unavailable");
+    Object.defineProperty(process, "platform", { ...platform, value: "win32" });
+    try {
+      const result = await runManagedChild({
+        command: process.execPath,
+        args: ["-e", "setTimeout(() => {}, 250)"],
+        cwd: process.cwd(),
+        environment: process.env,
+        timeoutMs: 20,
+        forceKillAfterMs: 1_000,
+      });
+      expect(result.timedOut).toBe(true);
+      expect(result.processTreeCleanupFailed).toBe(true);
+    } finally {
+      Object.defineProperty(process, "platform", platform);
+    }
+  });
 });
