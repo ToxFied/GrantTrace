@@ -93,7 +93,9 @@ for (const relativePath of tracked.stdout.split("\0").filter(Boolean)) {
 
 const temporaryRoot = await mkdtemp(join(tmpdir(), "granttrace-leakage-"));
 try {
-  const tarballPaths = [await createFreshTarball(temporaryRoot)];
+  const tarballPaths = process.argv[2]
+    ? [process.argv[2]]
+    : [await createFreshTarball(temporaryRoot)];
 
   for (const tarballPath of tarballPaths) {
     const archive = await readFileBounded(tarballPath, 25 * 1024 * 1024);
