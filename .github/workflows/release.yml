@@ -35,11 +35,14 @@ jobs:
       - name: Verify the release candidate
         run: pnpm verify
 
+      - name: Create the release tarball
+        run: pnpm package:pack -- "$RUNNER_TEMP/granttrace-release.tgz"
+
       - name: Test the installable package
-        run: pnpm package:smoke
+        run: pnpm package:smoke "$RUNNER_TEMP/granttrace-release.tgz"
 
       - name: Scan tracked files and package contents
-        run: pnpm leakage:scan
+        run: pnpm leakage:scan "$RUNNER_TEMP/granttrace-release.tgz"
 
       - name: Publish with registry provenance
-        run: npm publish --provenance --access public --tag beta
+        run: npm publish "$RUNNER_TEMP/granttrace-release.tgz" --provenance --access public --tag beta
