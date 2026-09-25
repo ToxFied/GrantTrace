@@ -26,6 +26,12 @@
 uses, saves the evidence in your repository, and flags unexpected permission
 changes in code review.**
 
+<p align="center">
+  <a href="https://toxfied.github.io/GrantTrace/media/granttrace-overview.mp4">
+    <img src="https://raw.githubusercontent.com/ToxFied/GrantTrace/main/.github/assets/granttrace-overview-poster.png" width="760" alt="Watch the 38-second GrantTrace overview: record a scenario, review a new permission, and inspect a saved recording">
+  </a>
+</p>
+
 ## Project status
 
 GrantTrace is an actively maintained public beta. See the
