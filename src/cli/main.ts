@@ -101,7 +101,7 @@ function helpText(): string {
     "Core workflow",
     "  granttrace record     Run, observe, review, and optionally accept a scenario",
     "  granttrace check      Review or accept the aggregate contract",
-    "  granttrace scenario   List or retire scenario recordings",
+    "  granttrace scenario   List, inspect, or retire scenario recordings",
     "",
     "Setup and diagnostics",
     "  granttrace init       Explicitly create private ignored local state",

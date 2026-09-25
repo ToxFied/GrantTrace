@@ -10,6 +10,8 @@ beta.
 
 ### Added
 
+- `scenario inspect <name>` shows one saved recording's permissions, resolved
+  routes, and evidence without rerunning it or changing the accepted contract.
 - An explicit `frontier list/select` workflow for choosing and retaining any
   complete nondominated permission assignment in the committed contract.
 - Stable, versioned JSON and PR-ready Markdown output for `granttrace check`,
@@ -36,6 +38,8 @@ beta.
 
 ### Fixed
 
+- Scenario listing sorts by scenario name and rejects recordings whose contents
+  do not match their filename.
 - Offline contract reproduction and package smoke tests now leave CI safety
   enabled except for the single disposable child that intentionally accepts a
   temporary contract.

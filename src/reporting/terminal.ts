@@ -8,6 +8,7 @@ const COVERAGE =
 export function renderAnalysisReport(
   contract: GrantTraceContract,
   observationCount: number,
+  options: { includeRoutes?: boolean } = {},
 ): string {
   const lines = [
     "GrantTrace",
@@ -38,6 +39,23 @@ export function renderAnalysisReport(
         lines.push(`  ${permission}: ${level}`);
       }
     }
+  }
+
+  if (options.includeRoutes) {
+    lines.push("", "Resolved routes");
+    if (contract.routes.length === 0) {
+      lines.push("  (none)");
+    }
+    for (const route of contract.routes) {
+      lines.push(
+        `  ${route.method} ${route.template}`,
+        `    Evidence  ${evidenceList(route.evidence)}`,
+      );
+    }
+    lines.push(
+      "",
+      "Read-only analysis of this recording; accepted policy and manual keeps are not included.",
+    );
   }
 
   lines.push("", "Coverage", `  ${COVERAGE}`, "");
