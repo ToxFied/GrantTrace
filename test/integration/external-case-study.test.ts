@@ -106,16 +106,21 @@ describe("All Contributors Bot offline compatibility study", () => {
     }
     expect(
       routes.filter((route) => route.catalogSupport === "covered"),
-    ).toHaveLength(7);
+    ).toHaveLength(4);
     expect(routes.filter((route) => route.catalogSupport === "gap")).toHaveLength(
-      1,
+      4,
     );
     expect(
       routes
         .filter((route) => route.catalogSupport === "gap")
         .map((route) => `${route.method} ${route.template}`)
         .sort(),
-    ).toEqual(["POST /repos/{owner}/{repo}/git/refs"]);
+    ).toEqual([
+      "GET /repos/{owner}/{repo}/git/ref/{ref}",
+      "GET /users/{username}",
+      "POST /repos/{owner}/{repo}/git/refs",
+      "PUT /repos/{owner}/{repo}/contents/{path}",
+    ]);
     expect(new Set(routes.map(routeKey)).size).toBe(7);
     expect(
       new Set(
@@ -123,8 +128,8 @@ describe("All Contributors Bot offline compatibility study", () => {
           .filter((route) => route.catalogSupport === "covered")
           .map(routeKey),
       ).size,
-    ).toBe(6);
-    expect(GITHUB_REST_CATALOG_ENTRIES).toHaveLength(53);
+    ).toBe(3);
+    expect(GITHUB_REST_CATALOG_ENTRIES).toHaveLength(49);
 
     for (const scenario of manifest.scenarios) {
       expect(scenario.fixture).toMatch(/^[a-z0-9-]+\.observations\.ndjson$/u);
@@ -206,16 +211,28 @@ describe("All Contributors Bot offline compatibility study", () => {
     const contract = buildContract(observations, githubPermissionCatalog);
 
     expect(contract.selectedPermissions).toEqual({
-      contents: "write",
+      contents: "read",
       pull_requests: "write",
     });
     expect(contract.permissionFrontier).toEqual([
-      { contents: "write", pull_requests: "write" },
+      { contents: "read", pull_requests: "write" },
     ]);
     expect(contract.unknowns).toEqual([
       {
         scenario: "all-contributors-new-branch-pr",
+        method: "GET",
+        template: null,
+        finding: "unresolved_route",
+      },
+      {
+        scenario: "all-contributors-new-branch-pr",
         method: "POST",
+        template: null,
+        finding: "unresolved_route",
+      },
+      {
+        scenario: "all-contributors-new-branch-pr",
+        method: "PUT",
         template: null,
         finding: "unresolved_route",
       },
@@ -223,11 +240,8 @@ describe("All Contributors Bot offline compatibility study", () => {
     expect(contract.routes.map((route) => `${route.method} ${route.template}`))
       .toEqual([
         "GET /repos/{owner}/{repo}/contents/{path}",
-        "GET /repos/{owner}/{repo}/git/ref/{ref}",
-        "GET /users/{username}",
         "POST /repos/{owner}/{repo}/issues/{issue_number}/comments",
         "POST /repos/{owner}/{repo}/pulls",
-        "PUT /repos/{owner}/{repo}/contents/{path}",
       ]);
   });
 });

@@ -17,8 +17,8 @@
     "emittedRequests": "runtime-emitted-requests.json",
     "requestCount": 10,
     "uniqueRouteCount": 7,
-    "catalogCoveredUniqueRouteCount": 6,
-    "catalogGapUniqueRouteCount": 1
+    "catalogCoveredUniqueRouteCount": 3,
+    "catalogGapUniqueRouteCount": 4
   },
   "execution": {
     "capturedOn": "2026-08-09",
@@ -84,18 +84,20 @@
   "resolvableSubset": {
     "complete": false,
     "selectedPermissions": {
-      "contents": "write",
+      "contents": "read",
       "pull_requests": "write"
     },
     "permissionFrontier": [
       {
-        "contents": "write",
+        "contents": "read",
         "pull_requests": "write"
       }
     ],
     "evidence": "pinned catalog only; mocked responses had no x-accepted-github-permissions header",
     "unknownMethods": [
-      "POST"
+      "GET",
+      "POST",
+      "PUT"
     ]
   },
   "routeCoverage": [
@@ -107,8 +109,8 @@
         404,
         200
       ],
-      "catalogSupport": "covered",
-      "inferredPermissions": "contents: read"
+      "catalogSupport": "gap",
+      "inferredPermissions": null
     },
     {
       "method": "GET",
@@ -128,8 +130,8 @@
       "statuses": [
         200
       ],
-      "catalogSupport": "covered",
-      "inferredPermissions": "no additional permission"
+      "catalogSupport": "gap",
+      "inferredPermissions": null
     },
     {
       "method": "POST",
@@ -149,8 +151,8 @@
         200,
         200
       ],
-      "catalogSupport": "covered",
-      "inferredPermissions": "contents: write"
+      "catalogSupport": "gap",
+      "inferredPermissions": null
     },
     {
       "method": "POST",
@@ -174,9 +176,12 @@
     }
   ],
   "evidencedCatalogGap": {
-    "count": 1,
+    "count": 4,
     "routes": [
-      "POST /repos/{owner}/{repo}/git/refs"
+      "GET /repos/{owner}/{repo}/git/ref/{ref}",
+      "GET /users/{username}",
+      "POST /repos/{owner}/{repo}/git/refs",
+      "PUT /repos/{owner}/{repo}/contents/{path}"
     ],
     "effect": "GrantTrace blocks a complete permission conclusion for the executed scenario."
   },
@@ -194,7 +199,7 @@
     "Nock rejects unmatched Node HTTP(S) traffic that it intercepts on the observed Octokit path; it is not an OS network or filesystem sandbox.",
     "Pinned third-party code can read files, spawn processes, or use channels nock does not intercept, so reruns should use a disposable container or VM.",
     "The upstream nock responses do not contain x-accepted-github-permissions headers.",
-    "One runtime-emitted route is absent from GrantTrace's pinned catalog, so the permission result is incomplete.",
+    "Four runtime-emitted routes are absent from GrantTrace's pinned catalog, so the permission result is incomplete.",
     "One upstream happy path does not establish coverage of every application branch or webhook payload.",
     "GrantTrace dependencies were installed with pnpm 9.15.4 rather than the packageManager-declared pnpm 10.28.2; the frozen lockfile was accepted unchanged.",
     "The frozen upstream install reported 62 audit findings; no dependency remediation was attempted.",

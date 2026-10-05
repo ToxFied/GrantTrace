@@ -51,11 +51,14 @@ jobs:
       - name: Audit production dependencies
         run: pnpm audit --prod
 
+      - name: Create the release tarball
+        run: pnpm package:pack -- "$RUNNER_TEMP/granttrace-ci.tgz"
+
       - name: Test the installable package
-        run: pnpm package:smoke
+        run: pnpm package:smoke "$RUNNER_TEMP/granttrace-ci.tgz"
 
       - name: Scan tracked files and package contents
-        run: pnpm leakage:scan
+        run: pnpm leakage:scan "$RUNNER_TEMP/granttrace-ci.tgz"
 
       - name: Check patch whitespace
         run: git diff --check

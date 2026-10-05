@@ -13,7 +13,7 @@ body:
     attributes:
       label: GrantTrace version
       description: Paste the beta version or commit hash you tested.
-      placeholder: 0.1.0-beta.2
+      placeholder: 0.1.0-beta.1
     validations:
       required: true
   - type: input

@@ -12,6 +12,7 @@ description: Commands, options, scenario naming, timeouts, and exit codes.
 | `granttrace doctor --repair`        | Remove only a lock that is proven stale and safe          |
 | `granttrace record NAME -- COMMAND` | Auto-initialize, record one scenario, and review its diff |
 | `granttrace scenario list`          | List local scenario recordings                            |
+| `granttrace scenario inspect NAME`  | Inspect one recording's permissions, routes, and evidence |
 | `granttrace scenario remove NAME`   | Remove one local recording                                |
 | `granttrace check`                  | Compare all recordings with the accepted contract         |
 | `granttrace check --accept`         | Atomically accept the reviewed contract                   |
@@ -63,6 +64,31 @@ environments it never prompts or accepts; a semantic change exits `6`.
 exists for multi-scenario automation, where each intermediate aggregate is
 intentionally incomplete. Use it only when a later `granttrace check` is
 guaranteed.
+
+## `scenario`
+
+```text
+granttrace scenario list
+granttrace scenario inspect <name>
+granttrace scenario remove <name>
+```
+
+`list` shows saved local recordings in name order. `inspect` analyzes one
+recording with the current pinned catalog and shows its selected permissions,
+resolved route templates, and evidence sources. Repeated requests count as
+observations; each resolved route appears once.
+
+Inspection is read-only and works in CI. It does not rerun the scenario, access
+GitHub, or change observations or `granttrace.lock.json`. Its selection uses
+the default policy for that recording alone, without the accepted contract's
+frontier choice or manual keeps. Use `check` for aggregate contract review.
+
+Missing, empty, malformed, or unsafe recordings exit `5`. A recording whose
+scenario names do not match its filename also exits `5`; `list` rejects such
+recordings too. Unknown or contradictory evidence exits `7` with an explanation.
+
+`remove` deletes only the local recording. Run `check` afterward to review the
+coverage change before accepting it.
 
 ## `check`
 

@@ -26,7 +26,7 @@ part of the result, not footnotes.
   intercept arbitrary network traffic.
 - Re-recording a scenario replaces its prior local evidence. It does not
   combine multiple historical executions or measure test coverage.
-- The pinned catalog covers 53 route templates, not the whole GitHub REST API.
+- The pinned catalog covers 49 route templates, not the whole GitHub REST API.
   Unknown templates fail closed. Exact coverage is in
   [REST catalog](/docs/catalog).
 
@@ -125,8 +125,9 @@ part of the result, not footnotes.
 - On Unix-like systems, managed children run in their own process group so
   timeout and interrupt escalation reaches descendants. Live proof is blocked
   on Windows because equivalent arbitrary descendant cleanup cannot be
-  verified. Recording, checking, analysis, and contract review remain
-  supported there.
+  verified. Recording can launch commands there, but reports cleanup failure
+  because GrantTrace cannot verify descendants after the command exits.
+  Checking, analysis, and contract review remain supported there.
 - The package and CI checks reduce accidental leakage and supply-chain risk;
   they cannot eliminate compromise of Node, pnpm, GitHub Actions, dependencies,
   or the operator's machine.

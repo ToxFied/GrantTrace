@@ -1,6 +1,8 @@
 node_modules/
 dist/
-.release/
+# Agent instructions are local to the development environment.
+[Aa][Gg][Ee][Nn][Tt].md
+[Aa][Gg][Ee][Nn][Tt][Ss].md
 .granttrace/
 .env
 .env.*
@@ -21,3 +23,9 @@ website/.source/
 website/out/
 website/next-env.d.ts
 website/*.tsbuildinfo
+# Local-only tooling state, scratch dirs, and generated previews. Never commit.
+.omo/
+.sisyphus/
+design-mocks/
+tmp/
+output/

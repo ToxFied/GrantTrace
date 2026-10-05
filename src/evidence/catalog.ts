@@ -31,11 +31,6 @@ const docs = (path: string, anchor: string): string =>
 const term = (permission: string, level: "read" | "write"): PermissionDNF => [
   [{ permission, level }],
 ];
-const noAdditionalPermission: PermissionDNF = [[]];
-const contentsAndWorkflowsWrite: PermissionDNF = [[
-  { permission: "contents", level: "write" },
-  { permission: "workflows", level: "write" },
-]];
 const issueOrPull = (level: "read" | "write"): PermissionDNF => [
   [{ permission: "issues", level }],
   [{ permission: "pull_requests", level }],
@@ -43,7 +38,7 @@ const issueOrPull = (level: "read" | "write"): PermissionDNF => [
 
 /**
  * Curated from GitHub's official "Permissions required for GitHub Apps"
- * reference and the linked endpoint pages, accessed 2026-08-12. Routes whose
+ * reference and the linked endpoint pages, accessed 2026-07-23. Routes whose
  * "additional permissions" relationship is conditional or ambiguous are
  * excluded unless the endpoint page explicitly documents its AND/OR shape.
  */
@@ -210,18 +205,6 @@ export const GITHUB_REST_CATALOG_ENTRIES: readonly CatalogEntry[] = [
     documentation: docs("repos/contents", "get-repository-content"),
   },
   {
-    method: "PUT",
-    template: "/repos/{owner}/{repo}/contents/{path}",
-    alternatives: term("contents", "write"),
-    documentation: docs("repos/contents", "create-or-update-file-contents"),
-  },
-  {
-    method: "PUT",
-    template: "/repos/{owner}/{repo}/contents/.github/workflows/{path}",
-    alternatives: contentsAndWorkflowsWrite,
-    documentation: docs("repos/contents", "create-or-update-file-contents"),
-  },
-  {
     method: "GET",
     template: "/repos/{owner}/{repo}/readme",
     alternatives: term("contents", "read"),
@@ -244,12 +227,6 @@ export const GITHUB_REST_CATALOG_ENTRIES: readonly CatalogEntry[] = [
     template: "/repos/{owner}/{repo}/git/trees/{tree_sha}",
     alternatives: term("contents", "read"),
     documentation: docs("git/trees", "get-a-tree"),
-  },
-  {
-    method: "GET",
-    template: "/repos/{owner}/{repo}/git/ref/{ref}",
-    alternatives: term("contents", "read"),
-    documentation: docs("git/refs", "get-a-reference"),
   },
   {
     method: "GET",
@@ -400,13 +377,6 @@ export const GITHUB_REST_CATALOG_ENTRIES: readonly CatalogEntry[] = [
     documentation: docs("releases/releases", "delete-a-release"),
   },
 
-  // Public user profile. GitHub documents no additional App permission.
-  {
-    method: "GET",
-    template: "/users/{username}",
-    alternatives: noAdditionalPermission,
-    documentation: docs("users/users", "get-a-user"),
-  },
 ] as const;
 
 export class GitHubPermissionCatalog implements PermissionCatalog {
@@ -467,7 +437,7 @@ export class GitHubPermissionCatalog implements PermissionCatalog {
 
     this.identity = {
       source: provenance?.source ?? "github-docs",
-      version: provenance?.version ?? "2026-03-10.20260812.1",
+      version: provenance?.version ?? "2026-03-10.20260723.1",
       checksum: `sha256:${checksum}`,
     };
   }

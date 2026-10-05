@@ -14,7 +14,7 @@ protocol implemented by GrantTrace.
 - Tool version: `0.1.0-beta.2`
 - Pinned GitHub REST API: `2026-03-10`
 - Offline catalog source: `github-docs`
-- Offline catalog version: `2026-03-10.20260812.1`
+- Offline catalog version: `2026-03-10.20260723.1`
 - Catalog identity: SHA-256 over sorted canonical entries, permission DNF, and
   official documentation URL
 

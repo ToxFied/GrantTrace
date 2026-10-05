@@ -26,6 +26,12 @@
 uses, saves the evidence in your repository, and flags unexpected permission
 changes in code review.**
 
+<p align="center">
+  <a href="https://toxfied.github.io/GrantTrace/media/granttrace-overview.mp4">
+    <img src="https://raw.githubusercontent.com/ToxFied/GrantTrace/main/.github/assets/granttrace-overview-poster.png" width="760" alt="Watch the 38-second GrantTrace overview: record a scenario, review a new permission, and inspect a saved recording">
+  </a>
+</p>
+
 ## Project status
 
 GrantTrace is an actively maintained public beta. See the
@@ -66,15 +72,13 @@ pnpm exec granttrace record issue-triage -- \
 ```text
 GrantTrace contract review required
 
-Changes  1 permission · 1 scenario · 1 route
-
 New permission
   issues: write
 
 Observed in
   Route      POST /repos/{owner}/{repo}/issues/{issue_number}/comments
   Scenarios  issue-triage
-  Evidence   Runtime response header, Pinned permission catalog
+  Evidence   Pinned permission catalog
 ```
 
 Review the diff, accept it locally, and commit `granttrace.lock.json`.
@@ -175,7 +179,7 @@ a permission name.
 ## How the contract is built
 
 1. The managed child records safe route templates, never concrete URLs.
-2. GrantTrace compares eligible runtime evidence with a versioned 53-route
+2. GrantTrace compares eligible runtime evidence with a versioned 49-route
    catalog reviewed against GitHub's REST documentation.
 3. It retains every nondominated sufficient permission assignment.
 4. A documented risk policy selects the default assignment for the lock.
@@ -230,7 +234,7 @@ Read [safe live setup](https://toxfied.github.io/GrantTrace/docs/live-setup/) be
 ## Boundaries
 
 GrantTrace currently supports GitHub.com REST API `2026-03-10` and a curated
-53-route catalog. It does not support GraphQL, GitHub Enterprise Server,
+49-route catalog. It does not support GraphQL, GitHub Enterprise Server,
 Actions `GITHUB_TOKEN`, OAuth Apps, personal access tokens, Git transport,
 webhook inference, or static whole-program analysis.
 
@@ -239,8 +243,9 @@ does not say unexecuted code is safe, and a permission absent from the contract
 is not automatically safe to remove from an existing production App.
 
 Live proof is Unix-only because GrantTrace must verify descendant-process
-cleanup. Recording, checking, analysis, and contract review remain supported
-on Windows.
+cleanup. Recording can launch a command on Windows, but GrantTrace reports
+cleanup failure because it cannot verify descendants after the command exits.
+Checking, analysis, and contract review remain supported.
 
 ## Security and privacy
 

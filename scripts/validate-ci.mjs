@@ -238,8 +238,10 @@ function validateRequiredCommands() {
     ["pnpm docs:build", "build documentation before merge"],
     ["pnpm docs:validate", "validate documentation before merge"],
     ["pnpm audit --prod", "audit production dependencies"],
-    ["pnpm package:smoke", ["smoke-test the tarball", 3]],
-    ["pnpm leakage:scan", "scan for leakage"],
+    ["pnpm package:pack -- \"$RUNNER_TEMP/granttrace-ci.tgz\"", "pack the release artifact"],
+    ["pnpm package:smoke \"$RUNNER_TEMP/granttrace-ci.tgz\"", "smoke-test the release artifact"],
+    ["pnpm leakage:scan \"$RUNNER_TEMP/granttrace-ci.tgz\"", "scan the release artifact"],
+    ["pnpm package:smoke", ["smoke-test other package consumers", 2]],
     ["git diff --check", "check patch whitespace"],
   ]);
   const commands = lines
@@ -472,10 +474,10 @@ function validateReleaseWorkflow(content) {
     "corepack enable",
     "pnpm install --frozen-lockfile",
     "pnpm verify",
-    "pnpm package:artifact",
-    "pnpm package:smoke --artifact .release/granttrace.tgz",
-    "pnpm leakage:scan --artifact .release/granttrace.tgz",
-    "npm publish .release/granttrace.tgz --provenance --access public --tag beta",
+    'pnpm package:pack -- "$RUNNER_TEMP/granttrace-release.tgz"',
+    'pnpm package:smoke "$RUNNER_TEMP/granttrace-release.tgz"',
+    'pnpm leakage:scan "$RUNNER_TEMP/granttrace-release.tgz"',
+    'npm publish "$RUNNER_TEMP/granttrace-release.tgz" --provenance --access public --tag beta',
   ];
   const commands = releaseLines
     .map((line) => /^\s+run:\s*(.+?)\s*$/u.exec(line)?.[1])
@@ -485,13 +487,13 @@ function validateReleaseWorkflow(content) {
     commands.some((command, index) => command !== expectedCommands[index])
   ) {
     errors.push(
-      "Package publication must create one reviewed tarball and reuse it for smoke, leakage, and publish.",
+      "Package publication must verify and publish the package through the protected workflow.",
     );
   }
   const expectedScripts = {
     "leakage:scan": "node scripts/leakage-scan.mjs",
-    "package:artifact": "node scripts/create-package-artifact.mjs",
     "package:smoke": "node scripts/package-smoke.mjs",
+    "package:pack": "node scripts/pack-release.mjs",
   };
   for (const [name, command] of Object.entries(expectedScripts)) {
     if (packageManifest.scripts?.[name] !== command) {
