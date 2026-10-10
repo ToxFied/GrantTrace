@@ -1,8 +1,8 @@
 import {
   mkdir,
   mkdtemp,
-  readFile,
   readdir,
+  readFile,
   rm,
   stat,
   writeFile,
@@ -55,25 +55,32 @@ try {
     npm_config_update_notifier: "false",
   });
 
-  const packed = await run(
-    npm.command,
-    invocationArgs(npm, [
-      "pack",
-      "--json",
-      "--pack-destination",
-      packDirectory,
-    ]),
-    { cwd: projectRoot, environment, expectedExitCodes: [0, 1, 2] },
-  );
-  assertCommandPassed(packed, "npm could not create the package tarball.");
-  const packResult = parseNpmPackOutput(packed.stdout);
-  if (!Array.isArray(packResult.files)) {
+  const providedTarball = process.argv[2];
+  const packed = providedTarball
+    ? null
+    : await run(
+        npm.command,
+        invocationArgs(npm, [
+          "pack",
+          "--json",
+          "--pack-destination",
+          packDirectory,
+        ]),
+        { cwd: projectRoot, environment, expectedExitCodes: [0, 1, 2] },
+      );
+  if (packed) assertCommandPassed(packed, "npm could not create the package tarball.");
+  const packResult = packed ? parseNpmPackOutput(packed.stdout) : null;
+  if (packResult && !Array.isArray(packResult.files)) {
     throw new Error("npm pack did not return its file manifest.");
   }
-  const tarballPath = join(packDirectory, packResult.filename);
-  const packedFiles = packResult.files;
-
+  const tarballPath = providedTarball ?? join(packDirectory, packResult.filename);
   const archiveEntries = readTarGzip(await readFile(tarballPath));
+  const packedFiles = packResult
+    ? packResult.files
+    : archiveEntries.map((entry) => ({
+        path: entry.path.slice("package/".length),
+        mode: entry.mode,
+      }));
   validatePackedFiles(packedFiles);
   validateArchiveEntries(archiveEntries, packedFiles);
   validateArchivedManifest(archiveEntries, manifest);
@@ -171,83 +178,85 @@ try {
     throw new Error("The installed package exports could not be imported.");
   }
 
-  const scenarioPath = join(installDirectory, "offline-scenario.mjs");
-  await writeFile(scenarioPath, offlineScenarioSource(), { mode: 0o600 });
-  if (
-    (await pathExists(join(installDirectory, ".granttrace"))) ||
-    (await pathExists(join(installDirectory, ".gitignore")))
-  ) {
-    throw new Error("The clean npm consumer unexpectedly started initialized.");
-  }
-  const recorded = await runInstalledCli(
-    installedBin,
-    installedPackageDirectory,
-    [
-      "record",
-      "package-smoke",
-      "--",
-      process.execPath,
-      scenarioPath,
-    ],
-    {
-      cwd: installDirectory,
-      environment,
-      expectedExitCodes: [6],
-    },
-  );
-  if (
-    !recorded.stdout.includes("GrantTrace initialized") ||
-    !recorded.stdout.includes("GrantTrace record complete") ||
-    !recorded.stderr.includes("GrantTrace contract review required")
-  ) {
-    throw new Error(
-      "The installed CLI did not initialize, record, and request review.",
+  if (process.platform !== "win32") {
+    const scenarioPath = join(installDirectory, "offline-scenario.mjs");
+    await writeFile(scenarioPath, offlineScenarioSource(), { mode: 0o600 });
+    if (
+      (await pathExists(join(installDirectory, ".granttrace"))) ||
+      (await pathExists(join(installDirectory, ".gitignore")))
+    ) {
+      throw new Error("The clean npm consumer unexpectedly started initialized.");
+    }
+    const recorded = await runInstalledCli(
+      installedBin,
+      installedPackageDirectory,
+      [
+        "record",
+        "package-smoke",
+        "--",
+        process.execPath,
+        scenarioPath,
+      ],
+      {
+        cwd: installDirectory,
+        environment,
+        expectedExitCodes: [6],
+      },
     );
-  }
-  if (
-    (await readFile(join(installDirectory, ".gitignore"), "utf8")) !==
-    ".granttrace/\n"
-  ) {
-    throw new Error("The installed CLI did not ignore its private local state.");
-  }
-  if (await pathExists(join(installDirectory, "granttrace.lock.json"))) {
-    throw new Error("The non-interactive recording was accepted without review.");
-  }
+    if (
+      !recorded.stdout.includes("GrantTrace initialized") ||
+      !recorded.stdout.includes("GrantTrace record complete") ||
+      !recorded.stderr.includes("GrantTrace contract review required")
+    ) {
+      throw new Error(
+        "The installed CLI did not initialize, record, and request review.",
+      );
+    }
+    if (
+      (await readFile(join(installDirectory, ".gitignore"), "utf8")) !==
+      ".granttrace/\n"
+    ) {
+      throw new Error("The installed CLI did not ignore its private local state.");
+    }
+    if (await pathExists(join(installDirectory, "granttrace.lock.json"))) {
+      throw new Error("The non-interactive recording was accepted without review.");
+    }
 
-  await runInstalledCli(
-    installedBin,
-    installedPackageDirectory,
-    ["check", "--accept"],
-    {
-      cwd: installDirectory,
-      environment: portableTemporaryAcceptanceEnvironment(environment),
-    },
-  );
-  const checked = await runInstalledCli(
-    installedBin,
-    installedPackageDirectory,
-    ["check"],
-    {
-      cwd: installDirectory,
-      environment,
-    },
-  );
-  if (!checked.stdout.includes("GrantTrace check passed")) {
-    throw new Error("The installed CLI did not validate its accepted contract.");
-  }
+    await runInstalledCli(
+      installedBin,
+      installedPackageDirectory,
+      ["check", "--accept"],
+      {
+        cwd: installDirectory,
+        environment: portableTemporaryAcceptanceEnvironment(environment),
+      },
+    );
+    const checked = await runInstalledCli(
+      installedBin,
+      installedPackageDirectory,
+      ["check"],
+      {
+        cwd: installDirectory,
+        environment,
+      },
+    );
+    if (!checked.stdout.includes("GrantTrace check passed")) {
+      throw new Error("The installed CLI did not validate its accepted contract.");
+    }
 
-  const accepted = JSON.parse(
-    await readFile(join(installDirectory, "granttrace.lock.json"), "utf8"),
-  );
-  if (
-    accepted.schemaVersion !== 3 ||
-    accepted.scenarios?.length !== 1 ||
-    accepted.scenarios[0]?.name !== "package-smoke"
-  ) {
-    throw new Error("The installed CLI wrote an unexpected contract.");
-  }
+    const accepted = JSON.parse(
+      await readFile(join(installDirectory, "granttrace.lock.json"), "utf8"),
+    );
+    if (
+      accepted.schemaVersion !== 3 ||
+      accepted.scenarios?.length !== 1 ||
+      accepted.scenarios[0]?.name !== "package-smoke"
+    ) {
+      throw new Error("The installed CLI wrote an unexpected contract.");
+    }
 
-  await validateEphemeralState(installDirectory);
+    await validateEphemeralState(installDirectory);
+  }
   await validatePnpmConsumer({
     directory: pnpmInstallDirectory,
     environment: portableEnvironment({
@@ -537,43 +546,45 @@ async function validatePnpmConsumer(input) {
     throw new Error("The strict pnpm consumer could not run the CLI.");
   }
 
-  const scenarioPath = join(input.directory, "offline-scenario.mjs");
-  await writeFile(scenarioPath, offlineScenarioSource(), { mode: 0o600 });
-  const recorded = await run(
-    input.pnpm.command,
-    invocationArgs(input.pnpm, [
-      "exec",
-      "granttrace",
-      "record",
-      "pnpm-package-smoke",
-      "--",
-      process.execPath,
-      scenarioPath,
-    ]),
-    {
-      cwd: input.directory,
-      environment: input.environment,
-      expectedExitCodes: [6],
-    },
-  );
-  if (
-    !recorded.stdout.includes("GrantTrace initialized") ||
-    !recorded.stdout.includes("GrantTrace record complete") ||
-    !recorded.stderr.includes("GrantTrace contract review required")
-  ) {
-    throw new Error(
-      `The strict pnpm consumer did not automatically record ordinary Octokit traffic:\n${recorded.stdout}${recorded.stderr}`,
+  if (process.platform !== "win32") {
+    const scenarioPath = join(input.directory, "offline-scenario.mjs");
+    await writeFile(scenarioPath, offlineScenarioSource(), { mode: 0o600 });
+    const recorded = await run(
+      input.pnpm.command,
+      invocationArgs(input.pnpm, [
+        "exec",
+        "granttrace",
+        "record",
+        "pnpm-package-smoke",
+        "--",
+        process.execPath,
+        scenarioPath,
+      ]),
+      {
+        cwd: input.directory,
+        environment: input.environment,
+        expectedExitCodes: [6],
+      },
     );
+    if (
+      !recorded.stdout.includes("GrantTrace initialized") ||
+      !recorded.stdout.includes("GrantTrace record complete") ||
+      !recorded.stderr.includes("GrantTrace contract review required")
+    ) {
+      throw new Error(
+        `The strict pnpm consumer did not automatically record ordinary Octokit traffic:\n${recorded.stdout}${recorded.stderr}`,
+      );
+    }
+    if (
+      (await readFile(join(input.directory, ".gitignore"), "utf8")) !==
+      ".granttrace/\n"
+    ) {
+      throw new Error(
+        "The strict pnpm consumer did not ignore its private local state.",
+      );
+    }
+    await validateEphemeralState(input.directory, "pnpm-package-smoke");
   }
-  if (
-    (await readFile(join(input.directory, ".gitignore"), "utf8")) !==
-    ".granttrace/\n"
-  ) {
-    throw new Error(
-      "The strict pnpm consumer did not ignore its private local state.",
-    );
-  }
-  await validateEphemeralState(input.directory, "pnpm-package-smoke");
 
   await Promise.all([
     writeFile(join(input.directory, "consumer.ts"), typescriptConsumerSource(), {

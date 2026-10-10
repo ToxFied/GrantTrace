@@ -75,6 +75,7 @@
     "leakage:scan": "node scripts/leakage-scan.mjs",
     "lint": "biome lint src test examples scripts vitest.config.ts",
     "package:smoke": "node scripts/package-smoke.mjs",
+    "package:pack": "node scripts/pack-release.mjs",
     "prepack": "pnpm clean:dist && pnpm build",
     "test": "vitest run",
     "test:assurance": "vitest run test/property",

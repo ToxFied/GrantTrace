@@ -90,6 +90,16 @@ function killProcessTree(
   signal: NodeJS.Signals,
   child: ReturnType<typeof spawn>,
 ): void {
+  if (process.platform === "win32" && pid !== undefined) {
+    // taskkill can walk descendants while the root process still exists.
+    const taskkill = spawn("taskkill.exe", ["/pid", String(pid), "/T", "/F"], {
+      stdio: "ignore",
+      windowsHide: true,
+    });
+    taskkill.once("error", () => undefined);
+    taskkill.unref();
+    return;
+  }
   if (process.platform !== "win32" && pid !== undefined) {
     try {
       process.kill(-pid, signal);
@@ -104,7 +114,12 @@ function killProcessTree(
 async function killRemainingProcessGroup(
   pid: number | undefined,
 ): Promise<boolean> {
-  if (process.platform === "win32" || pid === undefined) {
+  if (process.platform === "win32") {
+    // Windows does not expose a reliable post-exit process-tree query here.
+    // Report failure so callers fail closed instead of claiming cleanup.
+    return false;
+  }
+  if (pid === undefined) {
     return true;
   }
   try {

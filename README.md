@@ -26,6 +26,12 @@
 uses, saves the evidence in your repository, and flags unexpected permission
 changes in code review.**
 
+<p align="center">
+  <a href="https://toxfied.github.io/GrantTrace/media/granttrace-overview.mp4">
+    <img src="https://raw.githubusercontent.com/ToxFied/GrantTrace/main/.github/assets/granttrace-overview-poster.png" width="760" alt="Watch the 38-second GrantTrace overview: record a scenario, review a new permission, and inspect a saved recording">
+  </a>
+</p>
+
 ## Project status
 
 GrantTrace is an actively maintained public beta. See the
@@ -237,8 +243,9 @@ does not say unexecuted code is safe, and a permission absent from the contract
 is not automatically safe to remove from an existing production App.
 
 Live proof is Unix-only because GrantTrace must verify descendant-process
-cleanup. Recording, checking, analysis, and contract review remain supported
-on Windows.
+cleanup. Recording can launch a command on Windows, but GrantTrace reports
+cleanup failure because it cannot verify descendants after the command exits.
+Checking, analysis, and contract review remain supported.
 
 ## Security and privacy
 
