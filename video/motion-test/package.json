@@ -1,0 +1,20 @@
+{
+  "name": "granttrace-motion-test",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "studio": "remotion studio",
+    "render": "remotion render GrantTrace out/granttrace.mp4",
+    "still": "remotion still GrantTrace out/still.png"
+  },
+  "dependencies": {
+    "@remotion/cli": "^4.0.529",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "remotion": "^4.0.529"
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.0",
+    "typescript": "^7.0.2"
+  }
+}
