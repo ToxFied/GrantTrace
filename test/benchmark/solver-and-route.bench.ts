@@ -1,4 +1,4 @@
-import { bench, describe } from "vitest";
+import { describe, test } from "vitest";
 
 import { solvePermissionContract } from "../../src/permissions/solver.js";
 import type { RouteRequirement } from "../../src/permissions/types.js";
@@ -34,22 +34,18 @@ const routeOptions = {
 };
 
 describe("bounded permission and route measurements", () => {
-  bench(
-    "solve 6 routes with 3 alternatives each",
-    () => {
+  test("solve 6 routes with 3 alternatives each", async ({ bench }) => {
+    await bench("solve 6 routes with 3 alternatives each", () => {
       solvePermissionContract(solverRequirements);
-    },
-    solverOptions,
-  );
+    }).run(solverOptions);
+  });
 
-  bench(
-    "parse and match one URL against the pinned catalog",
-    () => {
+  test("parse and match one URL against the pinned catalog", async ({ bench }) => {
+    await bench("parse and match one URL against the pinned catalog", () => {
       resolveRuntimeRoute(
         "POST",
         "https://api.github.com/repos/benchmark-owner/benchmark-repo/issues/42/comments?ignored=1",
       );
-    },
-    routeOptions,
-  );
+    }).run(routeOptions);
+  });
 });
