@@ -8,7 +8,7 @@
     "dev": "next dev",
     "postinstall": "fumadocs-mdx",
     "start": "serve out",
-    "typecheck": "fumadocs-mdx && next typegen && tsc --noEmit"
+    "typecheck": "next typegen && fumadocs-mdx && tsc --noEmit"
   },
   "dependencies": {
     "@orama/orama": "3.1.18",
